@@ -33,17 +33,8 @@ ctest --test-dir build --output-on-failure
 Then run the mechanical checks for the non-negotiables. Any hit is a failure to fix, not to explain away:
 
 ```sh
-# Determinism: no randomness or wall-clock reads. The PLC's own Time constructor
-# (Value::time) is not a clock read, so it is filtered out; anything else reaching
-# for the clock or a random source is a failure.
-pattern='(^|[^_[:alnum:]])rand\(|random_device|std::chrono|(^|[^_[:alnum:]])time\('
-pattern="$pattern|system_clock|steady_clock"
-grep -rnE "$pattern" src/sim src/plc src/world | grep -vE 'Value::time\(|Value time\('
-
-# Layering: core is a leaf; nothing includes a header from a layer above it
-grep -rnE '#include "(platform|render|world|sim|plc|io|ui|lesson|assets|net|app)/' src/core
-grep -rnE '#include "(io|ui|lesson|assets|net|app)/' src/platform src/render src/world src/sim src/plc
-grep -rnE '#include "(net|app)/' src/io src/ui src/lesson src/assets
+# Determinism and layering. Prints every hit and exits non-zero; CI runs it too.
+./tools/check_rules.sh
 ```
 
 If a hit is a genuine false positive (for example a comment), name it in the PR description. If the renderer is touched, also build with `-DSC_ENABLE_VULKAN=ON` and say whether the golden-frame comparison was run.
