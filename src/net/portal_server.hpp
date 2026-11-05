@@ -29,6 +29,10 @@ struct Response {
     int status = 200;
     std::string content_type = "application/json";
     std::string body;
+    // Sent as Location when non-empty. A POST handler uses it to turn a form
+    // submission into a GET, so refreshing the page cannot repeat a step or a
+    // force.
+    std::string location;
 };
 
 class PortalRouter {

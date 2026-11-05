@@ -9,6 +9,8 @@ const char* status_text(int status) {
     switch (status) {
         case 200:
             return "OK";
+        case 303:
+            return "See Other";
         case 400:
             return "Bad Request";
         case 404:
@@ -116,6 +118,10 @@ std::string format_http_response(const Response& response) {
     text += response.content_type;
     text += "\r\nContent-Length: ";
     text += std::to_string(response.body.size());
+    if (!response.location.empty()) {
+        text += "\r\nLocation: ";
+        text += response.location;
+    }
     text += "\r\nConnection: close\r\n\r\n";
     text += response.body;
     return text;

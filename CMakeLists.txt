@@ -123,17 +123,22 @@ add_library(sc_app
     src/app/grades_students.cpp
     src/app/term_logs.cpp
     src/app/application.cpp
+    src/app/ide_session.cpp
+    src/app/ide_page.cpp
     src/app/watch_text.cpp
     src/app/lesson_runner.cpp
     src/app/lesson_api.cpp
 )
-target_link_libraries(sc_app PUBLIC sc_core sc_sim sc_plc sc_io sc_lesson sc_net PRIVATE sc_warnings)
+target_link_libraries(sc_app PUBLIC sc_core sc_sim sc_plc sc_io sc_lesson sc_net sc_ui PRIVATE sc_warnings)
 
 add_executable(scancycle_cli apps/scancycle_cli/main.cpp)
 target_link_libraries(scancycle_cli PRIVATE sc_plc sc_world sc_app sc_lesson sc_warnings)
 
 add_executable(scancycle_server apps/scancycle_server/main.cpp)
 target_link_libraries(scancycle_server PRIVATE sc_net sc_lesson sc_app sc_warnings)
+
+add_executable(scancycle_ide apps/scancycle_ide/main.cpp)
+target_link_libraries(scancycle_ide PRIVATE sc_app sc_net sc_warnings)
 
 if(SC_ENABLE_VULKAN)
     find_package(Vulkan REQUIRED)
@@ -178,6 +183,7 @@ if(SC_BUILD_TESTS)
         tests/test_sim.cpp
         tests/test_io.cpp
         tests/test_tools.cpp
+        tests/test_ide.cpp
         tests/test_lesson.cpp
         tests/test_app.cpp
     )

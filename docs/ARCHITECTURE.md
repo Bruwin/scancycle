@@ -42,7 +42,7 @@ completes the curriculum should recognise TIA Portal or Studio 5000 on sight.
 | `src/ui` | Structured Text editor model | 2 |
 | `src/lesson` | lesson schema, rubric, grader | 2 |
 | `src/net` | teacher portal routing | 3 |
-| `src/app` | composition root, headless session | 3 |
+| `src/app` | composition root, headless session, IDE routes | 3 |
 
 Rule: a module may include headers from its own layer or lower, never higher.
 
@@ -245,10 +245,11 @@ Readability beats variety — a photo-eye must be identifiable at 20 metres.
 * **M3** vertical slice: belts, photo-eyes, one machine, one program. *(done: box flow, belt
   transfer, sensing, jam detection, the machine model, and a lesson whose reference program
 drives the whole cell)*
-* **M4** PLC IDE: editor, diagnostics, online monitoring, forcing, single-scan step. *(in progress:
-  the headless half is done - the driver applies forces where a real PLC does, `Application`
-  steps one scan and reads a tag watch, and `scancycle_cli trace` prints the table; the IDE
-  surface itself is not written)*
+* **M4** PLC IDE: editor, diagnostics, online monitoring, forcing, single-scan step. *(done:
+  the driver applies forces where a real PLC does, `Application` steps one scan and reads a tag
+  watch, `scancycle_cli trace` prints the table, and `scancycle_ide` serves the local web
+  surface: Structured Text editor, compile diagnostics, watch table, force controls and
+  single-scan stepping. Graphical LD/FBD editors remain M7.)*
 * **M5** lessons + teacher portal: schema, grader, four real lessons, web UI. *(in progress:
   schema, grader, the lesson runner that self-tests a reference program, four lessons (three on
   the press cell) and the loopback HTTP transport are done; the web UI and WebSocket half are

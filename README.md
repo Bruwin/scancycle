@@ -14,8 +14,8 @@ Portal or Studio 5000 and recognise everything.
   project under other terms — including a commercial one — as long as changes to
   Scan Cycle itself stay under the LGPL and users can relink against them.
 * Status: **vertical slice** — the headless half of the product exists and is
-  tested; the renderer, editor widgets and portal transport are interfaces.
-  See `docs/ARCHITECTURE.md`.
+  tested; the renderer is opt-in, and the PLC IDE and teacher portal are local
+  web surfaces. See `docs/ARCHITECTURE.md`.
 
 ## What works today
 
@@ -38,7 +38,7 @@ Portal or Studio 5000 and recognise everything.
 | Composition root (plant + PLC + I/O in one headless session) | working, tested |
 | Vulkan 1.3 renderer: GPU cull, chunk streaming, golden frame (opt-in) | working, verified on lavapipe in CI |
 | Teacher portal: pages, toolbox-enforced grading, printable grade log | working, tested |
-| Editor widgets | interfaces only |
+| PLC IDE: editor, diagnostics, watch, forcing, single-scan step | working, tested (local web surface) |
 
 ## Build
 
@@ -171,6 +171,10 @@ curl -s -X POST -d "lesson=press-batch&student=Ada" http://127.0.0.1:8080/grade
 # Step one scan at a time against the vertical-slice cell and print a watch table
 ./build/bin/scancycle_cli trace examples/press_cell.st --scans=110 --watch=press,run_light
 
+# Open the PLC IDE on loopback: edit, compile, step, watch and force
+./build/bin/scancycle_ide --program=examples/press_cell.st
+# then open http://127.0.0.1:8090/
+
 # Run every lesson's reference program against its cell and grade it
 ./build/bin/scancycle_cli lesson
 ```
@@ -189,8 +193,8 @@ src/assets    procedural material library and machine kit generator
 src/ui        Structured Text editor model (buffer, diagnostics, undo)
 src/lesson    lesson data model, rubric, grader
 src/net       teacher portal request routing
-src/app       application composition root and headless session
-apps/         scancycle_cli, scancycle_server
+src/app       application composition root, headless session and IDE routes
+apps/         scancycle_cli, scancycle_server, scancycle_ide
 tests/        headless test suite (ctest)
 docs/         architecture and project conventions
 ```
