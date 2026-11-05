@@ -1,7 +1,10 @@
 #include "app/application.hpp"
+#include "app/df1_tool.hpp"
 #include "app/lesson_runner.hpp"
 #include "app/watch_text.hpp"
 #include "core/deterministic_rng.hpp"
+#include "io/df1_profile.hpp"
+#include "io/df1_serial_link.hpp"
 #include "lesson/lesson.hpp"
 #include "plc/compiler.hpp"
 #include "plc/il.hpp"
@@ -18,6 +21,7 @@
 #include <cstdlib>
 #include <fstream>
 #include <limits>
+#include <span>
 #include <sstream>
 #include <string>
 #include <utility>
@@ -37,7 +41,11 @@ void print_usage() {
         "  scancycle_cli bench [--iterations=N]\n"
         "  scancycle_cli trace <program.st> [--scans=N] [--force name=value] [--watch=a,b]\n"
         "                        [--snapshot]\n"
-        "  scancycle_cli lesson [--id=ID] [--seconds=N]\n");
+        "  scancycle_cli lesson [--id=ID] [--seconds=N]\n"
+        "  scancycle_cli df1 --port=DEVICE (--read=ADDR | --write=ADDR=VALUE)\n"
+        "                        [--baud=N] [--node=N] [--host=N] [--checksum=crc|bcc]\n"
+        "                        [--timeout-ms=N] [--trace]\n"
+        "                        (ADDR like N7:0, B3:5 or N7:0/3)\n");
 }
 
 bool read_file(const std::string& path, std::string& out) {
@@ -584,6 +592,177 @@ int command_lesson(const std::vector<std::string>& args) {
     return failures == 0 ? 0 : 1;
 }
 
+bool parse_long_option(const std::string& text, long minimum, long maximum, long& out) {
+    if (text.empty()) {
+        return false;
+    }
+    char* end = nullptr;
+    const long parsed = std::strtol(text.c_str(), &end, 10);
+    if (end == nullptr || *end != '\0' || parsed < minimum || parsed > maximum) {
+        return false;
+    }
+    out = parsed;
+    return true;
+}
+
+// One read or write against a real controller, using the MicroLogix 1000
+// profile unless the flags say otherwise. This is the bring-up path: no tag map,
+// no VM, one N7 or B3 address on the wire.
+int command_df1(const std::vector<std::string>& args) {
+    std::string port;
+    std::string read_text;
+    std::string write_text;
+    std::string checksum_text = "crc";
+    long baud = 19200;
+    long timeout_ms = 1000;
+    long node = 1;
+    long host = 0;
+    bool trace = false;
+
+    for (const std::string& arg : args) {
+        long parsed = 0;
+        if (arg.rfind("--port=", 0) == 0) {
+            port = arg.substr(7);
+        } else if (arg.rfind("--read=", 0) == 0) {
+            read_text = arg.substr(7);
+        } else if (arg.rfind("--write=", 0) == 0) {
+            write_text = arg.substr(8);
+        } else if (arg.rfind("--checksum=", 0) == 0) {
+            checksum_text = arg.substr(11);
+        } else if (arg.rfind("--baud=", 0) == 0) {
+            if (!parse_long_option(arg.substr(7), 300, 1'000'000, parsed)) {
+                std::fprintf(stderr, "--baud must be a positive rate\n");
+                return 2;
+            }
+            baud = parsed;
+        } else if (arg.rfind("--timeout-ms=", 0) == 0) {
+            if (!parse_long_option(arg.substr(13), 1, 60'000, parsed)) {
+                std::fprintf(stderr, "--timeout-ms must be 1..60000\n");
+                return 2;
+            }
+            timeout_ms = parsed;
+        } else if (arg.rfind("--node=", 0) == 0) {
+            if (!parse_long_option(arg.substr(7), 0, 254, parsed)) {
+                std::fprintf(stderr, "--node must be 0..254\n");
+                return 2;
+            }
+            node = parsed;
+        } else if (arg.rfind("--host=", 0) == 0) {
+            if (!parse_long_option(arg.substr(7), 0, 254, parsed)) {
+                std::fprintf(stderr, "--host must be 0..254\n");
+                return 2;
+            }
+            host = parsed;
+        } else if (arg == "--trace") {
+            trace = true;
+        } else {
+            std::fprintf(stderr, "unknown option '%s'\n", arg.c_str());
+            return 2;
+        }
+    }
+
+    if (port.empty()) {
+        std::fprintf(stderr, "df1 needs --port=DEVICE\n");
+        return 2;
+    }
+    if (read_text.empty() == write_text.empty()) {
+        std::fprintf(stderr, "df1 needs exactly one of --read or --write\n");
+        return 2;
+    }
+
+    sc::io::Df1Checksum checksum = sc::io::Df1Checksum::Crc16;
+    if (checksum_text == "crc" || checksum_text == "CRC") {
+        checksum = sc::io::Df1Checksum::Crc16;
+    } else if (checksum_text == "bcc" || checksum_text == "BCC") {
+        checksum = sc::io::Df1Checksum::Bcc;
+    } else {
+        std::fprintf(stderr, "--checksum must be crc or bcc\n");
+        return 2;
+    }
+
+    const bool writing = !write_text.empty();
+    std::string address_text = writing ? write_text : read_text;
+    std::string value_text;
+    if (writing) {
+        const std::size_t equals = address_text.rfind('=');
+        if (equals == std::string::npos || equals == 0) {
+            std::fprintf(stderr, "bad --write (expected ADDR=VALUE)\n");
+            return 2;
+        }
+        value_text = address_text.substr(equals + 1);
+        address_text = address_text.substr(0, equals);
+    }
+
+    sc::app::Df1Address address;
+    std::string error;
+    if (!sc::app::parse_df1_address(address_text, address, error)) {
+        std::fprintf(stderr, "%s\n", error.c_str());
+        return 2;
+    }
+
+    sc::u16 word_value = 0;
+    bool bit_value = false;
+    if (writing) {
+        const bool parsed =
+            address.has_bit
+                ? sc::app::parse_df1_bit_value(value_text, bit_value, error)
+                : sc::app::parse_df1_word_value(value_text, word_value, error);
+        if (!parsed) {
+            std::fprintf(stderr, "%s\n", error.c_str());
+            return 2;
+        }
+    }
+
+    sc::app::Df1ToolConfig config;
+    config.host = static_cast<sc::u8>(host);
+    config.node = static_cast<sc::u8>(node);
+    config.checksum = checksum;
+    config.address = address;
+
+    sc::io::Df1SerialConfig serial =
+        sc::io::df1_serial_config_for(sc::io::kMicroLogix1000, port);
+    serial.baud = static_cast<int>(baud);
+    serial.timeout_ms = static_cast<int>(timeout_ms);
+    serial.checksum = checksum;
+    if (trace) {
+        serial.trace = [](bool transmitted, std::span<const sc::u8> bytes) {
+            std::string line = transmitted ? "tx" : "rx";
+            char hex[8];
+            for (const sc::u8 byte : bytes) {
+                std::snprintf(hex, sizeof(hex), " %02X", static_cast<unsigned>(byte));
+                line += hex;
+            }
+            std::fprintf(stderr, "%s\n", line.c_str());
+        };
+    }
+
+    sc::io::Df1SerialLink link(serial);
+    sc::app::Df1ToolResult result;
+    if (writing) {
+        result = address.has_bit
+                     ? sc::app::df1_write_bit(config, link, bit_value)
+                     : sc::app::df1_write_word(config, link, word_value);
+    } else {
+        result = address.has_bit ? sc::app::df1_read_bit(config, link)
+                                 : sc::app::df1_read_word(config, link);
+    }
+    if (!result.ok) {
+        std::fprintf(stderr, "df1: %s\n", result.error.c_str());
+        return 1;
+    }
+
+    const std::string label = sc::app::df1_address_text(address);
+    if (address.has_bit) {
+        std::printf("%s = %d%s\n", label.c_str(), result.bit ? 1 : 0,
+                    writing ? " written" : "");
+    } else {
+        std::printf("%s = %u (0x%04X)%s\n", label.c_str(),
+                    static_cast<unsigned>(result.word),
+                    static_cast<unsigned>(result.word), writing ? " written" : "");
+    }
+    return 0;
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -616,6 +795,9 @@ int main(int argc, char** argv) {
     }
     if (command == "lesson") {
         return command_lesson(rest);
+    }
+    if (command == "df1") {
+        return command_df1(rest);
     }
 
     print_usage();

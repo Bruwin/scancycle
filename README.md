@@ -33,6 +33,8 @@ Portal or Studio 5000 and recognise everything.
 | Machine: pull from infeed, cycle time, release to outfeed | working, tested |
 | Lesson runner: a lesson's reference program drives its own cell | working, tested |
 | Modbus/TCP codec, commissioning safety gate | working, tested |
+| DF1 codec (DLE, BCC/CRC-16), PCCC typed read/write, loopback data table | working, tested (no hardware) |
+| DF1 serial link (termios, pty tests), MicroLogix 1000 profile, bring-up CLI | working, tested (no hardware) |
 | Procedural materials and parametric machine kits | working, tested |
 | Editor model, lesson schema, grader, portal routing | working, tested |
 | Composition root (plant + PLC + I/O in one headless session) | working, tested |
@@ -177,6 +179,12 @@ curl -s -X POST -d "lesson=press-batch&student=Ada" http://127.0.0.1:8080/grade
 # Step one scan at a time against the vertical-slice cell and print a watch table
 ./build/bin/scancycle_cli trace examples/press_cell.st --scans=110 --watch=press,run_light
 
+# Bring-up against a MicroLogix 1000 over serial DF1. Channel 0 should be DF1
+# full duplex, 19200 8N1, CRC, node 1; each command reads or writes one address.
+./build/bin/scancycle_cli df1 --port=/dev/ttyUSB0 --read=N7:0
+./build/bin/scancycle_cli df1 --port=/dev/ttyUSB0 --write=N7:1=1234
+./build/bin/scancycle_cli df1 --port=/dev/ttyUSB0 --read=B3:5/2
+
 # Open the PLC IDE on loopback: edit, compile, step, watch and force
 ./build/bin/scancycle_ide --program=examples/press_cell.st
 # then open http://127.0.0.1:8090/
@@ -194,7 +202,7 @@ src/render    RHI interface, mesh upload, voxel renderer (CPU side)
 src/world     voxel chunks, greedy mesher, world container, world generation
 src/sim       plant devices, factory simulation tick
 src/plc       IEC 61131-3 front ends (ST, ladder/FBD, IL) -> bytecode -> VM
-src/io        tag database, PLC driver interface, Modbus codec, commissioning
+src/io        tag database, PLC driver interface, Modbus and DF1 codecs, serial link
 src/assets    procedural material library and machine kit generator
 src/ui        Structured Text editor model (buffer, diagnostics, undo)
 src/lesson    lesson data model, rubric, grader
