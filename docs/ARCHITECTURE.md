@@ -197,7 +197,8 @@ than as a transport error. Graded attempts, their per-check reports and the
 submitted program are appended to a tab-separated log the server names at
 startup; `GET /grades` lists them newest first, above them a per-lesson pass rate
 and the rubric rows the class misses most, `GET /grades/<n>` reopens one attempt
-in full, and `GET /grades.csv` exports one row per attempt for a gradebook. The stylesheet carries print rules, so the log, an attempt and
+in full, and `GET /grades.csv` exports one row per attempt for a gradebook.
+`?lesson=<id>` narrows the log and the export to a single lesson. The stylesheet carries print rules, so the log, an attempt and
 a grade report print without nav links or forms. A line written by an older
 portal still opens, with its counts and no rubric. Both
 grade responses carry the submitted program back in that form, so a rejection or

@@ -4,8 +4,9 @@
 // a port. Only what the portal actually serves is implemented - a request line,
 // a body after the blank line, and a response with a Content-Length.
 //
-// Query strings are accepted and dropped: the portal routes by path, and a
-// browser that appends a cache-buster should still get the catalog.
+// The query string is kept beside the path. Routing still ignores it, so a
+// cache-buster cannot turn into a 404, but a page that filters
+// (`/grades?lesson=...`) can read the fields it needs.
 #include "net/portal_server.hpp"
 
 #include <string>

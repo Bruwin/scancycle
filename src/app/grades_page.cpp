@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <cstdio>
 #include <ctime>
 #include <map>
 #include <string>
@@ -34,6 +35,28 @@ bool parse_ordinal(std::string_view text, std::size_t& out) {
     return true;
 }
 
+// A lesson id comes from the log, which is a text file a person can edit, so a
+// filter link is built from an escaped id rather than pasted in verbatim.
+std::string query_escape(std::string_view text) {
+    std::string out;
+    out.reserve(text.size());
+    for (const char character : text) {
+        const bool plain = (character >= 'a' && character <= 'z') ||
+                           (character >= 'A' && character <= 'Z') ||
+                           (character >= '0' && character <= '9') || character == '-' ||
+                           character == '_';
+        if (plain) {
+            out.push_back(character);
+        } else {
+            char encoded[4];
+            std::snprintf(encoded, sizeof(encoded), "%%%02X",
+                          static_cast<unsigned>(static_cast<unsigned char>(character)));
+            out += encoded;
+        }
+    }
+    return out;
+}
+
 struct LessonTally {
     std::size_t attempts = 0;
     std::size_t passed = 0;
@@ -45,19 +68,19 @@ struct LessonTally {
 // is going and whether anyone has touched it lately. Ordered by lesson id so the
 // table does not shuffle between page loads. The rate is a whole percentage,
 // rounded down, because "33%" is what a person reads off three attempts.
-std::string lesson_summary(const std::vector<GradeRecord>& records) {
+std::string lesson_summary(const std::vector<const GradeRecord*>& records) {
     std::map<std::string, LessonTally> tallies;
-    for (const GradeRecord& record : records) {
-        LessonTally& tally = tallies[record.lesson_id];
+    for (const GradeRecord* record : records) {
+        LessonTally& tally = tallies[record->lesson_id];
         ++tally.attempts;
-        if (record.passed) {
+        if (record->passed) {
             ++tally.passed;
         }
         // Records arrive oldest first, so an equal timestamp means the later
         // submission is the latest one.
-        if (record.at >= tally.latest_at) {
-            tally.latest_at = record.at;
-            tally.latest_passed = record.passed;
+        if (record->at >= tally.latest_at) {
+            tally.latest_at = record->at;
+            tally.latest_passed = record->passed;
         }
     }
 
@@ -66,7 +89,8 @@ std::string lesson_summary(const std::vector<GradeRecord>& records) {
         "<th>Passed</th><th>Pass rate</th><th>Latest</th></tr></thead><tbody>";
     for (const auto& [lesson_id, tally] : tallies) {
         const std::size_t rate = tally.passed * 100 / tally.attempts;
-        table += "<tr><td><code>" + net::html_escape(lesson_id) + "</code></td><td>" +
+        table += "<tr><td><a href=\"/grades?lesson=" + query_escape(lesson_id) + "\"><code>" +
+                 net::html_escape(lesson_id) + "</code></a></td><td>" +
                  std::to_string(tally.attempts) + "</td><td>" + std::to_string(tally.passed) +
                  "</td><td>" + std::to_string(rate) + "%</td><td>" +
                  format_utc_minutes(tally.latest_at) + " <span class=\"";
@@ -85,12 +109,12 @@ struct CheckTally {
 // wording, because two lessons can phrase a check the same way and expect
 // different things. Only misses are listed: a check everyone passes is not a
 // teaching problem, and listing it would bury the ones that are.
-std::string missed_checks(const std::vector<GradeRecord>& records) {
+std::string missed_checks(const std::vector<const GradeRecord*>& records) {
     using Key = std::pair<std::string, std::string>;
     std::map<Key, CheckTally> tallies;
-    for (const GradeRecord& record : records) {
-        for (const GradeCheck& check : record.checks) {
-            CheckTally& tally = tallies[{record.lesson_id, check.description}];
+    for (const GradeRecord* record : records) {
+        for (const GradeCheck& check : record->checks) {
+            CheckTally& tally = tallies[{record->lesson_id, check.description}];
             ++tally.seen;
             if (!check.passed) {
                 ++tally.missed;
@@ -136,31 +160,60 @@ std::string missed_checks(const std::vector<GradeRecord>& records) {
 
 }  // namespace
 
-net::Response grades_page(const GradeLog& log) {
+net::Response grades_page(const GradeLog& log, std::string_view lesson) {
     std::string error;
     const std::vector<GradeRecord> records = log.entries(error);
+
+    // Pointers, not copies: a filtered page needs the records that match but the
+    // log already owns the programs, and copying them would double the memory a
+    // term's log costs for nothing.
+    std::vector<const GradeRecord*> shown;
+    shown.reserve(records.size());
+    for (const GradeRecord& record : records) {
+        if (lesson.empty() || record.lesson_id == lesson) {
+            shown.push_back(&record);
+        }
+    }
 
     std::string page = net::page_head("Scan Cycle grades");
     page += "<p class=\"no-print\"><a href=\"/\">Scan Cycle teacher portal</a></p>";
     page += "<h1>Graded attempts</h1>";
-    page += "<p>" + std::to_string(records.size()) +
-            (records.size() == 1 ? " attempt" : " attempts") + " recorded in <code>" +
-            net::html_escape(log.path()) + "</code>.</p>";
+    if (lesson.empty()) {
+        page += "<p>" + std::to_string(records.size()) +
+                (records.size() == 1 ? " attempt" : " attempts") + " recorded in <code>" +
+                net::html_escape(log.path()) + "</code>.</p>";
+    } else {
+        page += "<p>" + std::to_string(shown.size()) +
+                (shown.size() == 1 ? " attempt" : " attempts") + " for lesson <code>" +
+                net::html_escape(lesson) + "</code> in <code>" + net::html_escape(log.path()) +
+                "</code>.</p>";
+        page += "<p class=\"no-print\"><a href=\"/grades\">Show all lessons</a></p>";
+    }
 
     if (records.empty()) {
         page += "<p>No graded attempts yet.</p>";
+    } else if (shown.empty()) {
+        page += "<p>No attempts recorded for <code>" + net::html_escape(lesson) + "</code>.</p>";
     } else {
-        page += "<p class=\"no-print\"><a href=\"/grades.csv\" download>Download as CSV</a></p>";
-        page += lesson_summary(records);
-        page += missed_checks(records);
+        const std::string csv_href = lesson.empty()
+                                         ? std::string("/grades.csv")
+                                         : "/grades.csv?lesson=" + query_escape(lesson);
+        page += "<p class=\"no-print\"><a href=\"" + csv_href +
+                "\" download>Download as CSV</a></p>";
+        page += lesson_summary(shown);
+        page += missed_checks(shown);
         page += "<h2>Attempts</h2>";
         page += "<table><thead><tr><th>When (UTC)</th><th>Lesson</th><th>Result</th>"
                 "<th>Checks</th><th>Program</th><th class=\"no-print\">Report</th>"
                 "</tr></thead><tbody>";
         // Newest first, but the ordinal is the record's place in the file, so a
-        // link keeps pointing at the same attempt as more are appended.
+        // link keeps pointing at the same attempt as more are appended. A filter
+        // hides rows, it does not renumber them.
         for (std::size_t index = records.size(); index-- > 0;) {
             const GradeRecord& record = records[index];
+            if (!lesson.empty() && record.lesson_id != lesson) {
+                continue;
+            }
             page += "<tr><td>" + format_utc_minutes(record.at) + "</td><td><code>" +
                     net::html_escape(record.lesson_id) + "</code></td><td class=\"" +
                     (record.passed ? "pass\">pass" : "fail\">fail") + "</td><td>" +

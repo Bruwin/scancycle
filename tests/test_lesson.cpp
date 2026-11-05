@@ -266,6 +266,7 @@ TEST(portal_http_parser_reads_a_get) {
     CHECK(parsed.ok);
     CHECK(parsed.request.method == net::HttpMethod::Get);
     CHECK(parsed.request.path == "/api/lessons");
+    CHECK(parsed.request.query == "cache=1");
 }
 
 TEST(portal_http_parser_rejects_junk) {
@@ -717,14 +718,17 @@ TEST(grades_page_summarises_each_lesson) {
     const net::Response page = app::grades_page(log);
     CHECK(page.status == 200);
 
-    // Three attempts, one pass: a whole percentage, rounded down.
-    CHECK(page.body.find("<td><code>press-batch</code></td><td>3</td><td>1</td><td>33%</td>") !=
-          std::string::npos);
-    CHECK(page.body.find("<td><code>conveyor-interlock</code></td><td>1</td><td>0</td>"
+    // Three attempts, one pass: a whole percentage, rounded down. The lesson is
+    // a filter link, which is why the cell wraps the code element.
+    CHECK(page.body.find("<td><a href=\"/grades?lesson=press-batch\"><code>press-batch</code>"
+                         "</a></td><td>3</td><td>1</td><td>33%</td>") != std::string::npos);
+    CHECK(page.body.find("<td><a href=\"/grades?lesson=conveyor-interlock\">"
+                         "<code>conveyor-interlock</code></a></td><td>1</td><td>0</td>"
                          "<td>0%</td>") != std::string::npos);
 
     // The latest attempt is the newest record even when it failed.
-    const std::size_t press = page.body.find("<td><code>press-batch</code></td><td>3</td>");
+    const std::size_t press =
+        page.body.find("<code>press-batch</code></a></td><td>3</td>");
     CHECK(press != std::string::npos);
     CHECK(page.body.find("class=\"fail\">fail", press) != std::string::npos);
 
@@ -1015,6 +1019,106 @@ TEST(grades_csv_is_only_the_header_when_nothing_was_recorded) {
     const net::Response csv = app::grades_csv(log);
     CHECK(csv.status == 200);
     CHECK(csv.body == "attempt,when_utc,lesson,result,passed,total,missed_checks\n");
+
+    std::filesystem::remove(path);
+}
+
+TEST(grades_page_narrows_to_one_lesson) {
+    const std::filesystem::path path =
+        std::filesystem::temp_directory_path() / "scancycle-grades-filter-test.tsv";
+    std::filesystem::remove(path);
+    app::GradeLog log(path.string());
+    std::string error;
+
+    app::GradeRecord first;
+    first.at = 1700000000;
+    first.lesson_id = "press-batch";
+    first.passed = true;
+    first.passed_count = 1;
+    first.total = 1;
+    first.checks.push_back(app::GradeCheck{true, "Output on", "motor: output on"});
+    CHECK(log.append(first, error));
+
+    app::GradeRecord second;
+    second.at = 1700000060;
+    second.lesson_id = "conveyor-interlock";
+    second.total = 1;
+    second.checks.push_back(app::GradeCheck{false, "Latch holds", "output off"});
+    CHECK(log.append(second, error));
+
+    app::GradeRecord third;
+    third.at = 1700000120;
+    third.lesson_id = "press-batch";
+    third.total = 1;
+    third.checks.push_back(app::GradeCheck{false, "Latch holds", "output off"});
+    CHECK(log.append(third, error));
+
+    const net::Response filtered = app::grades_page(log, "press-batch");
+    CHECK(filtered.status == 200);
+    CHECK(filtered.body.find("2 attempts for lesson <code>press-batch</code>") !=
+          std::string::npos);
+    CHECK(filtered.body.find("conveyor-interlock") == std::string::npos);
+    CHECK(filtered.body.find("href=\"/grades?lesson=press-batch\"") != std::string::npos);
+    CHECK(filtered.body.find("href=\"/grades.csv?lesson=press-batch\"") !=
+          std::string::npos);
+    CHECK(filtered.body.find("Show all lessons") != std::string::npos);
+    // Ordinals are file positions: the second press attempt is still attempt 3.
+    CHECK(filtered.body.find("href=\"/grades/3\"") != std::string::npos);
+    CHECK(filtered.body.find("href=\"/grades/1\"") != std::string::npos);
+    CHECK(filtered.body.find("href=\"/grades/2\"") == std::string::npos);
+
+    // Without the field the page still shows everything.
+    const net::Response all = app::grades_page(log);
+    CHECK(all.body.find("conveyor-interlock") != std::string::npos);
+    CHECK(all.body.find("3 attempts recorded") != std::string::npos);
+
+    const net::Response nothing = app::grades_page(log, "no-such-lesson");
+    CHECK(nothing.status == 200);
+    CHECK(nothing.body.find("No attempts recorded for") != std::string::npos);
+    CHECK(nothing.body.find("Show all lessons") != std::string::npos);
+
+    std::filesystem::remove(path);
+}
+
+TEST(grades_csv_exports_one_lesson_and_keeps_ordinals) {
+    const std::filesystem::path path =
+        std::filesystem::temp_directory_path() / "scancycle-grades-csv-filter-test.tsv";
+    std::filesystem::remove(path);
+    app::GradeLog log(path.string());
+    std::string error;
+
+    const auto append = [&log, &error](std::int64_t at, const std::string& id, bool passed) {
+        app::GradeRecord record;
+        record.at = at;
+        record.lesson_id = id;
+        record.passed = passed;
+        record.passed_count = passed ? 1 : 0;
+        record.total = 1;
+        return log.append(record, error);
+    };
+
+    CHECK(append(1700000000, "press-batch", true));
+    CHECK(append(1700000060, "conveyor-interlock", false));
+    CHECK(append(1700000120, "press-batch", false));
+
+    const net::Response csv = app::grades_csv(log, "press-batch");
+    std::vector<std::string> lines;
+    std::size_t pos = 0;
+    while (pos < csv.body.size()) {
+        const std::size_t end = csv.body.find('\n', pos);
+        if (end == std::string::npos) {
+            break;
+        }
+        lines.push_back(csv.body.substr(pos, end - pos));
+        pos = end + 1;
+    }
+    CHECK(lines.size() == 3);
+    if (lines.size() == 3) {
+        CHECK(lines[1].rfind("1,", 0) == 0);
+        CHECK(lines[1].find("press-batch") != std::string::npos);
+        CHECK(lines[2].rfind("3,", 0) == 0);
+        CHECK(lines[2].find("press-batch") != std::string::npos);
+    }
 
     std::filesystem::remove(path);
 }

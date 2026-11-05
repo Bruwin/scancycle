@@ -93,6 +93,7 @@ ParsedRequest parse_http_request(std::string_view raw) {
 
     const std::size_t query = target.find('?');
     if (query != std::string_view::npos) {
+        out.request.query = std::string(target.substr(query + 1));
         target = target.substr(0, query);
     }
     out.request.path = std::string(target);

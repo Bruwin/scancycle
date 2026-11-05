@@ -3,6 +3,7 @@
 #include "app/grades_page.hpp"
 #include "app/lesson_api.hpp"
 #include "lesson/lesson.hpp"
+#include "net/http.hpp"
 #include "net/http_server.hpp"
 #include "net/portal_server.hpp"
 
@@ -56,14 +57,18 @@ int main(int argc, char** argv) {
                      return sc::app::grade_lesson_page(lessons, request, &grade_log);
                  });
 
+    // `?lesson=<id>` narrows either view to one lesson; an absent field is the
+    // whole log, and an empty value is treated the same as absent.
     router.route(sc::net::HttpMethod::Get, "/grades",
-                 [&grade_log](const sc::net::Request&) {
-                     return sc::app::grades_page(grade_log);
+                 [&grade_log](const sc::net::Request& request) {
+                     const std::string lesson = sc::net::form_field(request.query, "lesson");
+                     return sc::app::grades_page(grade_log, lesson);
                  });
 
     router.route(sc::net::HttpMethod::Get, "/grades.csv",
-                 [&grade_log](const sc::net::Request&) {
-                     return sc::app::grades_csv(grade_log);
+                 [&grade_log](const sc::net::Request& request) {
+                     const std::string lesson = sc::net::form_field(request.query, "lesson");
+                     return sc::app::grades_csv(grade_log, lesson);
                  });
 
     // The log grows while the server runs, so one route per attempt cannot be

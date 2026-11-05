@@ -20,6 +20,9 @@ struct Request {
     HttpMethod method = HttpMethod::Get;
     std::string path;
     std::string body;
+    // Everything after the first '?', still percent-encoded. Routing ignores it;
+    // a page that knows its field names decodes what it needs.
+    std::string query;
 };
 
 struct Response {
