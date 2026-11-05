@@ -170,8 +170,10 @@ reference target (DF1 full-duplex, 19 200 baud, 8N1, CRC, controller node 1,
 host node 0), and its N7 and B3 files are what this slice binds. Windows has no
 serial implementation yet and reports that as a value. `scancycle_cli df1` is
 the bring-up surface: one address, one read or write, and a write still passes
-through `CommissioningPolicy`. Like the other live drivers this has not met a
-real controller: the frame family follows the
+through `CommissioningPolicy`. `Application` takes a driver factory, so
+`trace --driver=df1` runs the same latch-scan-flush loop over the serial link,
+with BOOL tags mapped to N/B bits. Like the other live drivers this has not met
+a real controller: the frame family follows the
 Rockwell documentation, and the software peer is the only peer it has been
 tested against.
 
@@ -307,8 +309,9 @@ drives the whole cell)*
 * **M6** live drivers: Modbus TCP against a software slave, then libplctag, then DF1.
   *(in progress: the in-house Modbus/TCP driver, loopback software slave, the optional
   libplctag driver, and the DF1 codec, serial link, software data table and driver are
-  implemented and tested headlessly, with the MicroLogix 1000 as the reference target;
-  hardware commissioning remains, because no live driver has run against a real controller)*
+  implemented and tested headlessly, with the MicroLogix 1000 as the reference target, and the
+  scan loop can run over the DF1 link; hardware commissioning remains, because no live driver
+  has run against a real controller)*
 * **M7** graphical LD/FBD editors on the existing network model, SFC, content,
   asset variety.
 

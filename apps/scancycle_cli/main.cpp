@@ -3,6 +3,7 @@
 #include "app/lesson_runner.hpp"
 #include "app/watch_text.hpp"
 #include "core/deterministic_rng.hpp"
+#include "io/commissioning.hpp"
 #include "io/df1_profile.hpp"
 #include "io/df1_serial_link.hpp"
 #include "lesson/lesson.hpp"
@@ -21,6 +22,7 @@
 #include <cstdlib>
 #include <fstream>
 #include <limits>
+#include <memory>
 #include <sstream>
 #include <string>
 #include <utility>
@@ -39,7 +41,10 @@ void print_usage() {
         "  scancycle_cli ladder <program.ld> [--scans=N] [--dt-ms=N] [--set name=value]\n"
         "  scancycle_cli bench [--iterations=N]\n"
         "  scancycle_cli trace <program.st> [--scans=N] [--force name=value] [--watch=a,b]\n"
-        "                        [--snapshot]\n"
+        "                        [--snapshot] [--driver=df1 --port=DEVICE\n"
+        "                        --in=NAME=N7:0/3 --out=NAME=N7:1/0 [--baud=N]\n"
+        "                        [--node=N] [--host=N] [--checksum=crc|bcc]\n"
+        "                        [--timeout-ms=N]]\n"
         "  scancycle_cli lesson [--id=ID] [--seconds=N]\n"
         "  scancycle_cli df1 --port=DEVICE (--read=ADDR | --write=ADDR=VALUE)\n"
         "                        [--baud=N] [--node=N] [--host=N] [--checksum=crc|bcc]\n"
@@ -56,6 +61,8 @@ bool read_file(const std::string& path, std::string& out) {
     out = buffer.str();
     return true;
 }
+
+bool parse_long_option(const std::string& text, long minimum, long maximum, long& out);
 
 bool split_assignment(const std::string& text, std::string& name, std::string& value) {
     const std::size_t at = text.find('=');
@@ -401,6 +408,16 @@ int command_trace(const std::vector<std::string>& args) {
     bool snapshot_mode = false;
     std::vector<std::string> force_args;
     std::vector<std::string> watch_names;
+    std::string driver_name = "sim";
+    std::string port;
+    std::string profile_name;
+    std::string checksum_text;
+    long baud = 0;
+    long node = -1;
+    long host = -1;
+    long timeout_ms = 0;
+    std::vector<std::string> input_tags;
+    std::vector<std::string> output_tags;
 
     for (std::size_t i = 1; i < args.size(); ++i) {
         const std::string& arg = args[i];
@@ -426,6 +443,46 @@ int command_trace(const std::vector<std::string>& args) {
             }
         } else if (arg == "--snapshot") {
             snapshot_mode = true;
+        } else if (arg.rfind("--driver=", 0) == 0) {
+            driver_name = arg.substr(9);
+        } else if (arg.rfind("--port=", 0) == 0) {
+            port = arg.substr(7);
+        } else if (arg.rfind("--profile=", 0) == 0) {
+            profile_name = arg.substr(10);
+        } else if (arg.rfind("--baud=", 0) == 0) {
+            long parsed = 0;
+            if (!parse_long_option(arg.substr(7), 300, 1'000'000, parsed)) {
+                std::fprintf(stderr, "--baud must be a positive rate\n");
+                return 2;
+            }
+            baud = parsed;
+        } else if (arg.rfind("--node=", 0) == 0) {
+            long parsed = 0;
+            if (!parse_long_option(arg.substr(7), 0, 254, parsed)) {
+                std::fprintf(stderr, "--node must be 0..254\n");
+                return 2;
+            }
+            node = parsed;
+        } else if (arg.rfind("--host=", 0) == 0) {
+            long parsed = 0;
+            if (!parse_long_option(arg.substr(7), 0, 254, parsed)) {
+                std::fprintf(stderr, "--host must be 0..254\n");
+                return 2;
+            }
+            host = parsed;
+        } else if (arg.rfind("--timeout-ms=", 0) == 0) {
+            long parsed = 0;
+            if (!parse_long_option(arg.substr(13), 1, 60'000, parsed)) {
+                std::fprintf(stderr, "--timeout-ms must be 1..60000\n");
+                return 2;
+            }
+            timeout_ms = parsed;
+        } else if (arg.rfind("--checksum=", 0) == 0) {
+            checksum_text = arg.substr(11);
+        } else if (arg.rfind("--in=", 0) == 0) {
+            input_tags.push_back(arg.substr(5));
+        } else if (arg.rfind("--out=", 0) == 0) {
+            output_tags.push_back(arg.substr(6));
         } else {
             std::fprintf(stderr, "unknown option '%s'\n", arg.c_str());
             return 2;
@@ -440,9 +497,127 @@ int command_trace(const std::vector<std::string>& args) {
 
     sc::AppConfig config;
     config.program_source = source;
+
+    const bool df1_mode = driver_name == "df1";
+    if (!df1_mode && driver_name != "sim") {
+        std::fprintf(stderr, "--driver must be sim or df1\n");
+        return 2;
+    }
+    if (!df1_mode &&
+        (!port.empty() || !profile_name.empty() || !input_tags.empty() ||
+         !output_tags.empty() || baud != 0 || node >= 0 || host >= 0 ||
+         timeout_ms != 0 || !checksum_text.empty())) {
+        std::fprintf(stderr, "the df1 options need --driver=df1\n");
+        return 2;
+    }
+    if (df1_mode && port.empty()) {
+        std::fprintf(stderr, "--driver=df1 needs --port=DEVICE\n");
+        return 2;
+    }
+    if (df1_mode && !force_args.empty()) {
+        std::fprintf(stderr, "forces need --driver=sim\n");
+        return 2;
+    }
+    if (df1_mode && !profile_name.empty() && profile_name != "microLogix1000" &&
+        profile_name != "ml1000") {
+        std::fprintf(stderr, "unknown profile '%s' (only microLogix1000)\n",
+                     profile_name.c_str());
+        return 2;
+    }
+
+    // The policy must outlive the application: the driver holds a pointer to it.
+    sc::io::CommissioningPolicy policy;
+    if (df1_mode) {
+        if (baud == 0) {
+            baud = sc::io::kMicroLogix1000.baud;
+        }
+        if (node < 0) {
+            node = sc::io::kMicroLogix1000.controller_address;
+        }
+        if (host < 0) {
+            host = sc::io::kMicroLogix1000.host_address;
+        }
+        if (timeout_ms == 0) {
+            timeout_ms = 1000;
+        }
+        sc::io::Df1Checksum checksum = sc::io::kMicroLogix1000.checksum;
+        if (checksum_text == "crc" || checksum_text == "CRC") {
+            checksum = sc::io::Df1Checksum::Crc16;
+        } else if (checksum_text == "bcc" || checksum_text == "BCC") {
+            checksum = sc::io::Df1Checksum::Bcc;
+        } else if (!checksum_text.empty()) {
+            std::fprintf(stderr, "--checksum must be crc or bcc\n");
+            return 2;
+        }
+
+        std::vector<sc::io::Df1Tag> tags;
+        const auto add_tags = [&](const std::vector<std::string>& entries,
+                                  sc::io::Df1Direction direction) {
+            for (const std::string& entry : entries) {
+                const std::size_t equals = entry.find('=');
+                sc::app::Df1Address address;
+                std::string error;
+                if (equals == std::string::npos || equals == 0 ||
+                    !sc::app::parse_df1_address(entry.substr(equals + 1), address, error)) {
+                    std::fprintf(stderr, "bad tag mapping '%s' (expected NAME=N7:0/3)\n",
+                                 entry.c_str());
+                    return false;
+                }
+                if (!address.has_bit) {
+                    std::fprintf(stderr, "mapping '%s' needs a bit address, e.g. N7:0/3\n",
+                                 entry.c_str());
+                    return false;
+                }
+                sc::io::Df1Tag tag;
+                tag.name = entry.substr(0, equals);
+                tag.file = address.file;
+                tag.element = address.element;
+                tag.bit = address.bit;
+                tag.file_type = address.file_type;
+                tag.direction = direction;
+                tags.push_back(std::move(tag));
+            }
+            return true;
+        };
+        if (!add_tags(input_tags, sc::io::Df1Direction::Input) ||
+            !add_tags(output_tags, sc::io::Df1Direction::Output)) {
+            return 2;
+        }
+
+        for (const sc::io::Df1Tag& tag : tags) {
+            if (tag.direction == sc::io::Df1Direction::Output) {
+                policy.allow_address(tag.name);
+            }
+        }
+        policy.set_min_write_interval_ms(0);
+        if (!policy.begin_session(0, 86'400'000)) {
+            std::fprintf(stderr, "cannot open a commissioning session\n");
+            return 1;
+        }
+
+        sc::io::Df1Config df1 = sc::io::df1_config_for(sc::io::kMicroLogix1000);
+        df1.station = static_cast<sc::u8>(host);
+        df1.destination = static_cast<sc::u8>(node);
+        df1.checksum = checksum;
+        df1.tags = std::move(tags);
+        df1.commissioning = &policy;
+
+        sc::io::Df1SerialConfig serial =
+            sc::io::df1_serial_config_for(sc::io::kMicroLogix1000, port);
+        serial.baud = static_cast<int>(baud);
+        serial.timeout_ms = static_cast<int>(timeout_ms);
+        serial.checksum = checksum;
+
+        config.driver_factory = [df1, serial, &policy](sc::plc::Vm& vm)
+            -> std::unique_ptr<sc::io::PlcDriver> {
+            return std::make_unique<sc::io::Df1Driver>(
+                df1, vm, std::make_unique<sc::io::Df1SerialLink>(serial));
+        };
+    }
+
     sc::Application app(config, sc::sim::make_vertical_slice_plant());
     if (!app.initialize()) {
-        std::fprintf(stderr, "cannot start the cell: %s\n", app.error().c_str());
+        std::fprintf(stderr, "cannot start: %s\n", app.error().c_str());
         return 1;
     }
 
@@ -482,10 +657,15 @@ int command_trace(const std::vector<std::string>& args) {
         return 0;
     }
 
-    std::printf("cell    : %u devices, %lld ms per scan\n", app.plant().count(),
-                static_cast<long long>(config.plc_scan_ms));
-    for (const std::string& name : app.unbound_devices()) {
-        std::printf("unbound : %s (the program never mentions it)\n", name.c_str());
+    if (df1_mode) {
+        std::printf("driver  : df1 %s at %ld baud, node %ld, host %ld\n", port.c_str(),
+                    baud, node, host);
+    } else {
+        std::printf("cell    : %u devices, %lld ms per scan\n", app.plant().count(),
+                    static_cast<long long>(config.plc_scan_ms));
+        for (const std::string& name : app.unbound_devices()) {
+            std::printf("unbound : %s (the program never mentions it)\n", name.c_str());
+        }
     }
     // The table below shows what the program computed. A forced tag is marked,
     // but its value is the logic's, not the field's - so say plainly what the
