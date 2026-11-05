@@ -75,9 +75,9 @@ state machine and cannot be lowered to straight-line code at all.
 | Language | Front end | State |
 |---|---|---|
 | Structured Text (ST) | `plc/lexer`, `plc/parser`, `plc/compiler` | working and tested |
-| Ladder Diagram (LD) | `plc/netlist`: contacts, coils, series and parallel junctions | working and tested, including negated contacts and coils |
+| Ladder Diagram (LD) | `plc/ladder_text` parses rung files into `plc/netlist` | working and tested, including negated contacts and coils |
 | Function Block Diagram (FBD) | the same `plc/netlist` model | model working and tested; block library and editor are not |
-| Instruction List (IL) | `plc/il`: `LD`/`LDN`, `AND`/`ANDN`, `OR`/`ORN`, `ST`/`STN` | working and tested |
+| Instruction List (IL) | `plc/il`: `LD`/`LDN`, `AND`/`ANDN`, `OR`/`ORN`, `ST`/`STN` | working and tested; files carry a `VAR` block |
 | Sequential Function Chart (SFC) | none | not started |
 
 LD and FBD share one model because they are one idea drawn two ways: a boolean
