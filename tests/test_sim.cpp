@@ -8,6 +8,19 @@
 
 using namespace sc;
 
+namespace {
+
+// A belt that reaches full speed on the first tick, so tests can reason in
+// metres rather than in ramp curves.
+u32 make_instant_belt(sim::Plant& plant, const char* name, f64 length) {
+    const u32 belt = plant.add(sim::DeviceKind::Belt, name);
+    plant.device(belt).ramp_seconds = 0.0;
+    plant.device(belt).length = length;
+    return belt;
+}
+
+}  // namespace
+
 TEST(plant_motor_ramps_to_full_speed) {
     sim::Plant plant;
     const u32 motor = plant.add(sim::DeviceKind::Motor, "motor");
@@ -38,23 +51,140 @@ TEST(plant_motor_stops_when_the_command_drops) {
     CHECK(!plant.input(motor));
 }
 
-TEST(plant_belt_counts_boxes) {
+TEST(belt_delivers_a_box_past_its_end) {
     sim::Plant plant;
-    const u32 belt = plant.add(sim::DeviceKind::Belt, "belt");
-    plant.device(belt).ramp_seconds = 0.0;
+    const u32 belt = make_instant_belt(plant, "belt", 1.0);
     plant.set_output(belt, true);
+    plant.spawn_box(belt);
 
-    for (int tick = 0; tick < 300; ++tick) {
+    CHECK(plant.box_count() == 1);
+    for (int tick = 0; tick < 200; ++tick) {
         plant.tick(0.01);
     }
 
-    CHECK(plant.device(belt).box_count >= 2);
+    CHECK(plant.box_count() == 0);
+    CHECK(plant.device(belt).box_count == 1);
+}
+
+TEST(boxes_transfer_to_the_downstream_belt) {
+    sim::Plant plant;
+    const u32 upstream = make_instant_belt(plant, "upstream", 1.0);
+    const u32 downstream = make_instant_belt(plant, "downstream", 2.0);
+    plant.device(upstream).next = downstream;
+    plant.set_output(upstream, true);
+    plant.set_output(downstream, true);
+
+    plant.spawn_box(upstream);
+    for (int tick = 0; tick < 150; ++tick) {
+        plant.tick(0.01);
+    }
+
+    CHECK(plant.boxes_on(upstream) == 0);
+    CHECK(plant.boxes_on(downstream) == 1);
+    CHECK(plant.device(upstream).box_count == 1);
+    CHECK(plant.device(upstream).jammed == false);
+}
+
+TEST(photo_eye_senses_a_box_in_its_window) {
+    sim::Plant plant;
+    const u32 belt = make_instant_belt(plant, "belt", 4.0);
+    const u32 eye = plant.add(sim::DeviceKind::PhotoEye, "eye");
+    plant.device(eye).belt = belt;
+    plant.device(eye).at = 1.0;
+    plant.device(eye).window = 0.2;
+
+    plant.set_output(belt, true);
+    plant.spawn_box(belt);
+    CHECK(!plant.input(eye));
+
+    bool ever_sensed = false;
+    for (int tick = 0; tick < 200; ++tick) {
+        plant.tick(0.01);
+        ever_sensed = ever_sensed || plant.input(eye);
+    }
+
+    CHECK(ever_sensed);
+    // The box has travelled well past the sensing band by now.
+    CHECK(!plant.input(eye));
+}
+
+TEST(photo_eye_honours_a_manual_occlusion_override) {
+    sim::Plant plant;
+    const u32 belt = make_instant_belt(plant, "belt", 4.0);
+    const u32 eye = plant.add(sim::DeviceKind::PhotoEye, "eye");
+    plant.device(eye).belt = belt;
+    plant.device(eye).at = 1.0;
+
+    plant.set_blocked(eye, true);
+    plant.tick(0.01);
+    CHECK(plant.input(eye));
+
+    plant.set_blocked(eye, false);
+    plant.tick(0.01);
+    CHECK(!plant.input(eye));
+}
+
+TEST(belt_jams_when_the_downstream_belt_has_no_room) {
+    sim::Plant plant;
+    const u32 upstream = make_instant_belt(plant, "upstream", 1.0);
+    const u32 downstream = make_instant_belt(plant, "downstream", 2.0);
+    plant.device(upstream).next = downstream;
+
+    // A box already sitting at the downstream infeed blocks the hand-off.
+    plant.spawn_box(downstream);
+    plant.set_output(upstream, true);
+    plant.spawn_box(upstream);
+
+    for (int tick = 0; tick < 200; ++tick) {
+        plant.tick(0.01);
+    }
+
+    CHECK(plant.device(upstream).jammed);
+    CHECK(plant.boxes_on(upstream) == 1);
+    CHECK(plant.device(upstream).box_count == 0);
+}
+
+TEST(spawner_does_not_stack_boxes_on_a_stopped_belt) {
+    sim::Plant plant;
+    const u32 belt = make_instant_belt(plant, "belt", 4.0);
+    plant.device(belt).spawn_period = 0.5;
+
+    for (int tick = 0; tick < 500; ++tick) {
+        plant.tick(0.01);
+    }
+
+    // The infeed is never clear while a box sits at the head of a stopped belt.
+    CHECK(plant.boxes_on(belt) <= 1);
+}
+
+TEST(plant_is_deterministic) {
+    sim::Plant a;
+    sim::Plant b;
+    for (sim::Plant* plant : {&a, &b}) {
+        const u32 belt = make_instant_belt(*plant, "belt", 3.0);
+        const u32 eye = plant->add(sim::DeviceKind::PhotoEye, "eye");
+        plant->device(eye).belt = belt;
+        plant->device(eye).at = 1.5;
+        plant->device(belt).spawn_period = 0.7;
+        plant->set_output(belt, true);
+    }
+
+    for (int tick = 0; tick < 500; ++tick) {
+        a.tick(0.016);
+        b.tick(0.016);
+    }
+
+    CHECK(a.box_count() == b.box_count());
+    CHECK(a.device(0).box_count == b.device(0).box_count);
+    for (u32 i = 0; i < a.box_count() && i < b.box_count(); ++i) {
+        CHECK(a.box(i).position == b.box(i).position);
+        CHECK(a.box(i).belt == b.box(i).belt);
+    }
 }
 
 TEST(plant_ignores_non_positive_ticks) {
     sim::Plant plant;
-    const u32 belt = plant.add(sim::DeviceKind::Belt, "belt");
-    plant.device(belt).ramp_seconds = 0.0;
+    const u32 belt = make_instant_belt(plant, "belt", 4.0);
     plant.set_output(belt, true);
 
     plant.tick(0.0);
@@ -64,24 +194,36 @@ TEST(plant_ignores_non_positive_ticks) {
     CHECK(plant.device(belt).speed == 0.0);
 }
 
-TEST(plant_is_deterministic) {
-    sim::Plant a;
-    sim::Plant b;
-    for (sim::Plant* plant : {&a, &b}) {
-        plant->add(sim::DeviceKind::Belt, "belt");
-        plant->add(sim::DeviceKind::PhotoEye, "eye");
-        plant->set_output(0, true);
-        plant->set_blocked(1, true);
-    }
+TEST(plant_reset_clears_boxes_and_counters) {
+    sim::Plant plant;
+    const u32 belt = make_instant_belt(plant, "belt", 1.0);
+    plant.set_output(belt, true);
+    plant.spawn_box(belt);
 
-    for (int tick = 0; tick < 500; ++tick) {
-        a.tick(0.016);
-        b.tick(0.016);
+    for (int tick = 0; tick < 200; ++tick) {
+        plant.tick(0.01);
     }
+    CHECK(plant.device(belt).box_count == 1);
 
-    CHECK(a.device(0).box_count == b.device(0).box_count);
-    CHECK(a.device(0).speed == b.device(0).speed);
-    CHECK(a.device(1).input == b.device(1).input);
+    plant.reset();
+    CHECK(plant.box_count() == 0);
+    CHECK(plant.device(belt).box_count == 0);
+    CHECK(plant.device(belt).speed == 0.0);
+}
+
+TEST(vertical_slice_plant_is_wired) {
+    const sim::Plant plant = sim::make_vertical_slice_plant();
+
+    CHECK(plant.count() == 4);
+    // infeed -> outfeed routing
+    CHECK(plant.device(0).kind == sim::DeviceKind::Belt);
+    CHECK(plant.device(0).next == 2);
+    // photo-eye mounted on the infeed
+    CHECK(plant.device(1).kind == sim::DeviceKind::PhotoEye);
+    CHECK(plant.device(1).belt == 0);
+    CHECK(plant.device(1).at > 0.0);
+    CHECK(plant.device(2).kind == sim::DeviceKind::Belt);
+    CHECK(plant.device(3).kind == sim::DeviceKind::StackLight);
 }
 
 TEST(tag_database_round_trip) {

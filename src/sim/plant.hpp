@@ -2,6 +2,9 @@
 // The physical plant. Devices are deliberately dumb: they hold state, they ramp
 // towards a command, and they expose one boolean feedback. All plant timing is
 // driven by the tick argument, never by a clock.
+//
+// Boxes are the unit of material flow. They are owned by the plant rather than
+// by a belt, so handing one to the next belt is a change of owner, not a copy.
 #include "core/types.hpp"
 
 #include <string>
@@ -9,7 +12,15 @@
 
 namespace sc::sim {
 
+inline constexpr u32 kNoDevice = 0xFFFF'FFFFu;
+
 enum class DeviceKind : u8 { Motor = 0, Belt, PhotoEye, Valve, StackLight };
+
+struct Box {
+    u32 belt = kNoDevice;  // kNoDevice once it has left the line
+    f64 position = 0.0;    // metres from the infeed end of its belt
+    bool jammed = false;
+};
 
 struct Device {
     DeviceKind kind = DeviceKind::Motor;
@@ -20,10 +31,22 @@ struct Device {
 
     f64 speed = 0.0;         // normalised 0..1
     f64 ramp_seconds = 0.5;  // time from stopped to full speed
-    f64 distance = 0.0;      // belt travel, in metres
-    f64 box_spacing = 1.0;   // metres between boxes
-    i64 box_count = 0;
-    bool blocked = false;    // photo-eye occlusion
+    f64 distance = 0.0;      // total belt surface travel, metres
+    f64 box_spacing = 0.6;   // minimum gap between boxes, metres
+    i64 box_count = 0;       // boxes that have left this belt
+    bool blocked = false;    // manual occlusion override (lessons, tests)
+    bool jammed = false;     // a box could not advance
+
+    // Belt geometry and routing.
+    f64 length = 4.0;        // metres
+    u32 next = kNoDevice;    // downstream belt
+    f64 spawn_period = 0.0;  // seconds between infeed boxes; 0 disables spawning
+    f64 spawn_accumulator = 0.0;
+
+    // Photo-eye mounting: which belt, and where along it.
+    u32 belt = kNoDevice;
+    f64 at = 0.0;
+    f64 window = 0.2;  // half-width of the sensing band, metres
 
     i32 x = 0;
     i32 y = 0;
@@ -42,6 +65,13 @@ public:
     bool input(u32 index) const;
     void set_blocked(u32 index, bool blocked);
 
+    // Places a box at the infeed end of `belt`. Returns the new box index.
+    u32 spawn_box(u32 belt);
+    u32 box_count() const { return static_cast<u32>(boxes_.size()); }
+    const Box& box(u32 index) const { return boxes_[index]; }
+    u32 boxes_on(u32 belt) const;
+    void clear_boxes();
+
     // Advances every device by dt seconds. dt must be positive; a zero or
     // negative step is ignored rather than rewinding the plant.
     void tick(f64 dt_seconds);
@@ -49,9 +79,20 @@ public:
     void reset();
 
     const std::vector<Device>& devices() const { return devices_; }
+    const std::vector<Box>& boxes() const { return boxes_; }
 
 private:
+    void ramp_devices(f64 dt_seconds);
+    void advance_boxes(f64 dt_seconds);
+    void spawn_due_boxes(f64 dt_seconds);
+    void update_sensors();
+
     std::vector<Device> devices_;
+    std::vector<Box> boxes_;
 };
+
+// The M3 vertical slice: an infeed belt feeding a photo-eye and a second belt,
+// with a stack light for state. Enough to program a real interlock against.
+Plant make_vertical_slice_plant();
 
 }  // namespace sc::sim

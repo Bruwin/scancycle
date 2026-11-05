@@ -137,7 +137,8 @@ Readability beats variety — a photo-eye must be identifiable at 20 metres.
 * **M0** foundation: build, presets, CI, deterministic core, tests. *(done)*
 * **M1** PLC runtime v0.1: ST front end, VM, standard FBs, determinism tests. *(done)*
 * **M2** world + renderer: chunk storage, greedy mesher, Vulkan GPU-driven path.
-* **M3** vertical slice: belts, photo-eyes, one machine, one program.
+* **M3** vertical slice: belts, photo-eyes, one machine, one program. *(in progress: box flow,
+transfer between belts, sensing and jam detection are done; the machine model is next)*
 * **M4** PLC IDE: editor, diagnostics, online monitoring, forcing, single-scan step.
 * **M5** lessons + teacher portal: schema, grader, one real lesson, web UI.
 * **M6** live drivers: Modbus TCP against a software slave, then libplctag, then DF1.
