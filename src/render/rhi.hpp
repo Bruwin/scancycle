@@ -46,6 +46,11 @@ public:
     virtual void end_frame() = 0;
 
     virtual DrawStatistics statistics() const = 0;
+
+    // Driver complaints the backend observed. Always zero without
+    // validation; the viewer turns it into a non-zero exit so CI fails
+    // loudly instead of rendering something subtly wrong.
+    virtual u32 validation_errors() const { return 0; }
 };
 
 std::unique_ptr<RhiDevice> create_null_rhi_device();

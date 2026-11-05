@@ -16,6 +16,21 @@ namespace {
 
 constexpr u32 kFramesInFlight = 2;
 
+// Counts only errors: warnings from lavapipe or a driver are noise, but a
+// validation error means the frame is built wrong.
+VKAPI_ATTR VkBool32 VKAPI_CALL debug_callback(
+    VkDebugUtilsMessageSeverityFlagBitsEXT severity, VkDebugUtilsMessageTypeFlagsEXT,
+    const VkDebugUtilsMessengerCallbackDataEXT* data, void* user_data) {
+    if (severity < VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT) {
+        return VK_FALSE;
+    }
+    std::fprintf(stderr, "[vulkan validation] %s\n", data->pMessage);
+    if (user_data != nullptr) {
+        ++(*static_cast<u32*>(user_data));
+    }
+    return VK_FALSE;
+}
+
 bool has_extension(const std::vector<VkExtensionProperties>& available, const char* name) {
     for (const VkExtensionProperties& entry : available) {
         if (std::strcmp(entry.extensionName, name) == 0) {
@@ -56,6 +71,7 @@ public:
     void end_frame() override;
 
     DrawStatistics statistics() const override { return stats_; }
+    u32 validation_errors() const override { return validation_errors_; }
 
 private:
     bool fail(const char* what, VkResult result);
@@ -109,6 +125,7 @@ private:
     std::unique_ptr<ChunkRenderer> chunks_;
     FrameConstants constants_{};
     DrawStatistics stats_{};
+    u32 validation_errors_ = 0;
 };
 
 bool VulkanRenderer::fail(const char* what, VkResult result) {
@@ -169,6 +186,12 @@ bool VulkanRenderer::create_instance() {
         // refusing to start.
     }
 
+    bool debug_utils = false;
+    if (!layers.empty() && has_extension(available, VK_EXT_DEBUG_UTILS_EXTENSION_NAME)) {
+        extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
+        debug_utils = true;
+    }
+
     VkInstanceCreateInfo info{};
     info.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
     info.pApplicationInfo = &app;
@@ -183,6 +206,21 @@ bool VulkanRenderer::create_instance() {
     const VkResult result = vkCreateInstance(&info, nullptr, &instance_);
     if (result != VK_SUCCESS) {
         return fail("vkCreateInstance", result);
+    }
+
+    if (debug_utils) {
+        auto create_messenger = reinterpret_cast<PFN_vkCreateDebugUtilsMessengerEXT>(
+            vkGetInstanceProcAddr(instance_, "vkCreateDebugUtilsMessengerEXT"));
+        if (create_messenger != nullptr) {
+            VkDebugUtilsMessengerCreateInfoEXT messenger_info{};
+            messenger_info.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
+            messenger_info.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
+            messenger_info.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
+                                         VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT;
+            messenger_info.pfnUserCallback = debug_callback;
+            messenger_info.pUserData = &validation_errors_;
+            create_messenger(instance_, &messenger_info, nullptr, &debug_messenger_);
+        }
     }
     return true;
 }

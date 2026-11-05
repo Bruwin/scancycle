@@ -9,6 +9,7 @@
 #include "world/voxel_chunk.hpp"
 
 #include <cmath>
+#include <cstdlib>
 #include <cstdio>
 #include <cstring>
 
@@ -16,10 +17,12 @@ int main(int argc, char** argv) {
     sc::WindowDesc desc;
     sc::vk::VulkanConfig config;
 
+    // Bounded runs let CI and a quick hardware check finish on their own.
+    sc::i64 frame_limit = 0;
+
     for (int i = 1; i < argc; ++i) {
         if (std::strcmp(argv[i], "--frames") == 0 && i + 1 < argc) {
-            // Bounded runs let CI and a quick hardware check finish on their own.
-            ++i;
+            frame_limit = std::atoll(argv[++i]);
         } else if (std::strcmp(argv[i], "--shaders") == 0 && i + 1 < argc) {
             config.shader_directory = argv[++i];
         } else if (std::strcmp(argv[i], "--no-validation") == 0) {
@@ -77,7 +80,7 @@ int main(int argc, char** argv) {
     sc::InputState input;
     sc::i64 frames = 0;
 
-    while (!input.quit_requested) {
+    while (!input.quit_requested && (frame_limit <= 0 || frames < frame_limit)) {
         platform->poll_events(input);
 
         sc::FrameConstants constants;
@@ -109,6 +112,12 @@ int main(int argc, char** argv) {
         }
     }
 
+    const sc::DrawStatistics final_stats = device->statistics();
+    const sc::u32 errors = device->validation_errors();
+    std::printf("summary: frames %lld, meshes %u, faces %u, draws %u, validation errors %u\n",
+                static_cast<long long>(frames), final_stats.live_meshes, final_stats.quad_count,
+                final_stats.draw_calls, errors);
+
     platform->shutdown();
-    return 0;
+    return errors == 0 ? 0 : 1;
 }
