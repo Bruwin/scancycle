@@ -957,3 +957,63 @@ TEST(router_prefix_serves_a_family_of_paths) {
 
     CHECK(router.route_count() == 2);
 }
+
+TEST(grades_csv_exports_one_row_per_attempt) {
+    const std::filesystem::path path =
+        std::filesystem::temp_directory_path() / "scancycle-grades-csv-test.tsv";
+    std::filesystem::remove(path);
+    app::GradeLog log(path.string());
+    std::string error;
+
+    app::GradeRecord pass;
+    pass.at = 1700000000;
+    pass.lesson_id = "press-batch";
+    pass.passed = true;
+    pass.passed_count = 1;
+    pass.total = 1;
+    pass.checks.push_back(app::GradeCheck{true, "Output on", "motor: output on"});
+    CHECK(log.append(pass, error));
+
+    app::GradeRecord refused;
+    refused.at = 1700000060;
+    refused.lesson_id = "conveyor-interlock";
+    refused.passed_count = 1;
+    refused.total = 3;
+    refused.checks.push_back(app::GradeCheck{false, "Box, once\nor twice", "saw 1"});
+    refused.checks.push_back(app::GradeCheck{false, "Latch \"held\"", "output off"});
+    refused.checks.push_back(app::GradeCheck{true, "Output on", "on"});
+    CHECK(log.append(refused, error));
+
+    const net::Response csv = app::grades_csv(log);
+    CHECK(csv.status == 200);
+    CHECK(csv.content_type.rfind("text/csv", 0) == 0);
+    CHECK(csv.body.rfind("attempt,when_utc,lesson,result,passed,total,missed_checks\n", 0) == 0);
+
+    std::size_t lines = 0;
+    for (const char character : csv.body) {
+        lines += character == '\n' ? 1 : 0;
+    }
+    CHECK(lines == 3);
+
+    CHECK(csv.body.find("1,2023-11-14 22:13,press-batch,pass,1,1,\n") != std::string::npos);
+    CHECK(csv.body.find("2,2023-11-14 22:14,conveyor-interlock,fail,1,3,") !=
+          std::string::npos);
+    // Commas, quotes and line breaks survive inside one quoted cell, and the
+    // passed check is left out of the missed list.
+    CHECK(csv.body.find("\"Box, once or twice; Latch \"\"held\"\"\"") != std::string::npos);
+
+    std::filesystem::remove(path);
+}
+
+TEST(grades_csv_is_only_the_header_when_nothing_was_recorded) {
+    const std::filesystem::path path =
+        std::filesystem::temp_directory_path() / "scancycle-grades-csv-empty-test.tsv";
+    std::filesystem::remove(path);
+    app::GradeLog log(path.string());
+
+    const net::Response csv = app::grades_csv(log);
+    CHECK(csv.status == 200);
+    CHECK(csv.body == "attempt,when_utc,lesson,result,passed,total,missed_checks\n");
+
+    std::filesystem::remove(path);
+}

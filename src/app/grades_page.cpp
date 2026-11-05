@@ -1,5 +1,7 @@
 #include "app/grades_page.hpp"
 
+#include "app/grades_time.hpp"
+
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
@@ -11,23 +13,6 @@
 
 namespace sc::app {
 namespace {
-
-// UTC on purpose: a classroom log that shifts twice a year is a log nobody can
-// compare across terms.
-std::string format_time(std::int64_t seconds) {
-    const std::time_t when = static_cast<std::time_t>(seconds);
-    std::tm parts{};
-#if defined(_WIN32)
-    gmtime_s(&parts, &when);
-#else
-    gmtime_r(&when, &parts);
-#endif
-    char text[32];
-    if (std::strftime(text, sizeof(text), "%Y-%m-%d %H:%M", &parts) == 0) {
-        return "unknown";
-    }
-    return std::string(text);
-}
 
 // The suffix from /grades/<n>: digits only, counted from one, and bounded so an
 // absurd suffix cannot overflow the file index.
@@ -84,7 +69,7 @@ std::string lesson_summary(const std::vector<GradeRecord>& records) {
         table += "<tr><td><code>" + net::html_escape(lesson_id) + "</code></td><td>" +
                  std::to_string(tally.attempts) + "</td><td>" + std::to_string(tally.passed) +
                  "</td><td>" + std::to_string(rate) + "%</td><td>" +
-                 format_time(tally.latest_at) + " <span class=\"";
+                 format_utc_minutes(tally.latest_at) + " <span class=\"";
         table += tally.latest_passed ? "pass\">pass" : "fail\">fail";
         table += "</span></td></tr>";
     }
@@ -165,6 +150,7 @@ net::Response grades_page(const GradeLog& log) {
     if (records.empty()) {
         page += "<p>No graded attempts yet.</p>";
     } else {
+        page += "<p class=\"no-print\"><a href=\"/grades.csv\" download>Download as CSV</a></p>";
         page += lesson_summary(records);
         page += missed_checks(records);
         page += "<h2>Attempts</h2>";
@@ -175,7 +161,7 @@ net::Response grades_page(const GradeLog& log) {
         // link keeps pointing at the same attempt as more are appended.
         for (std::size_t index = records.size(); index-- > 0;) {
             const GradeRecord& record = records[index];
-            page += "<tr><td>" + format_time(record.at) + "</td><td><code>" +
+            page += "<tr><td>" + format_utc_minutes(record.at) + "</td><td><code>" +
                     net::html_escape(record.lesson_id) + "</code></td><td class=\"" +
                     (record.passed ? "pass\">pass" : "fail\">fail") + "</td><td>" +
                     std::to_string(record.passed_count) + " of " + std::to_string(record.total) +
@@ -220,7 +206,7 @@ net::Response attempt_page(const GradeLog& log, std::string_view ordinal) {
     page += "<h1>Graded attempt</h1>";
     page += "<p>Attempt " + std::to_string(wanted) + " of " + std::to_string(records.size()) +
             "; lesson <code>" + net::html_escape(record.lesson_id) + "</code>; " +
-            format_time(record.at) + " UTC.</p>";
+            format_utc_minutes(record.at) + " UTC.</p>";
     page += "<p>Result: <span class=\"";
     page += record.passed ? "pass\">pass" : "fail\">fail";
     page += "</span>; " + std::to_string(record.passed_count) + " of " +

@@ -1,4 +1,5 @@
 #include "app/grade_log.hpp"
+#include "app/grades_csv.hpp"
 #include "app/grades_page.hpp"
 #include "app/lesson_api.hpp"
 #include "lesson/lesson.hpp"
@@ -60,6 +61,11 @@ int main(int argc, char** argv) {
                      return sc::app::grades_page(grade_log);
                  });
 
+    router.route(sc::net::HttpMethod::Get, "/grades.csv",
+                 [&grade_log](const sc::net::Request&) {
+                     return sc::app::grades_csv(grade_log);
+                 });
+
     // The log grows while the server runs, so one route per attempt cannot be
     // registered at startup; the prefix route resolves the ordinal per request.
     router.route_prefix(sc::net::HttpMethod::Get, "/grades/",
@@ -82,6 +88,7 @@ int main(int argc, char** argv) {
     std::printf("  POST http://127.0.0.1:%u/grade      (page)\n", bound);
     std::printf("  http://127.0.0.1:%u/grades   (printable log)\n", bound);
     std::printf("  http://127.0.0.1:%u/grades/<n> (one attempt)\n", bound);
+    std::printf("  http://127.0.0.1:%u/grades.csv (spreadsheet)\n", bound);
     std::printf("  records %s\n\n", records_path.c_str());
     for (const sc::lesson::Lesson& lesson : lessons) {
         std::printf("  lesson %-20s %s\n", lesson.id.c_str(), lesson.title.c_str());
