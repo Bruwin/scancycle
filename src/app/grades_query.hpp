@@ -32,7 +32,7 @@ inline std::string query_escape(std::string_view text) {
 // The query string that reproduces a filter, without the leading '?'. Empty when
 // nothing is filtered, so callers can leave the URL bare instead of adding '?'.
 inline std::string filter_query(std::string_view lesson, std::string_view student,
-                                std::string_view result = {}) {
+                                std::string_view result = {}, std::string_view term = {}) {
     std::string query;
     if (!lesson.empty()) {
         query += "lesson=" + query_escape(lesson);
@@ -48,6 +48,12 @@ inline std::string filter_query(std::string_view lesson, std::string_view studen
             query += "&";
         }
         query += "result=" + query_escape(result);
+    }
+    if (!term.empty()) {
+        if (!query.empty()) {
+            query += "&";
+        }
+        query += "term=" + query_escape(term);
     }
     return query;
 }

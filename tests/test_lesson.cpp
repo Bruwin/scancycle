@@ -5,6 +5,7 @@
 #include "app/grades_csv.hpp"
 #include "app/grades_page.hpp"
 #include "app/grades_pager.hpp"
+#include "app/term_logs.hpp"
 #include "app/lesson_runner.hpp"
 #include "lesson/grader.hpp"
 #include "app/lesson_api.hpp"
@@ -16,6 +17,7 @@
 
 #include <cctype>
 #include <filesystem>
+#include <fstream>
 #include <string>
 #include <thread>
 #include <vector>
@@ -1376,6 +1378,15 @@ TEST(attempt_page_keeps_the_filter_on_its_back_link) {
     CHECK(editable.body.find("<input type=\"hidden\" name=\"student\" value=\"Bob\">") !=
           std::string::npos);
     CHECK(editable.body.find("PROGRAM P\nEND_PROGRAM") != std::string::npos);
+    // A report read from another term points back at that term, but re-grading
+    // writes to the active one, so the form drops the viewed term.
+    const net::Response old_term =
+        app::attempt_page(log, "2", "press-batch", "Bob", "fail", "2025-autumn");
+    CHECK(old_term.body.find("<a href=\"/grades?lesson=press-batch&student=Bob&result=fail"
+                             "&term=2025-autumn\">Scan Cycle class log</a>") !=
+          std::string::npos);
+    CHECK(old_term.body.find("action=\"/grade?lesson=press-batch&student=Bob&result=fail\"") !=
+          std::string::npos);
 
     std::filesystem::remove(path);
 }
@@ -1670,6 +1681,65 @@ TEST(grades_csv_exports_one_result) {
     }
     CHECK(csv.body.find(",fail,") != std::string::npos);
     CHECK(csv.body.find(",pass,") == std::string::npos);
+
+    std::filesystem::remove(path);
+}
+
+TEST(term_logs_lists_logs_and_rejects_unsafe_names) {
+    const std::filesystem::path dir = std::filesystem::temp_directory_path() / "scancycle-terms";
+    std::filesystem::remove_all(dir);
+    std::filesystem::create_directories(dir);
+    for (const char* name : {"2026-spring.tsv", "2025-autumn.tsv", "notes.txt"}) {
+        std::ofstream file(dir / name);
+        file << "";
+    }
+
+    const std::vector<std::string> terms = app::list_terms(dir);
+    CHECK(terms.size() == 2);
+    if (terms.size() == 2) {
+        CHECK(terms[0] == "2025-autumn");
+        CHECK(terms[1] == "2026-spring");
+    }
+
+    CHECK(app::valid_term("2026-spring"));
+    CHECK(!app::valid_term(""));
+    CHECK(!app::valid_term(".."));
+    CHECK(!app::valid_term("a/b"));
+    CHECK(!app::valid_term("back\\slash"));
+    CHECK(app::term_path(dir, "2026-spring") == dir / "2026-spring.tsv");
+
+    std::filesystem::remove_all(dir);
+}
+
+TEST(grades_page_switches_terms_and_keeps_filters) {
+    const std::filesystem::path path =
+        std::filesystem::temp_directory_path() / "scancycle-term-switcher.tsv";
+    std::filesystem::remove(path);
+    app::GradeLog log(path.string());
+    std::string error;
+
+    app::GradeRecord record;
+    record.at = 1700000000;
+    record.lesson_id = "press-batch";
+    record.student = "Ada";
+    record.passed = false;
+    record.passed_count = 0;
+    record.total = 1;
+    CHECK(log.append(record, error));
+
+    const std::vector<std::string> terms{"2025-autumn", "2026-spring"};
+    const net::Response page =
+        app::grades_page(log, "", "Ada", 1, {}, "fail", "2026-spring", terms);
+    CHECK(page.body.find("Term:") != std::string::npos);
+    CHECK(page.body.find("<strong>2026-spring</strong>") != std::string::npos);
+    CHECK(page.body.find("<a href=\"/grades?student=Ada&result=fail&term=2025-autumn\">"
+                         "2025-autumn</a>") != std::string::npos);
+    CHECK(page.body.find("href=\"/grades.csv?student=Ada&result=fail&term=2026-spring\"") !=
+          std::string::npos);
+
+    // The single-file mode has no switcher at all.
+    const net::Response plain = app::grades_page(log, "", "", 1, {}, "", "", {});
+    CHECK(plain.body.find("Term:") == std::string::npos);
 
     std::filesystem::remove(path);
 }

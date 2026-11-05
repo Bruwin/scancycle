@@ -121,6 +121,7 @@ add_library(sc_app
     src/app/grades_csv.cpp
     src/app/grades_coverage.cpp
     src/app/grades_students.cpp
+    src/app/term_logs.cpp
     src/app/application.cpp
     src/app/watch_text.cpp
     src/app/lesson_runner.cpp

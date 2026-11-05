@@ -20,11 +20,14 @@ namespace sc::app {
 // last one. `catalog` is the lesson ids the coverage table always shows as
 // columns, so a lesson nobody attempted is still visible; empty would only show
 // lessons that already appear in the log. `result` is `pass` or `fail`; anything
-// else is an empty page, like an unknown lesson or student.
+// else is an empty page, like an unknown lesson or student. `term` names the log
+// being read and `terms` lists the ones a teacher can switch to; when `terms` is
+// empty there is no switcher and the portal is the single-file mode.
 net::Response grades_page(const GradeLog& log, std::string_view lesson = {},
                           std::string_view student = {}, std::size_t page = 1,
                           std::span<const std::string> catalog = {},
-                          std::string_view result = {});
+                          std::string_view result = {}, std::string_view term = {},
+                          std::span<const std::string> terms = {});
 
 // One recorded attempt with its full report, for the page a teacher prints.
 // `ordinal` is the suffix of /grades/<n>, counted from 1 in file order; anything
@@ -32,6 +35,6 @@ net::Response grades_page(const GradeLog& log, std::string_view lesson = {},
 // the back link, so leaving an attempt returns to the view it was opened from.
 net::Response attempt_page(const GradeLog& log, std::string_view ordinal,
                            std::string_view lesson = {}, std::string_view student = {},
-                           std::string_view result = {});
+                           std::string_view result = {}, std::string_view term = {});
 
 }  // namespace sc::app

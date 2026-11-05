@@ -199,7 +199,11 @@ a tab-separated log the server names at startup; `GET /grades` lists them newest
 rate, a per-student one and the rubric rows the class misses most,
 `GET /grades/<n>` reopens one attempt in full, keeping the active filter on its
 back link and on its edit form, and `GET /grades.csv` exports one row per
-attempt for a gradebook.
+attempt for a gradebook. With `--logs=<dir>` the portal serves one `<term>.tsv`
+per class or term: `--term=` names the log new attempts are written to and
+`?term=` reads any of the others. A term is validated against a filename-safe
+alphabet before it is joined into a path, so a URL cannot reach outside the
+directory.
 `?lesson=<id>`, `?student=<name>` and `?result=pass|fail` narrow the log and the
 export, alone or together. The attempt table shows 25 rows per page; `?page=<n>` slices only that
 table, while the summaries and the export keep describing the whole filtered

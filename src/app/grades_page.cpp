@@ -144,7 +144,8 @@ std::string missed_checks(const std::vector<const GradeRecord*>& records) {
 
 net::Response grades_page(const GradeLog& log, std::string_view lesson, std::string_view student,
                           std::size_t page_number, std::span<const std::string> catalog,
-                          std::string_view result) {
+                          std::string_view result, std::string_view term,
+                          std::span<const std::string> terms) {
     std::string error;
     const std::vector<GradeRecord> records = log.entries(error);
 
@@ -165,6 +166,25 @@ net::Response grades_page(const GradeLog& log, std::string_view lesson, std::str
     std::string page = net::page_head("Scan Cycle grades");
     page += "<p class=\"no-print\"><a href=\"/\">Scan Cycle teacher portal</a></p>";
     page += "<h1>Graded attempts</h1>";
+    // Switching term keeps the filters: "Ada's failures" is just as meaningful
+    // in the previous term as in this one.
+    if (terms.size() > 1 && !term.empty()) {
+        page += "<p class=\"no-print\">Term: ";
+        bool first = true;
+        for (const std::string& one : terms) {
+            if (!first) {
+                page += " | ";
+            }
+            first = false;
+            if (one == term) {
+                page += "<strong>" + net::html_escape(one) + "</strong>";
+            } else {
+                page += "<a href=\"/grades?" + filter_query(lesson, student, result, one) + "\">" +
+                        net::html_escape(one) + "</a>";
+            }
+        }
+        page += "</p>";
+    }
     if (!filtered) {
         page += "<p>" + std::to_string(records.size()) +
                 (records.size() == 1 ? " attempt" : " attempts") + " recorded in <code>" +
@@ -200,7 +220,7 @@ net::Response grades_page(const GradeLog& log, std::string_view lesson, std::str
         }
         page += ".</p>";
     } else {
-        const std::string query = filter_query(lesson, student, result);
+        const std::string query = filter_query(lesson, student, result, term);
         const std::string csv_href = query.empty() ? std::string("/grades.csv")
                                                    : "/grades.csv?" + query;
         // Paging slices the table only. The summaries still count every filtered
@@ -216,7 +236,7 @@ net::Response grades_page(const GradeLog& log, std::string_view lesson, std::str
         page += student_coverage(shown, catalog);
         page += missed_checks(shown);
         page += "<h2>Attempts</h2>";
-        page += attempt_pager(current, pages, lesson, student, result);
+        page += attempt_pager(current, pages, lesson, student, result, term);
         page += "<table><thead><tr><th>When (UTC)</th><th>Student</th><th>Lesson</th>"
                 "<th>Result</th><th>Checks</th><th>Program</th>"
                 "<th class=\"no-print\">Report</th></tr></thead><tbody>";
@@ -253,13 +273,15 @@ net::Response grades_page(const GradeLog& log, std::string_view lesson, std::str
 }
 
 net::Response attempt_page(const GradeLog& log, std::string_view ordinal, std::string_view lesson,
-                           std::string_view student, std::string_view result) {
+                           std::string_view student, std::string_view result,
+                           std::string_view term) {
     net::Response response;
     response.content_type = "text/html; charset=utf-8";
 
     // The filter belongs to the view the report was opened from, not to the
     // attempt, so it only shapes the way back.
-    const std::string query = filter_query(lesson, student, result);
+    const std::string query = filter_query(lesson, student, result, term);
+    const std::string form_query = filter_query(lesson, student, result);
     const std::string back = query.empty() ? std::string("/grades") : "/grades?" + query;
 
     std::string error;
@@ -314,9 +336,11 @@ net::Response attempt_page(const GradeLog& log, std::string_view ordinal, std::s
         // the filter so the fresh report still leads back to this view.
         page += "<h2 class=\"no-print\">Edit and grade again</h2>"
                 "<form method=\"post\" action=\"/grade";
-        if (!query.empty()) {
+        // Re-grading always writes to the active term, so the form deliberately
+        // drops the viewed term and the fresh report points at the active one.
+        if (!form_query.empty()) {
             page += "?";
-            page += query;
+            page += form_query;
         }
         page += "\"><input type=\"hidden\" name=\"lesson\" value=\"" +
                 net::html_escape(record.lesson_id) + "\">";

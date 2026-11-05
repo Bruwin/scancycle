@@ -152,6 +152,10 @@ curl -s "http://127.0.0.1:8080/grades?student=Ada&page=2"
 # Only the attempts that failed, or result=pass, combinable with the filters
 curl -s "http://127.0.0.1:8080/grades?result=fail"
 
+# One log per term: new attempts go to --term, ?term= reads an older one
+./build/scancycle_server --logs=grades --term=2026-spring
+curl -s "http://127.0.0.1:8080/grades?term=2025-autumn"
+
 # A name on the submission travels into the log, the pages and the CSV
 curl -s -X POST -d "lesson=press-batch&student=Ada" http://127.0.0.1:8080/grade
 
