@@ -14,7 +14,7 @@ class VoxelRenderer {
 public:
     explicit VoxelRenderer(RhiDevice& device) : device_(device) {}
 
-    void enqueue_chunk(u32 chunk_x, u32 chunk_y, u32 chunk_z, MeshData mesh);
+    void enqueue_chunk(i32 chunk_x, i32 chunk_y, i32 chunk_z, MeshData mesh);
 
     // Uploads at most `budget` queued chunks. Returns how many were uploaded.
     u32 upload_pending(u32 budget);
@@ -24,9 +24,9 @@ public:
 
 private:
     struct Pending {
-        u32 x = 0;
-        u32 y = 0;
-        u32 z = 0;
+        i32 x = 0;
+        i32 y = 0;
+        i32 z = 0;
         MeshData mesh;
     };
 

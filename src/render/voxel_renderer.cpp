@@ -4,7 +4,7 @@
 
 namespace sc {
 
-void VoxelRenderer::enqueue_chunk(u32 chunk_x, u32 chunk_y, u32 chunk_z, MeshData mesh) {
+void VoxelRenderer::enqueue_chunk(i32 chunk_x, i32 chunk_y, i32 chunk_z, MeshData mesh) {
     pending_.push_back(Pending{chunk_x, chunk_y, chunk_z, std::move(mesh)});
 }
 

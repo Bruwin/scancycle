@@ -38,7 +38,7 @@ public:
     virtual const char* backend_name() const = 0;
 
     // One contiguous upload per chunk. Handles are stable until released.
-    virtual GpuMeshHandle upload_chunk_mesh(u32 chunk_x, u32 chunk_y, u32 chunk_z,
+    virtual GpuMeshHandle upload_chunk_mesh(i32 chunk_x, i32 chunk_y, i32 chunk_z,
                                             const MeshData& mesh) = 0;
     virtual void release_mesh(GpuMeshHandle handle) = 0;
 

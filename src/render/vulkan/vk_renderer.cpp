@@ -63,7 +63,7 @@ public:
 
     const char* backend_name() const override { return "vulkan"; }
 
-    GpuMeshHandle upload_chunk_mesh(u32 chunk_x, u32 chunk_y, u32 chunk_z,
+    GpuMeshHandle upload_chunk_mesh(i32 chunk_x, i32 chunk_y, i32 chunk_z,
                                     const MeshData& mesh) override;
     void release_mesh(GpuMeshHandle handle) override;
 
@@ -678,7 +678,7 @@ bool VulkanRenderer::recreate_swapchain() {
     return create_capture_buffer();
 }
 
-GpuMeshHandle VulkanRenderer::upload_chunk_mesh(u32 chunk_x, u32 chunk_y, u32 chunk_z,
+GpuMeshHandle VulkanRenderer::upload_chunk_mesh(i32 chunk_x, i32 chunk_y, i32 chunk_z,
                                                 const MeshData& mesh) {
     if (!chunks_) {
         return GpuMeshHandle{};

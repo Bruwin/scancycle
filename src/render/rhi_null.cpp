@@ -14,7 +14,7 @@ class NullRhiDevice final : public RhiDevice {
 public:
     const char* backend_name() const override { return "null"; }
 
-    GpuMeshHandle upload_chunk_mesh(u32 chunk_x, u32 chunk_y, u32 chunk_z,
+    GpuMeshHandle upload_chunk_mesh(i32 chunk_x, i32 chunk_y, i32 chunk_z,
                                     const MeshData& mesh) override {
         (void)chunk_x;
         (void)chunk_y;
