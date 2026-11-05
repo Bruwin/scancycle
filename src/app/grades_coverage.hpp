@@ -5,6 +5,7 @@
 // totals can show.
 #include "app/grade_log.hpp"
 
+#include <span>
 #include <string>
 #include <vector>
 
@@ -14,6 +15,12 @@ namespace sc::app {
 // follow up with, and unnamed attempts still count in the student summary. Each
 // cell is the passed count over the attempt count, and links to that pair's
 // filtered log so a gap can be investigated in one click.
-std::string student_coverage(const std::vector<const GradeRecord*>& records);
+//
+// `catalog` is every lesson the portal knows about, so a lesson nobody has
+// attempted still gets a column of dashes rather than disappearing. A lesson the
+// log remembers but the catalog has dropped keeps its column too: an old term's
+// report should not lose the work it recorded.
+std::string student_coverage(const std::vector<const GradeRecord*>& records,
+                             std::span<const std::string> catalog);
 
 }  // namespace sc::app

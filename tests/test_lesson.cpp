@@ -1511,6 +1511,8 @@ TEST(student_coverage_crosses_students_with_lessons) {
     CHECK(append("Ada", "conveyor-interlock", true));
     CHECK(append("Bob", "press-batch", true));
     CHECK(append("", "press-batch", true));
+    // An old log can name a lesson the current catalog no longer offers.
+    CHECK(append("Cy", "retired-lesson", true));
 
     const std::vector<app::GradeRecord> records = log.entries(error);
     std::vector<const app::GradeRecord*> shown;
@@ -1518,8 +1520,16 @@ TEST(student_coverage_crosses_students_with_lessons) {
         shown.push_back(&record);
     }
 
-    const std::string table = app::student_coverage(shown);
+    const std::vector<std::string> catalog{"hoist-safety", "press-batch", "conveyor-interlock"};
+    const std::string table = app::student_coverage(shown, catalog);
     CHECK(table.find("<h2>Coverage by student and lesson</h2>") != std::string::npos);
+    // A catalog lesson nobody attempted is a column, and its cells are dashes.
+    CHECK(table.find("<th><code>hoist-safety</code></th>") != std::string::npos);
+    CHECK(table.find("lesson=hoist-safety") == std::string::npos);
+    // A log-only lesson keeps its column even though the catalog dropped it.
+    CHECK(table.find("<th><code>retired-lesson</code></th>") != std::string::npos);
+    CHECK(table.find("<a href=\"/grades?student=Cy&lesson=retired-lesson\">1/1</a>") !=
+          std::string::npos);
     CHECK(table.find("<th><a href=\"/grades?student=Ada\">Ada</a></th>") != std::string::npos);
     CHECK(table.find("<a href=\"/grades?student=Ada&lesson=conveyor-interlock\">1/1</a>") !=
           std::string::npos);
@@ -1537,7 +1547,32 @@ TEST(student_coverage_crosses_students_with_lessons) {
     anonymous.passed_count = 1;
     anonymous.total = 1;
     const std::vector<const app::GradeRecord*> no_names{&anonymous};
-    CHECK(app::student_coverage(no_names).empty());
+    CHECK(app::student_coverage(no_names, catalog).empty());
+
+    std::filesystem::remove(path);
+}
+
+TEST(grades_page_covers_catalog_lessons_nobody_attempted) {
+    const std::filesystem::path path =
+        std::filesystem::temp_directory_path() / "scancycle-coverage-page.tsv";
+    std::filesystem::remove(path);
+    app::GradeLog log(path.string());
+    std::string error;
+
+    app::GradeRecord record;
+    record.at = 1700000000;
+    record.lesson_id = "press-batch";
+    record.student = "Ada";
+    record.passed = true;
+    record.passed_count = 1;
+    record.total = 1;
+    CHECK(log.append(record, error));
+
+    const std::vector<std::string> catalog{"hoist-safety", "press-batch"};
+    const net::Response page = app::grades_page(log, "", "", 1, catalog);
+    CHECK(page.body.find("<th><code>hoist-safety</code></th>") != std::string::npos);
+    // Nobody attempted it, so the cell is a dash rather than a link.
+    CHECK(page.body.find("lesson=hoist-safety") == std::string::npos);
 
     std::filesystem::remove(path);
 }

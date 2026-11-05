@@ -5,6 +5,7 @@
 
 #include <cstddef>
 #include <map>
+#include <span>
 #include <string>
 
 namespace sc::app {
@@ -17,12 +18,19 @@ struct Coverage {
 
 }  // namespace
 
-std::string student_coverage(const std::vector<const GradeRecord*>& records) {
+std::string student_coverage(const std::vector<const GradeRecord*>& records,
+                             std::span<const std::string> catalog) {
     // Nested maps keep both axes sorted, so the table does not reorder itself
-    // between loads as attempts arrive. Lessons with no attempt in the filtered
-    // set are not columns: the log cannot report on a lesson nobody submitted.
+    // between loads as attempts arrive. Columns start as the catalog, because an
+    // untouched lesson is the gap a teacher most needs to see, and any log-only
+    // lesson is added as encounters it.
     std::map<std::string, std::map<std::string, Coverage>> coverage;
     std::map<std::string, bool> lessons;
+    for (const std::string& lesson : catalog) {
+        if (!lesson.empty()) {
+            lessons[lesson] = true;
+        }
+    }
     for (const GradeRecord* record : records) {
         if (record->student.empty()) {
             continue;

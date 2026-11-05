@@ -143,7 +143,7 @@ std::string missed_checks(const std::vector<const GradeRecord*>& records) {
 }  // namespace
 
 net::Response grades_page(const GradeLog& log, std::string_view lesson, std::string_view student,
-                          std::size_t page_number) {
+                          std::size_t page_number, std::span<const std::string> catalog) {
     std::string error;
     const std::vector<GradeRecord> records = log.entries(error);
 
@@ -205,7 +205,7 @@ net::Response grades_page(const GradeLog& log, std::string_view lesson, std::str
                 "\" download>Download as CSV</a></p>";
         page += lesson_summary(shown);
         page += student_summary(shown);
-        page += student_coverage(shown);
+        page += student_coverage(shown, catalog);
         page += missed_checks(shown);
         page += "<h2>Attempts</h2>";
         page += attempt_pager(current, pages, lesson, student);

@@ -46,6 +46,13 @@ int main(int argc, char** argv) {
     }
 
     const std::vector<sc::lesson::Lesson> lessons = sc::lesson::make_builtin_lessons();
+    // The coverage table needs the catalog, not just what the log remembers, so a
+    // lesson nobody has tried still appears as a column of dashes.
+    std::vector<std::string> lesson_ids;
+    lesson_ids.reserve(lessons.size());
+    for (const sc::lesson::Lesson& one : lessons) {
+        lesson_ids.push_back(one.id);
+    }
     sc::app::GradeLog grade_log(records_path);
 
     sc::net::PortalRouter router = sc::net::make_default_router(lessons);
@@ -63,12 +70,12 @@ int main(int argc, char** argv) {
     // the whole log, an empty value is treated as absent, and both together
     // narrow further.
     router.route(sc::net::HttpMethod::Get, "/grades",
-                 [&grade_log](const sc::net::Request& request) {
+                 [&grade_log, &lesson_ids](const sc::net::Request& request) {
                      const std::string lesson = sc::net::form_field(request.query, "lesson");
                      const std::string student = sc::net::form_field(request.query, "student");
                      const std::size_t page = sc::app::parse_attempt_page(
                          sc::net::form_field(request.query, "page"));
-                     return sc::app::grades_page(grade_log, lesson, student, page);
+                     return sc::app::grades_page(grade_log, lesson, student, page, lesson_ids);
                  });
 
     router.route(sc::net::HttpMethod::Get, "/grades.csv",

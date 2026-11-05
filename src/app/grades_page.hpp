@@ -5,6 +5,8 @@
 #include "net/portal_server.hpp"
 
 #include <cstddef>
+#include <span>
+#include <string>
 #include <string_view>
 
 namespace sc::app {
@@ -15,9 +17,12 @@ namespace sc::app {
 // not a 404: the log itself exists and the query is well formed. `page` is the
 // 1-based `page` field: it slices the attempt table only, while the summaries and
 // the CSV keep describing the whole filtered set. A page past the end shows the
-// last one.
+// last one. `catalog` is the lesson ids the coverage table always shows as
+// columns, so a lesson nobody attempted is still visible; empty would only show
+// lessons that already appear in the log.
 net::Response grades_page(const GradeLog& log, std::string_view lesson = {},
-                          std::string_view student = {}, std::size_t page = 1);
+                          std::string_view student = {}, std::size_t page = 1,
+                          std::span<const std::string> catalog = {});
 
 // One recorded attempt with its full report, for the page a teacher prints.
 // `ordinal` is the suffix of /grades/<n>, counted from 1 in file order; anything
