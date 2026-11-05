@@ -422,6 +422,35 @@ TEST(lesson_page_is_absent_for_an_unknown_id) {
     CHECK(router.dispatch(request).status == 404);
 }
 
+TEST(lesson_page_lists_the_lesson_toolbox) {
+    lesson::Lesson restricted;
+    restricted.id = "restricted";
+    restricted.title = "Restricted";
+    restricted.allowed_instructions = {"TON", "CTU"};
+
+    lesson::Lesson open;
+    open.id = "open";
+    open.title = "Open";
+
+    const std::vector<lesson::Lesson> lessons{restricted, open};
+    const net::PortalRouter router = net::make_default_router(lessons);
+
+    net::Request request;
+    request.method = net::HttpMethod::Get;
+    request.path = "/lessons/restricted";
+    const net::Response tool = router.dispatch(request);
+
+    CHECK(tool.status == 200);
+    CHECK(tool.body.find("<code>TON</code>") != std::string::npos);
+    CHECK(tool.body.find("<code>CTU</code>") != std::string::npos);
+    CHECK(tool.body.find("Every instruction is available") == std::string::npos);
+
+    request.path = "/lessons/open";
+    const net::Response every = router.dispatch(request);
+    CHECK(every.status == 200);
+    CHECK(every.body.find("Every instruction is available") != std::string::npos);
+}
+
 TEST(portal_escapes_page_text) {
     CHECK(net::html_escape("<a & b>") == "&lt;a &amp; b&gt;");
     CHECK(net::html_escape("\"quoted\"") == "&quot;quoted&quot;");

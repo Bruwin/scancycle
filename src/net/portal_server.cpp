@@ -157,8 +157,22 @@ std::string lesson_page(const lesson::Lesson& lesson, const std::vector<lesson::
                        "</title></head><body>"
                        "<p><a href=\"/\">Scan Cycle teacher portal</a></p><h1>" +
                        html_escape(lesson.title) + "</h1><p>" +
-                       html_escape(lesson.objective) + "</p>" +
-                       "<h2>How this is graded</h2><table><thead><tr><th>Check</th>"
+                       html_escape(lesson.objective) + "</p><h2>Toolbox</h2>";
+
+    if (lesson.allowed_instructions.empty()) {
+        page += "<p>Every instruction is available.</p>";
+    } else {
+        page += "<p>This lesson grants: ";
+        for (std::size_t i = 0; i < lesson.allowed_instructions.size(); ++i) {
+            if (i != 0) {
+                page += ", ";
+            }
+            page += "<code>" + html_escape(lesson.allowed_instructions[i]) + "</code>";
+        }
+        page += "</p>";
+    }
+
+    page += "<h2>How this is graded</h2><table><thead><tr><th>Check</th>"
                        "<th>What passes</th></tr></thead><tbody>";
     for (const lesson::RubricCheck& check : lesson.rubric) {
         page += "<tr><td>" + html_escape(check.description) + "</td><td>" +

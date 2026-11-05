@@ -189,7 +189,8 @@ on the internet. `net/http` parses and formats messages as pure text,
 `net/http_server` serves the router over TCP bound to loopback, `GET /` renders
 the catalog as a page, `POST /api/grade` returns a lesson's rubric report as JSON,
 and `POST /grade` renders the same run as a page for the catalog's form.
-`GET /lessons/<id>` shows an objective and its rubric before anyone submits. Both
+`GET /lessons/<id>` shows an objective, its toolbox and its rubric before anyone
+submits. Both
 grade responses carry the submitted program back in that form, so a rejection or
 a failed compile never costs a student their work. There is no TLS or authentication yet, and the WebSocket half of
 the portal is still open.
