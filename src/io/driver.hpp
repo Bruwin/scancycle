@@ -20,6 +20,12 @@ public:
     virtual bool read_inputs() = 0;
     virtual bool write_outputs() = 0;
 
+    // One complete scan: latch inputs, run the program, flush outputs. The
+    // composition root drives every transport through this call, so a live
+    // controller and the simulated cell cannot drift apart.
+    virtual bool run_scan(i64 now_ms) = 0;
+    virtual i64 scans() const = 0;
+
     virtual const char* name() const = 0;
     virtual std::string last_error() const = 0;
 };
