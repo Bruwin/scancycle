@@ -1347,6 +1347,8 @@ TEST(attempt_page_keeps_the_filter_on_its_back_link) {
 
     const net::Response plain = app::attempt_page(log, "1");
     CHECK(plain.body.find("<a href=\"/grades\">Scan Cycle class log</a>") != std::string::npos);
+    // A reference-only attempt has nothing to edit, so it offers no form.
+    CHECK(plain.body.find("Edit and grade again") == std::string::npos);
 
     const net::Response filtered = app::attempt_page(log, "1", "press-batch", "Ada");
     CHECK(filtered.body.find("<a href=\"/grades?lesson=press-batch&student=Ada\">"
@@ -1356,5 +1358,43 @@ TEST(attempt_page_keeps_the_filter_on_its_back_link) {
               .body.find("<a href=\"/grades?lesson=press-batch&student=Ada\">"
                          "Back to the class log</a>") != std::string::npos);
 
+    // A typed program can be corrected in place, and the form keeps the filter
+    // so the next report still belongs to the view the teacher is watching.
+    app::GradeRecord typed = record;
+    typed.student = "Bob";
+    typed.program = "PROGRAM P\nEND_PROGRAM\n";
+    CHECK(log.append(typed, error));
+    const net::Response editable = app::attempt_page(log, "2", "press-batch", "Bob");
+    CHECK(editable.body.find("action=\"/grade?lesson=press-batch&student=Bob\"") !=
+          std::string::npos);
+    CHECK(editable.body.find("<input type=\"hidden\" name=\"student\" value=\"Bob\">") !=
+          std::string::npos);
+    CHECK(editable.body.find("PROGRAM P\nEND_PROGRAM") != std::string::npos);
+
     std::filesystem::remove(path);
+}
+
+TEST(grade_again_from_a_filtered_report_returns_to_the_filtered_log) {
+    const std::vector<lesson::Lesson> lessons = lesson::make_builtin_lessons();
+
+    net::Request request;
+    request.method = net::HttpMethod::Post;
+    request.path = "/grade";
+    request.query = "lesson=press-batch&student=Ada";
+    request.body = "lesson=press-batch&student=Ada";
+
+    const net::Response page = app::grade_lesson_page(lessons, request);
+    CHECK(page.status == 200);
+    CHECK(page.body.find("<a href=\"/grades?lesson=press-batch&student=Ada\">"
+                         "Back to the filtered class log</a>") != std::string::npos);
+    // Grading again from the report keeps the filter too.
+    CHECK(page.body.find("action=\"/grade?lesson=press-batch&student=Ada\"") !=
+          std::string::npos);
+
+    net::Request bare = request;
+    bare.query.clear();
+    bare.body = "lesson=press-batch";
+    const net::Response plain = app::grade_lesson_page(lessons, bare);
+    CHECK(plain.body.find("Back to the filtered class log") == std::string::npos);
+    CHECK(plain.body.find("action=\"/grade\"") != std::string::npos);
 }

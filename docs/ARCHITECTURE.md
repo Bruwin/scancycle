@@ -198,7 +198,8 @@ submitted program and the student's name, when one was given, are appended to
 a tab-separated log the server names at startup; `GET /grades` lists them newest first, above them a per-lesson pass
 rate, a per-student one and the rubric rows the class misses most,
 `GET /grades/<n>` reopens one attempt in full, keeping the active filter on its
-back link, and `GET /grades.csv` exports one row per attempt for a gradebook.
+back link and on its edit form, and `GET /grades.csv` exports one row per
+attempt for a gradebook.
 `?lesson=<id>` and `?student=<name>` narrow the log and the export, alone or
 together. The stylesheet carries print rules, so the log, an attempt and
 a grade report print without nav links or forms. A line written by an older

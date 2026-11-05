@@ -68,9 +68,11 @@ std::string page_head(std::string_view title);
 // The one lesson form. The catalog renders it empty; the grade page renders it
 // with the submission, so neither a program nor the name on it is lost between
 // attempts. The student field is optional: an unnamed attempt is still graded.
+// `query` is an already-encoded filter placed on the action, so grading again
+// from a filtered log returns to that view instead of the whole one.
 std::string lesson_form(const std::vector<lesson::Lesson>& lessons,
                         std::string_view selected, std::string_view program,
-                        std::string_view student);
+                        std::string_view student, std::string_view query = {});
 
 PortalRouter make_default_router(const std::vector<lesson::Lesson>& lessons);
 

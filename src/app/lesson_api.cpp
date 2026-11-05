@@ -1,6 +1,7 @@
 #include "app/lesson_api.hpp"
 
 #include "app/grade_log.hpp"
+#include "app/grades_query.hpp"
 #include "app/lesson_runner.hpp"
 #include "lesson/grader.hpp"
 #include "net/http.hpp"
@@ -8,6 +9,7 @@
 #include <cstdint>
 #include <ctime>
 #include <string>
+#include <string_view>
 #include <utility>
 
 namespace sc::app {
@@ -104,7 +106,8 @@ net::Response json_error(int status, const std::string& message) {
 // a student can see which assertion failed and what the simulation actually did.
 // The submission rides along in the form below it, so fixing a near miss is an
 // edit rather than a retype.
-std::string report_page(const GradeOutcome& outcome, const std::vector<lesson::Lesson>& lessons) {
+std::string report_page(const GradeOutcome& outcome, const std::vector<lesson::Lesson>& lessons,
+                        const std::string& filter) {
     const lesson::GradeReport& report = outcome.report;
 
     std::string page = net::page_head("Scan Cycle grade");
@@ -130,7 +133,11 @@ std::string report_page(const GradeOutcome& outcome, const std::vector<lesson::L
     }
 
     page += "</tbody></table><h2 class=\"no-print\">Edit and grade again</h2>";
-    page += net::lesson_form(lessons, report.lesson_id, outcome.program, outcome.student);
+    page += net::lesson_form(lessons, report.lesson_id, outcome.program, outcome.student, filter);
+    if (!filter.empty()) {
+        page += "<p class=\"no-print\"><a href=\"/grades?" + filter +
+                "\">Back to the filtered class log</a></p>";
+    }
     page += "<p class=\"no-print\"><a href=\"/\">Grade another lesson</a></p>"
             "</main></body></html>";
     return page;
@@ -138,11 +145,17 @@ std::string report_page(const GradeOutcome& outcome, const std::vector<lesson::L
 
 // A rejection is still an answer about a submission someone wrote: the message
 // explains what was wrong, and the form comes back filled in.
-std::string error_page(const GradeOutcome& outcome, const std::vector<lesson::Lesson>& lessons) {
+std::string error_page(const GradeOutcome& outcome, const std::vector<lesson::Lesson>& lessons,
+                       const std::string& filter) {
     std::string page = net::page_head("Scan Cycle grade");
     page += "<h1>Could not grade</h1><p>" + net::html_escape(outcome.error) + "</p>";
     page += "<h2>Your program is still here</h2>";
-    page += net::lesson_form(lessons, outcome.wanted_lesson, outcome.program, outcome.student);
+    page += net::lesson_form(lessons, outcome.wanted_lesson, outcome.program, outcome.student,
+                             filter);
+    if (!filter.empty()) {
+        page += "<p class=\"no-print\"><a href=\"/grades?" + filter +
+                "\">Back to the filtered class log</a></p>";
+    }
     page += "<p class=\"no-print\"><a href=\"/\">Back to the catalog</a></p>"
             "</main></body></html>";
     return page;
@@ -168,11 +181,16 @@ net::Response grade_lesson_page(const std::vector<lesson::Lesson>& lessons,
     const GradeOutcome outcome = grade_submission(lessons, request);
     record_if_asked(outcome, log);
 
+    // The filter rides on the query, not in the submission: it says which log
+    // view the student came from, so the report can lead back there.
+    const std::string filter = filter_query(net::form_field(request.query, "lesson"),
+                                            net::form_field(request.query, "student"));
+
     net::Response response;
     response.status = outcome.status;
     response.content_type = "text/html; charset=utf-8";
-    response.body =
-        outcome.status == 200 ? report_page(outcome, lessons) : error_page(outcome, lessons);
+    response.body = outcome.status == 200 ? report_page(outcome, lessons, filter)
+                                          : error_page(outcome, lessons, filter);
     return response;
 }
 

@@ -293,6 +293,21 @@ net::Response attempt_page(const GradeLog& log, std::string_view ordinal, std::s
         page += "<p>The lesson's reference solution was graded; no program was submitted.</p>";
     } else {
         page += "<pre>" + net::html_escape(record.program) + "</pre>";
+        // A near miss is fixed by editing, not retyping, and the form carries
+        // the filter so the fresh report still leads back to this view.
+        page += "<h2 class=\"no-print\">Edit and grade again</h2>"
+                "<form method=\"post\" action=\"/grade";
+        if (!query.empty()) {
+            page += "?";
+            page += query;
+        }
+        page += "\"><input type=\"hidden\" name=\"lesson\" value=\"" +
+                net::html_escape(record.lesson_id) + "\">";
+        page += "<input type=\"hidden\" name=\"student\" value=\"" +
+                net::html_escape(record.student) + "\">";
+        page += "<p><label>Program<br><textarea name=\"program\" rows=\"12\" cols=\"60\">";
+        page += net::html_escape(record.program) + "</textarea></label></p>";
+        page += "<p><button type=\"submit\">Grade again</button></p></form>";
     }
     page += "</main></body></html>";
 

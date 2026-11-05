@@ -110,9 +110,16 @@ std::string page_head(std::string_view title) {
 }
 
 std::string lesson_form(const std::vector<lesson::Lesson>& lessons, std::string_view selected,
-                        std::string_view program, std::string_view student) {
-    std::string form =
-        "<form method=\"post\" action=\"/grade\">"
+                        std::string_view program, std::string_view student,
+                        std::string_view query) {
+    std::string form = "<form method=\"post\" action=\"/grade";
+    if (!query.empty()) {
+        // Already percent-encoded by the caller, so only '?' and '&' remain.
+        form += "?";
+        form += query;
+    }
+    form +=
+        "\">"
         "<p><label>Name or initials "
         "<input type=\"text\" name=\"student\" maxlength=\"80\" value=\"" +
         html_escape(student) +
