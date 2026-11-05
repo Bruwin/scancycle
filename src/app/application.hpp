@@ -4,12 +4,14 @@
 // the scan on its own period. Nothing else in the codebase is allowed to know
 // how these pieces fit together.
 #include "core/types.hpp"
+#include "io/driver.hpp"
 #include "io/force_table.hpp"
 #include "io/sim_driver.hpp"
 #include "lesson/grader.hpp"
 #include "plc/vm.hpp"
 #include "sim/plant.hpp"
 
+#include <functional>
 #include <memory>
 #include <string>
 #include <string_view>
@@ -37,6 +39,10 @@ struct AppConfig {
     // The lesson's toolbox. Empty means every instruction is available; otherwise
     // a program that uses anything else is refused before it can be graded.
     std::vector<std::string> allowed_instructions;
+
+    // Built after the program compiles, because a live driver binds into the VM.
+    // Empty keeps the simulated cell.
+    std::function<std::unique_ptr<io::PlcDriver>(plc::Vm&)> driver_factory;
 };
 
 class Application {
@@ -63,7 +69,8 @@ public:
 
     // Pins a bound tag, the way an engineer forces I/O at the rack. Refused when
     // the name is not a tag this program is bound to, so a typo cannot create a
-    // force that silently does nothing.
+    // force that silently does nothing. The simulated driver is the only one
+    // that can apply a force; a live controller refuses.
     bool set_force(std::string name, bool value);
     bool clear_force(std::string_view name);
     void clear_forces();
@@ -121,7 +128,8 @@ private:
     io::ForceTable forces_;  // declared before the driver, which points at it
     plc::CompiledProgram program_;
     std::unique_ptr<plc::Vm> vm_;
-    std::unique_ptr<io::SimDriver> driver_;
+    std::unique_ptr<io::PlcDriver> driver_;
+    io::SimDriver* sim_driver_ = nullptr;  // non-null only for the simulated cell
     std::vector<std::string> unbound_devices_;
     i64 now_ms_ = 0;
     i64 scan_accumulator_ms_ = 0;
