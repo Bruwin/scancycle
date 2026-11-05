@@ -33,6 +33,7 @@ Portal or Studio 5000 and recognise everything.
 | Machine: pull from infeed, cycle time, release to outfeed | working, tested |
 | Lesson runner: a lesson's reference program drives its own cell | working, tested |
 | Modbus/TCP codec, live loopback driver, software slave, commissioning gate | working, tested |
+| libplctag driver (CIP/S7 booleans), opt-in build, fake-backend tests | working, tested (no hardware) |
 | Procedural materials and parametric machine kits | working, tested |
 | Editor model, lesson schema, grader, portal routing | working, tested |
 | Composition root (plant + PLC + I/O in one headless session) | working, tested |
@@ -43,7 +44,7 @@ Portal or Studio 5000 and recognise everything.
 ## Build
 
 Requires a C++20 compiler and CMake 3.25 or newer. No third-party packages are
-needed yet.
+needed for the default build.
 
 ```sh
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
@@ -53,6 +54,17 @@ ctest --test-dir build --output-on-failure
 
 Cross-compilation presets live in `CMakePresets.json` (`debug`, `release`,
 `windows`, `macos`).
+
+The libplctag driver (Allen-Bradley CIP, Siemens S7) is opt-in and needs the C
+library and headers installed:
+
+```sh
+cmake -S . -B build -DSC_ENABLE_LIBPLCTAG=ON
+cmake --build build -j
+```
+
+Without the switch the driver still compiles, as a stub whose factory reports
+that the binding was disabled at build time.
 
 The renderer is opt-in, because the headless half must build anywhere:
 
@@ -194,7 +206,7 @@ src/render    RHI interface, mesh upload, voxel renderer (CPU side)
 src/world     voxel chunks, greedy mesher, world container, world generation
 src/sim       plant devices, factory simulation tick
 src/plc       IEC 61131-3 front ends (ST, ladder/FBD, IL) -> bytecode -> VM
-src/io        tag database, PLC driver interface, Modbus/TCP driver + slave, commissioning
+src/io        tag database, PLC driver interface, Modbus/TCP + libplctag drivers, commissioning
 src/assets    procedural material library and machine kit generator
 src/ui        Structured Text editor model (buffer, diagnostics, undo)
 src/lesson    lesson data model, rubric, grader

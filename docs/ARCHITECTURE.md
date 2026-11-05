@@ -139,8 +139,18 @@ register, inputs latched before the scan, only changed outputs written after it,
 and every write checked by `CommissioningPolicy`. `io::ModbusTcpSlave` is a
 single-client loopback register image for tests and classroom commissioning.
 The TCP primitives are in-house; the driver deliberately reuses the existing
-Modbus codec rather than owning a second frame parser. libplctag and DF1 remain
-the next M6 steps.
+Modbus codec rather than owning a second frame parser.
+
+The second slice is `io::LibPlcTagDriver`, the path to Allen-Bradley CIP and
+Siemens S7. It deliberately does not call the C library directly: a `PlcTagApi`
+seam carries `create`, `read`, `get_bool`, `set_bool`, `write` and `destroy`, so
+the latching, changed-output and commissioning rules are tested with a fake
+backend and need no PLC. One binding is one complete libplctag attribute string,
+which keeps protocol selection in configuration rather than in the driver. The
+real adapter is a single translation unit behind `-DSC_ENABLE_LIBPLCTAG=ON`, off
+by default, because the headless build must not require an external package.
+It has not been run against real hardware; that is what the commissioning gate
+is for. DF1 remains the next M6 step.
 
 ## Drivers and licensing
 
@@ -273,7 +283,9 @@ drives the whole cell)*
   still loopback-only with no TLS or authentication)*
 * **M6** live drivers: Modbus TCP against a software slave, then libplctag, then DF1.
   *(in progress: the in-house Modbus/TCP driver, loopback software slave, write-gated
-  output path and socket tests are done; libplctag and DF1 remain)*
+  output path and socket tests are done, and the optional libplctag driver is implemented
+  behind an injectable API and tested with a fake backend; DF1 remains, and neither live
+  driver has been run against real hardware)*
 * **M7** graphical LD/FBD editors on the existing network model, SFC, content,
   asset variety.
 
