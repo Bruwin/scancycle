@@ -32,7 +32,7 @@ Portal or Studio 5000 and recognise everything.
 | Box flow: belt transfer, photo-eye sensing, jam detection | working, tested |
 | Machine: pull from infeed, cycle time, release to outfeed | working, tested |
 | Lesson runner: a lesson's reference program drives its own cell | working, tested |
-| Modbus/TCP codec, commissioning safety gate | working, tested |
+| Modbus/TCP codec, live loopback driver, software slave, commissioning gate | working, tested |
 | Procedural materials and parametric machine kits | working, tested |
 | Editor model, lesson schema, grader, portal routing | working, tested |
 | Composition root (plant + PLC + I/O in one headless session) | working, tested |
@@ -194,7 +194,7 @@ src/render    RHI interface, mesh upload, voxel renderer (CPU side)
 src/world     voxel chunks, greedy mesher, world container, world generation
 src/sim       plant devices, factory simulation tick
 src/plc       IEC 61131-3 front ends (ST, ladder/FBD, IL) -> bytecode -> VM
-src/io        tag database, PLC driver interface, Modbus codec, commissioning
+src/io        tag database, PLC driver interface, Modbus/TCP driver + slave, commissioning
 src/assets    procedural material library and machine kit generator
 src/ui        Structured Text editor model (buffer, diagnostics, undo)
 src/lesson    lesson data model, rubric, grader
