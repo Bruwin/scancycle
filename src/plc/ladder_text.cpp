@@ -3,7 +3,6 @@
 #include "plc/source_text.hpp"
 
 #include <cctype>
-#include <limits>
 #include <memory>
 #include <string>
 #include <string_view>
@@ -191,7 +190,7 @@ bool parse_duration(std::string_view text, i64& out) {
         return false;
     }
 
-    // Ten digits keeps the multiplication below in range; no lesson waits longer.
+    // Nine digits keeps the multiplication below in range; no lesson waits longer.
     if (pos > 9) {
         return false;
     }
@@ -221,9 +220,32 @@ bool parse_duration(std::string_view text, i64& out) {
     return true;
 }
 
-// Recognises `TON(` at the start of a rung body, returning the offset of '('.
-// Case-insensitive, because ladder text here is not case-sensitive anywhere else.
-bool timer_call(std::string_view body, std::size_t& open) {
+// A counter preset is a count, so it is a bare whole number.
+bool parse_count(std::string_view text, i64& out) {
+    const std::string_view trimmed = trim_text(text);
+    if (trimmed.empty() || trimmed.size() > 9) {
+        return false;
+    }
+    i64 value = 0;
+    for (const char c : trimmed) {
+        if (std::isdigit(static_cast<unsigned char>(c)) == 0) {
+            return false;
+        }
+        value = value * 10 + (c - '0');
+    }
+    out = value;
+    return true;
+}
+
+struct SinkCall {
+    std::string_view type;  // points at a literal: "ton", "tof", "ctu", "ctd"
+    std::size_t open = 0;   // offset of '('
+};
+
+// Recognises a block name and its opening parenthesis at the start of a rung
+// body. Case-insensitive, because ladder text here is not case-sensitive anywhere
+// else. A name that is not one of the four sinks is an ordinary contact.
+bool block_call(std::string_view body, SinkCall& out) {
     std::size_t pos = 0;
     while (pos < body.size() && std::isspace(static_cast<unsigned char>(body[pos])) != 0) {
         ++pos;
@@ -232,7 +254,14 @@ bool timer_call(std::string_view body, std::size_t& open) {
     while (pos < body.size() && is_ident_char(body[pos])) {
         ++pos;
     }
-    if (!text_equals_ci(body.substr(begin, pos - begin), "ton")) {
+    const std::string_view word = body.substr(begin, pos - begin);
+    std::string_view type;
+    for (const char* candidate : {"ton", "tof", "ctu", "ctd"}) {
+        if (text_equals_ci(word, candidate)) {
+            type = candidate;
+        }
+    }
+    if (type.empty()) {
         return false;
     }
     while (pos < body.size() && std::isspace(static_cast<unsigned char>(body[pos])) != 0) {
@@ -241,80 +270,141 @@ bool timer_call(std::string_view body, std::size_t& open) {
     if (pos >= body.size() || body[pos] != '(') {
         return false;
     }
-    open = pos;
+    out.type = type;
+    out.open = pos;
     return true;
 }
 
-// `body` is everything right of '='. The condition may hold parentheses of its
-// own, so the argument split happens at the first comma directly inside TON's.
-bool parse_timer_arguments(std::string_view body, std::size_t open, std::size_t body_offset,
-                           int line, Diagnostics& diagnostics, NetPtr& condition,
-                           i64& preset_ms) {
-    std::size_t depth = 0;
-    std::size_t close = std::string_view::npos;
-    std::size_t comma = std::string_view::npos;
-    for (std::size_t i = open; i < body.size(); ++i) {
-        if (body[i] == '(') {
-            ++depth;
-        } else if (body[i] == ')') {
-            --depth;
-            if (depth == 0) {
-                close = i;
-                break;
-            }
-        } else if (body[i] == ',' && depth == 1 && comma == std::string_view::npos) {
-            comma = i;
-        }
+enum class SinkParse { NotACall, Parsed, Failed };
+
+struct ParsedSink {
+    std::string_view type;
+    NetPtr condition;
+    NetPtr second;  // counter reset/load, may stay null
+    i64 preset = 0;
+    bool counter = false;
+};
+
+// Splits the call's arguments at top-level commas, so a network may bring its own
+// parentheses. The preset is always the last argument.
+SinkParse parse_sink(std::string_view body, std::size_t body_offset, int line,
+                     Diagnostics& diagnostics, ParsedSink& out) {
+    SinkCall call;
+    if (!block_call(body, call)) {
+        return SinkParse::NotACall;
     }
 
     const auto column_of = [&](std::size_t offset) {
         return static_cast<int>(body_offset + offset + 1);
     };
 
+    std::size_t depth = 0;
+    std::size_t close = std::string_view::npos;
+    std::vector<std::size_t> commas;
+    for (std::size_t i = call.open; i < body.size(); ++i) {
+        const char c = body[i];
+        if (c == '(') {
+            ++depth;
+        } else if (c == ')') {
+            --depth;
+            if (depth == 0) {
+                close = i;
+                break;
+            }
+        } else if (c == ',' && depth == 1) {
+            commas.push_back(i);
+        }
+    }
+
     if (close == std::string_view::npos) {
-        diagnostics.push_back({line, column_of(open), "missing ')' after the TON arguments"});
-        return false;
+        diagnostics.push_back(
+            {line, column_of(call.open), "missing ')' after the block arguments"});
+        return SinkParse::Failed;
     }
     if (!trim_text(body.substr(close + 1)).empty()) {
         diagnostics.push_back(
-            {line, column_of(close + 1), "a TON call ends the rung; remove what follows ')'"});
-        return false;
+            {line, column_of(close + 1), "a block call ends the rung; remove what follows ')'"});
+        return SinkParse::Failed;
     }
-    if (comma == std::string_view::npos) {
+
+    const bool counter = call.type == "ctu" || call.type == "ctd";
+    if (counter && (commas.size() < 1 || commas.size() > 2)) {
         diagnostics.push_back(
-            {line, column_of(open), "TON needs two arguments: TON(condition, 1s)"});
-        return false;
+            {line, column_of(call.open),
+             std::string(call.type) + " needs two or three arguments: " +
+                 std::string(call.type) + "(pulse, reset, 5)"});
+        return SinkParse::Failed;
+    }
+    if (!counter && commas.size() != 1) {
+        diagnostics.push_back(
+            {line, column_of(call.open),
+             std::string(call.type) + " needs two arguments: " + std::string(call.type) +
+                 "(condition, 1s)"});
+        return SinkParse::Failed;
     }
 
-    const std::string_view in_text = body.substr(open + 1, comma - open - 1);
-    if (trim_text(in_text).empty()) {
-        diagnostics.push_back({line, column_of(comma), "TON needs a condition before the comma"});
-        return false;
+    const auto segment = [&](std::size_t index) -> std::string_view {
+        const std::size_t begin = index == 0 ? call.open + 1 : commas[index - 1] + 1;
+        const std::size_t end = index < commas.size() ? commas[index] : close;
+        return body.substr(begin, end - begin);
+    };
+
+    const auto parse_network = [&](std::string_view text, std::size_t offset,
+                                   const char* what, NetPtr& target) {
+        if (trim_text(text).empty()) {
+            diagnostics.push_back(
+                {line, column_of(offset), std::string(what) + " needs a condition"});
+            return false;
+        }
+        // Keep leading spaces out of the parse but above the column base, so a
+        // diagnostic points at the tag rather than at the comma before it.
+        std::size_t lead = 0;
+        while (lead < text.size() &&
+               std::isspace(static_cast<unsigned char>(text[lead])) != 0) {
+            ++lead;
+        }
+        ConditionParser parser(text.substr(lead), line, body_offset + offset + lead,
+                               diagnostics);
+        target = parser.parse();
+        return target != nullptr;
+    };
+
+    if (!parse_network(segment(0), call.open + 1, counter ? "the pulse input" : "the condition",
+                       out.condition)) {
+        return SinkParse::Failed;
+    }
+    if (counter && commas.size() == 2) {
+        if (!parse_network(segment(1), commas[0] + 1, "the reset input", out.second)) {
+            return SinkParse::Failed;
+        }
     }
 
-    const std::string_view preset_text = trim_text(body.substr(comma + 1, close - comma - 1));
-    if (!parse_duration(preset_text, preset_ms)) {
-        diagnostics.push_back({line, column_of(comma + 1),
-                               "'" + std::string(preset_text) +
+    const std::size_t preset_index = commas.size();
+    const std::size_t preset_offset = commas[preset_index - 1] + 1;
+    const std::string_view preset_text = segment(preset_index);
+    if (counter) {
+        if (!parse_count(preset_text, out.preset)) {
+            diagnostics.push_back({line, column_of(preset_offset),
+                                   "'" + std::string(trim_text(preset_text)) +
+                                       "' is not a count; write a whole number, e.g. 5"});
+            return SinkParse::Failed;
+        }
+    } else if (!parse_duration(preset_text, out.preset)) {
+        diagnostics.push_back({line, column_of(preset_offset),
+                               "'" + std::string(trim_text(preset_text)) +
                                    "' is not a duration; write 500ms, 1s or 2m"});
-        return false;
+        return SinkParse::Failed;
     }
-    if (preset_ms <= 0) {
-        diagnostics.push_back(
-            {line, column_of(comma + 1), "a TON preset must be longer than zero"});
-        return false;
+    if (out.preset <= 0) {
+        diagnostics.push_back({line, column_of(preset_offset),
+                               "a " + std::string(call.type) +
+                                   " preset must be longer than zero"});
+        return SinkParse::Failed;
     }
 
-    // Keep the condition's own leading spaces so a diagnostic points at the tag,
-    // not at the comma before it.
-    std::size_t lead = 0;
-    while (lead < in_text.size() &&
-           std::isspace(static_cast<unsigned char>(in_text[lead])) != 0) {
-        ++lead;
-    }
-    ConditionParser parser(in_text.substr(lead), line, body_offset + open + 1 + lead, diagnostics);
-    condition = parser.parse();
-    return condition != nullptr;
+    out.type = call.type;
+    out.counter = counter;
+    return SinkParse::Parsed;
 }
 
 }  // namespace
@@ -370,15 +460,27 @@ LadderParseResult parse_ladder_source(std::string_view source) {
 
         const std::string_view body = line.substr(equals + 1);
         Rung rung;
-        std::size_t timer_open = 0;
-        if (timer_call(body, timer_open)) {
-            TimerSink sink;
-            sink.var = std::string(coil);
-            if (!parse_timer_arguments(body, timer_open, equals + 1, line_number,
-                                       result.diagnostics, rung.condition, sink.preset_ms)) {
-                continue;
+        ParsedSink sink;
+        const SinkParse parsed = parse_sink(body, equals + 1, line_number, result.diagnostics, sink);
+        if (parsed == SinkParse::Failed) {
+            continue;
+        }
+        if (parsed == SinkParse::Parsed) {
+            rung.condition = std::move(sink.condition);
+            if (sink.counter) {
+                CounterSink counter;
+                counter.var = std::string(coil);
+                counter.preset = sink.preset;
+                counter.down = sink.type == "ctd";
+                counter.reset = std::move(sink.second);
+                rung.counter = std::move(counter);
+            } else {
+                TimerSink timer;
+                timer.var = std::string(coil);
+                timer.preset_ms = sink.preset;
+                timer.off_delay = sink.type == "tof";
+                rung.timer = std::move(timer);
             }
-            rung.timer = std::move(sink);
         } else {
             ConditionParser parser(body, line_number, equals + 1, result.diagnostics);
             NetPtr condition = parser.parse();

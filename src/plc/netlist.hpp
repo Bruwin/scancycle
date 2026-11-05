@@ -15,9 +15,10 @@
 //     reads FALSE forever and a student hunting a bug that is not there.
 //   * A null condition means the rung is wired straight to the rail: always true.
 //   * Conditions must be pure. A multi-coil rung re-emits its condition once per
-//     coil rather than stuffing one value into a temp slot. A timer is the one
-//     stateful sink: it gets a rung of its own, holds the condition in its own IN
-//     field and lands Q in a BOOL tag, so the network itself stays boolean.
+//     coil rather than stuffing one value into a temp slot. A timer or counter is
+//     the one stateful sink: it gets a rung of its own, holds the condition in its
+//     own input field and lands its output in a tag, so the network itself stays
+//     boolean.
 #include "core/types.hpp"
 #include "plc/declaration.hpp"
 #include "plc/diagnostic.hpp"
@@ -56,17 +57,30 @@ struct Coil {
 };
 
 // A timer sink turns the rung's condition into a delay: `var` reads TRUE once the
-// condition has held for `preset_ms`. The TON instance behind it is internal, so a
-// rung still reads as "tag = condition" and the netlist never carries time values.
+// condition has held for `preset_ms` (TON), or stays TRUE for `preset_ms` after
+// the condition opens (TOF). The instance behind it is internal, so a rung still
+// reads as "tag = condition" and the netlist never carries time values.
 struct TimerSink {
-    std::string var;  // BOOL tag that receives Q
-    i64 preset_ms = 0;
+    std::string var;         // BOOL tag that receives Q
+    i64 preset_ms = 0;       // PT
+    bool off_delay = false;  // TOF instead of TON
+};
+
+// A counter sink counts rising edges of the condition and sets `var` when the
+// count reaches `preset` (CTU) or falls to zero (CTD). `reset` is the second
+// input - CTU's R, CTD's LD - and may be left unwired, which holds it FALSE.
+struct CounterSink {
+    std::string var;    // BOOL tag that receives Q
+    i64 preset = 0;     // PV
+    bool down = false;  // CTD instead of CTU
+    NetPtr reset;       // null: the second input is never energised
 };
 
 struct Rung {
     NetPtr condition;                // null: always energised
     std::vector<Coil> coils;         // every coil is written from the same condition
     std::optional<TimerSink> timer;  // a timer rung drives this instead of coils
+    std::optional<CounterSink> counter;  // a counter rung drives this instead
 };
 
 struct NetlistResult {

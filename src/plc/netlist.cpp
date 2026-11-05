@@ -73,12 +73,22 @@ void emit(CompiledProgram& program, const NetNode& node) {
     }
 }
 
-void emit_condition(CompiledProgram& program, const NetPtr& condition) {
-    if (condition) {
-        emit(program, *condition);
+// An unwired operand still has to put something on the stack: a rail contact is
+// TRUE, an unused block input is FALSE.
+void emit_operand(CompiledProgram& program, const NetPtr& node, bool when_absent) {
+    if (node) {
+        emit(program, *node);
     } else {
-        program.code.push_back({Op::PushConst, add_const(program, Value::boolean(true)), 0});
+        program.code.push_back(
+            {Op::PushConst, add_const(program, Value::boolean(when_absent)), 0});
     }
+}
+
+const char* sink_type(const Rung& rung) {
+    if (rung.timer) {
+        return rung.timer->off_delay ? "tof" : "ton";
+    }
+    return rung.counter->down ? "ctd" : "ctu";
 }
 
 }  // namespace
@@ -95,19 +105,28 @@ NetlistResult compile_netlist(std::string_view name, std::span<const Rung> rungs
     for (std::size_t i = 0; i < rungs.size(); ++i) {
         const std::string where = "rung " + std::to_string(i + 1) + ": ";
         const Rung& rung = rungs[i];
-        if (rung.timer && !rung.coils.empty()) {
+        const int sinks = (rung.timer ? 1 : 0) + (rung.counter ? 1 : 0) +
+                          (rung.coils.empty() ? 0 : 1);
+        if (sinks > 1) {
             result.diagnostics.push_back(
-                {0, 0, where + "a rung ends in one sink: coils or a timer, not both"});
+                {0, 0, where + "a rung has one sink: coils, a timer or a counter"});
             continue;
         }
-        if (!rung.timer && rung.coils.empty()) {
-            result.diagnostics.push_back({0, 0, where + "a rung needs a coil or a timer"});
+        if (sinks == 0) {
+            result.diagnostics.push_back(
+                {0, 0, where + "a rung needs a coil, a timer or a counter"});
             continue;
         }
         if (rung.condition) {
             std::string error;
             if (!validate(*rung.condition, result.program, error)) {
                 result.diagnostics.push_back({0, 0, where + error});
+            }
+        }
+        if (rung.counter && rung.counter->reset) {
+            std::string error;
+            if (!validate(*rung.counter->reset, result.program, error)) {
+                result.diagnostics.push_back({0, 0, where + "reset input: " + error});
             }
         }
         if (rung.timer) {
@@ -126,6 +145,22 @@ NetlistResult compile_netlist(std::string_view name, std::span<const Rung> rungs
                     {0, 0, where + "a timer preset must be longer than zero"});
             }
         }
+        if (rung.counter) {
+            const i32 slot = result.program.find_var(rung.counter->var);
+            if (slot < 0) {
+                result.diagnostics.push_back(
+                    {0, 0, where + "counter output '" + rung.counter->var +
+                              "' is not a declared variable"});
+            } else if (result.program.vars[static_cast<std::size_t>(slot)].type !=
+                       ValueType::Bool) {
+                result.diagnostics.push_back(
+                    {0, 0, where + "counter output '" + rung.counter->var + "' must be BOOL"});
+            }
+            if (rung.counter->preset <= 0) {
+                result.diagnostics.push_back(
+                    {0, 0, where + "a counter preset must be longer than zero"});
+            }
+        }
         for (const Coil& coil : rung.coils) {
             if (result.program.find_var(coil.var) < 0) {
                 result.diagnostics.push_back(
@@ -138,38 +173,52 @@ NetlistResult compile_netlist(std::string_view name, std::span<const Rung> rungs
         return result;
     }
 
-    // Every timer rung owns one TON instance. The instance name starts with '#' so
-    // it can never collide with a tag: no source language here spells that.
-    i32 timers = 0;
+    // Every block rung owns one instance. The instance name starts with '#' so it
+    // can never collide with a tag: no source language here spells that.
+    i32 blocks = 0;
     for (const Rung& rung : rungs) {
-        if (rung.timer) {
-            const FbDecl* ton = find_builtin_fb("ton");
-            if (ton == nullptr) {
-                result.diagnostics.push_back({0, 0, "the TON block is not available"});
+        if (rung.timer || rung.counter) {
+            const FbDecl* decl = find_builtin_fb(sink_type(rung));
+            if (decl == nullptr) {
+                result.diagnostics.push_back({0, 0, "a block sink is not available"});
                 return result;
             }
             const i32 fb_index = static_cast<i32>(result.program.fbs.size());
-            result.program.fbs.push_back(*ton);
+            result.program.fbs.push_back(*decl);
 
             VarInfo instance;
-            instance.name = "#ton" + std::to_string(++timers);
+            instance.name = "#fb" + std::to_string(++blocks);
             instance.fb_index = fb_index;
             result.program.vars.push_back(std::move(instance));
 
-            emit_condition(result.program, rung.condition);
+            // Input 0 is the rung's condition in every block sink.
+            emit_operand(result.program, rung.condition, true);
             result.program.code.push_back({Op::StoreFbField, fb_index, 0});
-            result.program.code.push_back(
-                {Op::PushConst, add_const(result.program, Value::time(rung.timer->preset_ms)),
-                 0});
-            result.program.code.push_back({Op::StoreFbField, fb_index, 1});
+
+            const i32 output_field = rung.timer ? 2 : 3;
+            if (rung.timer) {
+                result.program.code.push_back(
+                    {Op::PushConst,
+                     add_const(result.program, Value::time(rung.timer->preset_ms)), 0});
+                result.program.code.push_back({Op::StoreFbField, fb_index, 1});
+            } else {
+                emit_operand(result.program, rung.counter->reset, false);
+                result.program.code.push_back({Op::StoreFbField, fb_index, 1});
+                result.program.code.push_back(
+                    {Op::PushConst,
+                     add_const(result.program, Value::integer(rung.counter->preset)), 0});
+                result.program.code.push_back({Op::StoreFbField, fb_index, 2});
+            }
+
             result.program.code.push_back({Op::CallFb, fb_index, 0});
-            result.program.code.push_back({Op::LoadFbField, fb_index, 2});
+            result.program.code.push_back({Op::LoadFbField, fb_index, output_field});
+            const std::string& target = rung.timer ? rung.timer->var : rung.counter->var;
             result.program.code.push_back(
-                {Op::StoreVar, result.program.find_var(rung.timer->var), 0});
+                {Op::StoreVar, result.program.find_var(target), 0});
             continue;
         }
         for (const Coil& coil : rung.coils) {
-            emit_condition(result.program, rung.condition);
+            emit_operand(result.program, rung.condition, true);
             if (coil.negated) {
                 result.program.code.push_back({Op::Unary, static_cast<i32>(UnOp::Not), 0});
             }

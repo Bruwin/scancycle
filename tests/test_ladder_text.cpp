@@ -268,3 +268,99 @@ TEST(a_timer_rung_ends_at_its_closing_paren) {
     CHECK(built.diagnostics.size() == 1);
     CHECK(built.diagnostics[0].message.find("remove what follows") != std::string::npos);
 }
+
+TEST(an_off_delay_timer_rung_holds_the_coil) {
+    const std::string source = std::string(kHeader) + "d = TOF(a, 1s)\n";
+    Built built = build(source);
+    CHECK(built.ok);
+    if (!built.ok) {
+        return;
+    }
+
+    Vm vm(built.program);
+    CHECK(vm.set("a", Value::boolean(true)));
+    CHECK(vm.scan(0));
+    CHECK(vm.get("d").as_bool());
+
+    CHECK(vm.set("a", Value::boolean(false)));
+    CHECK(vm.scan(100));
+    CHECK(vm.get("d").as_bool());
+    CHECK(vm.scan(1100));
+    CHECK(!vm.get("d").as_bool());
+}
+
+TEST(a_counter_rung_counts_rising_edges) {
+    const std::string source = std::string(kHeader) + "d = CTU(a, 2)\n";
+    Built built = build(source);
+    CHECK(built.ok);
+    if (!built.ok) {
+        return;
+    }
+
+    Vm vm(built.program);
+    CHECK(vm.scan(0));
+    CHECK(!vm.get("d").as_bool());
+
+    CHECK(vm.set("a", Value::boolean(true)));
+    CHECK(vm.scan(10));
+    CHECK(!vm.get("d").as_bool());
+    CHECK(vm.scan(20));
+    CHECK(!vm.get("d").as_bool());
+
+    CHECK(vm.set("a", Value::boolean(false)));
+    CHECK(vm.scan(30));
+    CHECK(vm.set("a", Value::boolean(true)));
+    CHECK(vm.scan(40));
+    CHECK(vm.get("d").as_bool());
+}
+
+TEST(a_counter_rung_takes_a_reset_network) {
+    const std::string source = std::string(kHeader) + "d = CTU(a, b, 2)\n";
+    Built built = build(source);
+    CHECK(built.ok);
+    if (!built.ok) {
+        return;
+    }
+
+    Vm vm(built.program);
+    CHECK(vm.set("a", Value::boolean(true)));
+    CHECK(vm.scan(10));
+    CHECK(vm.set("a", Value::boolean(false)));
+    CHECK(vm.scan(20));
+    CHECK(vm.set("a", Value::boolean(true)));
+    CHECK(vm.scan(30));
+    CHECK(vm.get("d").as_bool());
+
+    CHECK(vm.set("b", Value::boolean(true)));
+    CHECK(vm.scan(40));
+    CHECK(!vm.get("d").as_bool());
+
+    CHECK(vm.set("b", Value::boolean(false)));
+    CHECK(vm.set("a", Value::boolean(false)));
+    CHECK(vm.scan(50));
+    CHECK(vm.set("a", Value::boolean(true)));
+    CHECK(vm.scan(60));
+    CHECK(!vm.get("d").as_bool());
+}
+
+TEST(a_counter_preset_must_be_a_whole_number) {
+    Built built = build(std::string(kHeader) + "d = CTU(a, two)\n");
+    CHECK(!built.ok);
+    CHECK(built.diagnostics.size() == 1);
+    CHECK(built.diagnostics[0].message.find("not a count") != std::string::npos);
+}
+
+TEST(a_counter_without_a_preset_is_a_diagnostic) {
+    Built built = build(std::string(kHeader) + "d = CTU(a)\n");
+    CHECK(!built.ok);
+    CHECK(built.diagnostics.size() == 1);
+    CHECK(built.diagnostics[0].message.find("two or three arguments") != std::string::npos);
+}
+
+TEST(a_counter_reset_needs_a_condition) {
+    Built built = build(std::string(kHeader) + "d = CTU(a, , 3)\n");
+    CHECK(!built.ok);
+    CHECK(built.diagnostics.size() == 1);
+    CHECK(built.diagnostics[0].message.find("reset input needs a condition") !=
+          std::string::npos);
+}
