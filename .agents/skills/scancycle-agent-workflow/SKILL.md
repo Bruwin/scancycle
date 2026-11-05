@@ -33,8 +33,12 @@ ctest --test-dir build --output-on-failure
 Then run the mechanical checks for the non-negotiables. Any hit is a failure to fix, not to explain away:
 
 ```sh
-# Determinism: no randomness or wall-clock in simulation code
-grep -rnE "\brand\(|random_device|std::chrono|time\(|system_clock|steady_clock" src/sim src/plc src/world
+# Determinism: no randomness or wall-clock reads. The PLC's own Time constructor
+# (Value::time) is not a clock read, so it is filtered out; anything else reaching
+# for the clock or a random source is a failure.
+pattern='(^|[^_[:alnum:]])rand\(|random_device|std::chrono|(^|[^_[:alnum:]])time\('
+pattern="$pattern|system_clock|steady_clock"
+grep -rnE "$pattern" src/sim src/plc src/world | grep -vE 'Value::time\(|Value time\('
 
 # Layering: core is a leaf; nothing includes a header from a layer above it
 grep -rnE '#include "(platform|render|world|sim|plc|io|ui|lesson|assets|net|app)/' src/core

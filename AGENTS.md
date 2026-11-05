@@ -64,8 +64,12 @@ ctest --test-dir build --output-on-failure
 Plus, with no hits:
 
 ```sh
-grep -rnE "\brand\(|random_device|std::chrono|time\(|system_clock|steady_clock" \
-    src/sim src/plc src/world
+# Wall-clock and randomness. The PLC's own Time constructor (Value::time) is not a
+# clock read, so it is filtered out; anything else reaching for the clock or a
+# random source is a failure.
+pattern='(^|[^_[:alnum:]])rand\(|random_device|std::chrono|(^|[^_[:alnum:]])time\('
+pattern="$pattern|system_clock|steady_clock"
+grep -rnE "$pattern" src/sim src/plc src/world | grep -vE 'Value::time\(|Value time\('
 grep -rnE '#include "(platform|render|world|sim|plc|io|ui|lesson|assets|net|app)/' src/core
 grep -rnE '#include "(io|ui|lesson|assets|net|app)/' \
     src/platform src/render src/world src/sim src/plc
