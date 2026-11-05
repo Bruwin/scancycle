@@ -1,6 +1,8 @@
 #include "app/application.hpp"
 
 #include "plc/compiler.hpp"
+#include "plc/ladder_text.hpp"
+#include "plc/netlist.hpp"
 #include "plc/parser.hpp"
 
 #include <utility>
@@ -24,21 +26,38 @@ bool Application::initialize() {
         plant_.add(spec.kind, spec.name);
     }
 
-    plc::ParseResult parsed = plc::parse_program(config_.program_source);
-    if (!parsed.program) {
-        error_ = parsed.diagnostics.empty() ? "failed to parse the program"
-                                            : parsed.diagnostics.front().message;
-        return false;
-    }
+    if (config_.program_language == ProgramLanguage::Ladder) {
+        plc::LadderParseResult parsed = plc::parse_ladder_source(config_.program_source);
+        if (!parsed.ok) {
+            error_ = parsed.diagnostics.empty() ? "failed to parse the ladder program"
+                                                : parsed.diagnostics.front().message;
+            return false;
+        }
+        plc::NetlistResult compiled =
+            plc::compile_netlist("ladder", parsed.source.rungs, parsed.source.vars);
+        if (!compiled.ok) {
+            error_ = compiled.diagnostics.empty() ? "failed to compile the ladder program"
+                                                 : compiled.diagnostics.front().message;
+            return false;
+        }
+        program_ = std::move(compiled.program);
+    } else {
+        plc::ParseResult parsed = plc::parse_program(config_.program_source);
+        if (!parsed.program) {
+            error_ = parsed.diagnostics.empty() ? "failed to parse the program"
+                                                : parsed.diagnostics.front().message;
+            return false;
+        }
 
-    plc::CompileResult compiled = plc::compile(*parsed.program);
-    if (!compiled.ok) {
-        error_ = compiled.diagnostics.empty() ? "failed to compile the program"
-                                             : compiled.diagnostics.front().message;
-        return false;
-    }
+        plc::CompileResult compiled = plc::compile(*parsed.program);
+        if (!compiled.ok) {
+            error_ = compiled.diagnostics.empty() ? "failed to compile the program"
+                                                 : compiled.diagnostics.front().message;
+            return false;
+        }
 
-    program_ = std::move(compiled.program);
+        program_ = std::move(compiled.program);
+    }
 
     // Bind by what the program declares, not by what the plant contains. A
     // lesson cell can hold devices a given exercise never touches, and the

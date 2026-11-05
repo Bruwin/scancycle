@@ -195,7 +195,7 @@ TEST(batch_lesson_reference_solution_passes_its_own_rubric) {
 
 TEST(builtin_lessons_all_reach_the_portal_catalog) {
     const std::vector<lesson::Lesson> built = lesson::make_builtin_lessons();
-    CHECK(built.size() == 3);
+    CHECK(built.size() == 4);
 
     std::vector<std::string> ids;
     for (const lesson::Lesson& one : built) {
@@ -219,6 +219,7 @@ TEST(builtin_lessons_all_reach_the_portal_catalog) {
     CHECK(catalog.body.find("conveyor-interlock") != std::string::npos);
     CHECK(catalog.body.find("press-cycle") != std::string::npos);
     CHECK(catalog.body.find("press-batch") != std::string::npos);
+    CHECK(catalog.body.find("press-batch-ladder") != std::string::npos);
 }
 
 TEST(portal_http_parser_reads_a_get) {
@@ -272,4 +273,21 @@ TEST(portal_transport_answers_the_catalog_over_a_socket) {
     CHECK(raw.find("HTTP/1.1 200 OK") != std::string::npos);
     CHECK(raw.find("Content-Type: application/json") != std::string::npos);
     CHECK(raw.find("\"id\":\"conveyor-interlock\"") != std::string::npos);
+}
+
+TEST(ladder_lesson_reference_solution_passes_its_own_rubric) {
+    const lesson::Lesson ladder = lesson::make_ladder_batch_lesson();
+
+    CHECK(ladder.reference_language == lesson::ReferenceLanguage::Ladder);
+    CHECK(ladder.starting_plant.count() == 5);
+    CHECK(ladder.reference_solution.find("TON(") != std::string::npos);
+    CHECK(ladder.reference_solution.find("CTU(") != std::string::npos);
+
+    const LessonRunResult run = run_lesson(ladder);
+
+    CHECK(run.ok);
+    CHECK(run.error.empty());
+    CHECK(!run.faulted);
+    CHECK(run.boxes_processed >= 3);
+    CHECK(run.report.passed());
 }

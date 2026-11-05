@@ -166,11 +166,66 @@ END_PROGRAM
     return lesson;
 }
 
+Lesson make_ladder_batch_lesson() {
+    Lesson lesson;
+    lesson.id = "press-batch-ladder";
+    lesson.title = "Press cell: the batch, drawn in ladder";
+    lesson.objective =
+        "Write the batching program as rung files: delay the start with a TON rung, "
+        "count the press's ready pulses with a CTU rung, and publish the count.";
+    lesson.world_seed = 17;
+
+    lesson.starting_plant = sim::make_vertical_slice_plant();
+    lesson.preset_inputs.push_back({"start_btn", true});
+    lesson.reference_language = ReferenceLanguage::Ladder;
+
+    lesson.rubric.push_back(check_on(lesson.starting_plant, "press", "ladder-processed",
+                                     "Press completes three parts",
+                                     CheckKind::ProcessedCountAtLeast, 3.0));
+    lesson.rubric.push_back(check_on(lesson.starting_plant, "infeed_belt", "ladder-stops-infeed",
+                                     "The batch stops the infeed", CheckKind::DeviceOutputFalse));
+    lesson.rubric.push_back(check_on(lesson.starting_plant, "run_light", "ladder-light",
+                                     "Run light is on", CheckKind::DeviceOutputTrue));
+    lesson.rubric.push_back(RubricCheck{"program-healthy", "Program runs without a fault",
+                                        CheckKind::ProgramHealthy, 0, 0.0});
+
+    // The left side of a rung names the tag its sink writes; a counter rung may
+    // name a second tag for CV, which is how the count reaches parts_made.
+    lesson.reference_solution = R"ld(VAR
+    start_btn    : BOOL;
+    infeed_belt  : BOOL;
+    press        : BOOL;
+    outfeed_belt : BOOL;
+    run_light    : BOOL;
+    press_fb     : BOOL;
+    press_busy   : BOOL;
+    run_ready    : BOOL;
+    batch_full   : BOOL;
+    parts_made   : INT;
+END_VAR
+
+(* The line starts one second after the operator presses start. *)
+run_ready = TON(start_btn, 1s)
+
+(* Ready is high while the press idles, so count its inverse. *)
+press_busy = !press_fb
+batch_full, parts_made = CTU(press_busy, 3)
+
+(* Feed the batch, then stop feeding once it is full. *)
+infeed_belt = run_ready & !batch_full
+press = run_ready
+outfeed_belt = run_ready
+run_light = run_ready
+)ld";
+    return lesson;
+}
+
 std::vector<Lesson> make_builtin_lessons() {
     std::vector<Lesson> lessons;
     lessons.push_back(make_conveyor_interlock_lesson());
     lessons.push_back(make_press_cycle_lesson());
     lessons.push_back(make_batch_cycle_lesson());
+    lessons.push_back(make_ladder_batch_lesson());
     return lessons;
 }
 

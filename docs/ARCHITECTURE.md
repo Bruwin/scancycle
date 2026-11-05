@@ -180,7 +180,9 @@ Lessons are data, never compiled content: seed, starting plant, objective,
 over the deterministic simulation ("conveyor stopped within 200 ms of sensor 3
 blocking, zero escaped boxes"). Each lesson carries a reference program that CI
 runs against that lesson's own cell as a regression test of the lesson itself, so
-a rubric no solution can satisfy fails the build.
+a rubric no solution can satisfy fails the build. A reference program may be
+Structured Text or a ladder rung file; the lesson runner compiles either into the
+same bytecode before the cell runs it.
 
 The portal is a local service (`scancycle_server`) so a classroom does not depend
 on the internet. `net/http` parses and formats messages as pure text,
@@ -219,9 +221,10 @@ drives the whole cell)*
   the headless half is done - the driver applies forces where a real PLC does, `Application`
   steps one scan and reads a tag watch, and `scancycle_cli trace` prints the table; the IDE
   surface itself is not written)*
-* **M5** lessons + teacher portal: schema, grader, three real lessons, web UI. *(in progress:
-  schema, grader, the lesson runner that self-tests a reference program, and three lessons on
-  the press cell are done; portal transport and web UI are not)*
+* **M5** lessons + teacher portal: schema, grader, four real lessons, web UI. *(in progress:
+  schema, grader, the lesson runner that self-tests a reference program, four lessons (three on
+  the press cell) and the loopback HTTP transport are done; the web UI and WebSocket half are
+  not)*
 * **M6** live drivers: Modbus TCP against a software slave, then libplctag, then DF1.
 * **M7** graphical LD/FBD editors on the existing network model, SFC, content,
   asset variety.

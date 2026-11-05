@@ -20,6 +20,10 @@ LessonRunResult run_lesson(const lesson::Lesson& lesson, LessonRunConfig config)
 
     AppConfig app_config;
     app_config.program_source = lesson.reference_solution;
+    app_config.program_language =
+        lesson.reference_language == lesson::ReferenceLanguage::Ladder
+            ? ProgramLanguage::Ladder
+            : ProgramLanguage::StructuredText;
     app_config.tick_seconds = config.tick_seconds;
     app_config.plc_scan_ms = config.plc_scan_ms;
 
