@@ -1,5 +1,6 @@
 #include "app/grades_page.hpp"
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <ctime>
@@ -90,6 +91,64 @@ std::string lesson_summary(const std::vector<GradeRecord>& records) {
     return table + "</tbody></table>";
 }
 
+struct CheckTally {
+    std::size_t seen = 0;
+    std::size_t missed = 0;
+};
+
+// Which rubric rows the class keeps tripping over. Keyed by lesson as well as by
+// wording, because two lessons can phrase a check the same way and expect
+// different things. Only misses are listed: a check everyone passes is not a
+// teaching problem, and listing it would bury the ones that are.
+std::string missed_checks(const std::vector<GradeRecord>& records) {
+    using Key = std::pair<std::string, std::string>;
+    std::map<Key, CheckTally> tallies;
+    for (const GradeRecord& record : records) {
+        for (const GradeCheck& check : record.checks) {
+            CheckTally& tally = tallies[{record.lesson_id, check.description}];
+            ++tally.seen;
+            if (!check.passed) {
+                ++tally.missed;
+            }
+        }
+    }
+
+    const std::string heading = "<h2>Missed checks</h2>";
+    std::vector<std::pair<Key, CheckTally>> rows;
+    for (const auto& entry : tallies) {
+        if (entry.second.missed > 0) {
+            rows.push_back(entry);
+        }
+    }
+    if (rows.empty()) {
+        if (tallies.empty()) {
+            return heading +
+                   "<p>These attempts were recorded without per-check detail, so there is "
+                   "nothing to total.</p>";
+        }
+        return heading + "<p>No check has been missed in the attempts kept here.</p>";
+    }
+
+    // Most-missed first. A stable sort keeps the map's lesson-then-wording order
+    // for ties, so the table does not shuffle between reloads.
+    std::stable_sort(rows.begin(), rows.end(), [](const auto& left, const auto& right) {
+        return left.second.missed > right.second.missed;
+    });
+
+    std::string table = heading +
+                        "<table><thead><tr><th>Lesson</th><th>Check</th><th>Missed</th>"
+                        "<th>Seen</th><th>Miss rate</th></tr></thead><tbody>";
+    for (const auto& row : rows) {
+        const std::size_t rate = row.second.missed * 100 / row.second.seen;
+        table += "<tr><td><code>" + net::html_escape(row.first.first) + "</code></td><td>" +
+                 net::html_escape(row.first.second) + "</td><td>" +
+                 std::to_string(row.second.missed) + "</td><td>" +
+                 std::to_string(row.second.seen) + "</td><td>" + std::to_string(rate) +
+                 "%</td></tr>";
+    }
+    return table + "</tbody></table>";
+}
+
 }  // namespace
 
 net::Response grades_page(const GradeLog& log) {
@@ -107,6 +166,7 @@ net::Response grades_page(const GradeLog& log) {
         page += "<p>No graded attempts yet.</p>";
     } else {
         page += lesson_summary(records);
+        page += missed_checks(records);
         page += "<h2>Attempts</h2>";
         page += "<table><thead><tr><th>When (UTC)</th><th>Lesson</th><th>Result</th>"
                 "<th>Checks</th><th>Program</th><th class=\"no-print\">Report</th>"

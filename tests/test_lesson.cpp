@@ -733,6 +733,110 @@ TEST(grades_page_summarises_each_lesson) {
     std::filesystem::remove(path);
 }
 
+TEST(grades_page_lists_the_checks_the_class_misses_most) {
+    const std::filesystem::path path =
+        std::filesystem::temp_directory_path() / "scancycle-grades-missed-test.tsv";
+    std::filesystem::remove(path);
+    app::GradeLog log(path.string());
+    std::string error;
+
+    const auto append = [&log, &error](std::int64_t at, const std::string& id,
+                                       std::vector<app::GradeCheck> checks) {
+        app::GradeRecord record;
+        record.at = at;
+        record.lesson_id = id;
+        record.checks = std::move(checks);
+        record.total = record.checks.size();
+        for (const app::GradeCheck& check : record.checks) {
+            if (check.passed) {
+                ++record.passed_count;
+            }
+        }
+        record.passed = record.passed_count == record.total;
+        return log.append(record, error);
+    };
+
+    CHECK(append(1700000000, "press-batch",
+                 {app::GradeCheck{true, "Output on", "motor: output on"},
+                  app::GradeCheck{false, "Latch holds", "output off"}}));
+    CHECK(append(1700000060, "press-batch",
+                 {app::GradeCheck{true, "Output on", "motor: output on"},
+                  app::GradeCheck{false, "Latch holds", "output off"}}));
+    CHECK(append(1700000120, "press-batch",
+                 {app::GradeCheck{true, "Output on", "motor: output on"},
+                  app::GradeCheck{true, "Latch holds", "output held"}}));
+    CHECK(append(1700000180, "conveyor-interlock",
+                 {app::GradeCheck{false, "Latch holds", "output off"}}));
+    // An attempt from before checks were stored must not count as a miss.
+    app::GradeRecord legacy;
+    legacy.at = 1700000240;
+    legacy.lesson_id = "press-batch";
+    CHECK(log.append(legacy, error));
+
+    const net::Response page = app::grades_page(log);
+    CHECK(page.status == 200);
+
+    // Two misses in three sightings outranks one in one.
+    const std::size_t worst =
+        page.body.find("<td><code>press-batch</code></td><td>Latch holds</td><td>2</td>"
+                       "<td>3</td><td>66%</td>");
+    const std::size_t other =
+        page.body.find("<td><code>conveyor-interlock</code></td><td>Latch holds</td><td>1</td>"
+                       "<td>1</td><td>100%</td>");
+    CHECK(worst != std::string::npos);
+    CHECK(other != std::string::npos);
+    CHECK(worst < other);
+
+    // A check nobody missed is not a problem to report.
+    CHECK(page.body.find("<td>Output on</td>") == std::string::npos);
+    CHECK(page.body.find("<h2>Missed checks</h2>") != std::string::npos);
+
+    std::filesystem::remove(path);
+}
+
+TEST(grades_page_says_when_there_is_nothing_missed_to_report) {
+    const std::filesystem::path clean =
+        std::filesystem::temp_directory_path() / "scancycle-grades-clean-test.tsv";
+    std::filesystem::remove(clean);
+    {
+        app::GradeLog log(clean.string());
+        std::string error;
+        app::GradeRecord record;
+        record.at = 1700000000;
+        record.lesson_id = "press-batch";
+        record.passed = true;
+        record.passed_count = 1;
+        record.total = 1;
+        record.checks.push_back(app::GradeCheck{true, "Output on", "motor: output on"});
+        CHECK(log.append(record, error));
+
+        const net::Response page = app::grades_page(log);
+        CHECK(page.status == 200);
+        CHECK(page.body.find("No check has been missed") != std::string::npos);
+        CHECK(page.body.find("<h2>Missed checks</h2>") != std::string::npos);
+    }
+    std::filesystem::remove(clean);
+
+    const std::filesystem::path legacy =
+        std::filesystem::temp_directory_path() / "scancycle-grades-legacy-checks.tsv";
+    std::filesystem::remove(legacy);
+    {
+        app::GradeLog log(legacy.string());
+        std::string error;
+        app::GradeRecord record;
+        record.at = 1700000000;
+        record.lesson_id = "press-batch";
+        record.passed = false;
+        record.total = 2;
+        CHECK(log.append(record, error));
+
+        const net::Response page = app::grades_page(log);
+        CHECK(page.status == 200);
+        CHECK(page.body.find("recorded without per-check detail") != std::string::npos);
+    }
+    std::filesystem::remove(legacy);
+}
+
 TEST(grades_page_says_so_when_nothing_was_recorded) {
     const std::filesystem::path path =
         std::filesystem::temp_directory_path() / "scancycle-grades-empty-test.tsv";
