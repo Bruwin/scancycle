@@ -104,13 +104,69 @@ std::string catalog_page(const std::vector<lesson::Lesson>& lessons) {
         "<p>Every lesson's reference program must pass its own rubric.</p><ul>";
 
     for (const lesson::Lesson& lesson : lessons) {
-        page += "<li><strong>" + html_escape(lesson.id) + "</strong> - " +
-                html_escape(lesson.title) + "</li>";
+        page += "<li><a href=\"/lessons/" + html_escape(lesson.id) + "\">" +
+                html_escape(lesson.title) + "</a> <code>" + html_escape(lesson.id) +
+                "</code></li>";
     }
 
     page += "</ul>";
     page += lesson_form(lessons, "", "");
     page += "<p><a href=\"/api/lessons\">JSON catalog</a></p></body></html>";
+    return page;
+}
+
+std::string number_text(f64 value) {
+    const long long whole = static_cast<long long>(value);
+    if (static_cast<f64>(whole) == value) {
+        return std::to_string(whole);
+    }
+    return std::to_string(value);
+}
+
+// What the check actually measures, in the sentence a student would say. The
+// rubric's own description is the goal; this is the measurement.
+std::string rule_text(const lesson::RubricCheck& check, const sim::Plant& plant) {
+    std::string prefix;
+    if (check.kind != lesson::CheckKind::ProgramHealthy) {
+        prefix = check.device < plant.count() ? plant.device(check.device).name + ": "
+                                              : "device " + std::to_string(check.device) + ": ";
+    }
+    switch (check.kind) {
+        case lesson::CheckKind::DeviceOutputTrue:
+            return prefix + "output on";
+        case lesson::CheckKind::DeviceOutputFalse:
+            return prefix + "output off";
+        case lesson::CheckKind::BoxCountAtLeast:
+            return prefix + "at least " + number_text(check.threshold) + " boxes";
+        case lesson::CheckKind::SpeedAtLeast:
+            return prefix + "speed at least " + number_text(check.threshold);
+        case lesson::CheckKind::ProcessedCountAtLeast:
+            return prefix + "at least " + number_text(check.threshold) + " parts processed";
+        case lesson::CheckKind::ProgramHealthy:
+            return "program runs without a fault";
+    }
+    return "the check passes";
+}
+
+// A lesson before anyone submits: the goal, the rubric it will be measured
+// against, and the form, so a student reads the rules instead of guessing them.
+std::string lesson_page(const lesson::Lesson& lesson, const std::vector<lesson::Lesson>& lessons) {
+    std::string page = "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\">"
+                       "<title>" +
+                       html_escape(lesson.title) +
+                       "</title></head><body>"
+                       "<p><a href=\"/\">Scan Cycle teacher portal</a></p><h1>" +
+                       html_escape(lesson.title) + "</h1><p>" +
+                       html_escape(lesson.objective) + "</p>" +
+                       "<h2>How this is graded</h2><table><thead><tr><th>Check</th>"
+                       "<th>What passes</th></tr></thead><tbody>";
+    for (const lesson::RubricCheck& check : lesson.rubric) {
+        page += "<tr><td>" + html_escape(check.description) + "</td><td>" +
+                html_escape(rule_text(check, lesson.starting_plant)) + "</td></tr>";
+    }
+    page += "</tbody></table><h2>Submit a program</h2>";
+    page += lesson_form(lessons, lesson.id, "");
+    page += "</body></html>";
     return page;
 }
 
@@ -146,6 +202,18 @@ PortalRouter make_default_router(const std::vector<lesson::Lesson>& lessons) {
         response.body = std::move(body);
         return response;
     });
+
+    // A page per lesson, registered from the list the server was handed so a
+    // lesson cannot be in the catalog and missing from the router.
+    for (std::size_t i = 0; i < lessons.size(); ++i) {
+        router.route(HttpMethod::Get, "/lessons/" + lessons[i].id,
+                     [lessons, i](const Request&) {
+                         Response response;
+                         response.content_type = "text/html; charset=utf-8";
+                         response.body = lesson_page(lessons[i], lessons);
+                         return response;
+                     });
+    }
 
     return router;
 }

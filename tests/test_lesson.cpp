@@ -95,7 +95,7 @@ TEST(grader_reports_a_missing_device_instead_of_crashing) {
 TEST(portal_router_serves_the_default_surface) {
     std::vector<lesson::Lesson> lessons{lesson::make_conveyor_interlock_lesson()};
     const net::PortalRouter router = net::make_default_router(lessons);
-    CHECK(router.route_count() == 3);
+    CHECK(router.route_count() == 4);  // two JSON routes, the catalog, one lesson page
 
     net::Request request;
     request.method = net::HttpMethod::Get;
@@ -390,6 +390,36 @@ TEST(grade_route_grades_a_submitted_program) {
     CHECK(response.status == 200);
     CHECK(response.body.find("\"lesson\":\"press-cycle\"") != std::string::npos);
     CHECK(response.body.find("\"passed\":false") != std::string::npos);
+}
+
+TEST(lesson_page_explains_the_rubric_before_submitting) {
+    const std::vector<lesson::Lesson> lessons = lesson::make_builtin_lessons();
+    const net::PortalRouter router = net::make_default_router(lessons);
+
+    net::Request request;
+    request.method = net::HttpMethod::Get;
+    request.path = "/lessons/press-batch";
+    const net::Response page = router.dispatch(request);
+
+    CHECK(page.status == 200);
+    CHECK(page.content_type.rfind("text/html", 0) == 0);
+    CHECK(page.body.find("count a batch") != std::string::npos);
+    CHECK(page.body.find("Delay the line start by a second") != std::string::npos);
+    CHECK(page.body.find("Press completes three parts") != std::string::npos);
+    CHECK(page.body.find("press: at least 3 parts processed") != std::string::npos);
+    CHECK(page.body.find("<textarea name=\"program\"") != std::string::npos);
+    CHECK(page.body.find("<option value=\"press-batch\" selected>") != std::string::npos);
+}
+
+TEST(lesson_page_is_absent_for_an_unknown_id) {
+    const std::vector<lesson::Lesson> lessons = lesson::make_builtin_lessons();
+    const net::PortalRouter router = net::make_default_router(lessons);
+
+    net::Request request;
+    request.method = net::HttpMethod::Get;
+    request.path = "/lessons/no-such-lesson";
+
+    CHECK(router.dispatch(request).status == 404);
 }
 
 TEST(portal_escapes_page_text) {
