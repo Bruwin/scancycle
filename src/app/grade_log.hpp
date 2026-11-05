@@ -11,6 +11,15 @@
 
 namespace sc::app {
 
+// One rubric row as it stood when the attempt was graded. The description is the
+// goal the student was shown and the detail is what the simulation actually did,
+// so a failure can still be explained after the run is gone.
+struct GradeCheck {
+    bool passed = false;
+    std::string description;
+    std::string detail;
+};
+
 struct GradeRecord {
     std::int64_t at = 0;  // unix seconds, supplied by the caller
     std::string lesson_id;
@@ -18,6 +27,9 @@ struct GradeRecord {
     std::size_t passed_count = 0;
     std::size_t total = 0;
     std::string program;  // what was submitted; empty means the reference
+    // The report behind the counts. Rows written before checks were stored carry
+    // none, which is why the counts are kept separately instead of derived.
+    std::vector<GradeCheck> checks;
 };
 
 // An append-only log. Appending opens the file per record, so two portal

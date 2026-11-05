@@ -702,3 +702,112 @@ TEST(grades_page_says_so_when_nothing_was_recorded) {
     CHECK(page.body.find("No graded attempts yet.") != std::string::npos);
     CHECK(page.body.find("0 attempts recorded") != std::string::npos);
 }
+
+TEST(attempt_page_reopens_one_report_with_its_program) {
+    const std::filesystem::path path =
+        std::filesystem::temp_directory_path() / "scancycle-attempt-page-test.tsv";
+    std::filesystem::remove(path);
+    app::GradeLog log(path.string());
+    std::string error;
+
+    app::GradeRecord record;
+    record.at = 1700000000;
+    record.lesson_id = "press-batch";
+    record.passed = false;
+    record.passed_count = 1;
+    record.total = 2;
+    record.program = "PROGRAM X\nVAR\n  a : BOOL;\nEND_VAR\n  a := a < 1 AND a;\nEND_PROGRAM\n";
+    record.checks.push_back(app::GradeCheck{true, "Output on", "motor: output on"});
+    record.checks.push_back(app::GradeCheck{false, "Latch holds", "output off"});
+    CHECK(log.append(record, error));
+
+    const net::Response page = app::attempt_page(log, "1");
+    CHECK(page.status == 200);
+    CHECK(page.content_type.rfind("text/html", 0) == 0);
+    CHECK(page.body.find("press-batch") != std::string::npos);
+    CHECK(page.body.find("1 of 2") != std::string::npos);
+    CHECK(page.body.find("Latch holds") != std::string::npos);
+    CHECK(page.body.find("output off") != std::string::npos);
+    CHECK(page.body.find("class=\"fail\">fail") != std::string::npos);
+    CHECK(page.body.find("class=\"pass\">pass") != std::string::npos);
+    CHECK(page.body.find("<pre>") != std::string::npos);
+    // The program is shown as text, never parsed as markup.
+    CHECK(page.body.find("a := a &lt; 1 AND a;") != std::string::npos);
+    CHECK(page.body.find("a := a < 1 AND a;") == std::string::npos);
+    CHECK(page.body.find("@media print") != std::string::npos);
+
+    std::filesystem::remove(path);
+}
+
+TEST(attempt_page_is_missing_for_anything_not_recorded) {
+    const std::filesystem::path path =
+        std::filesystem::temp_directory_path() / "scancycle-attempt-page-missing.tsv";
+    std::filesystem::remove(path);
+    app::GradeLog log(path.string());
+
+    CHECK(app::attempt_page(log, "1").status == 404);
+    CHECK(app::attempt_page(log, "0").status == 404);
+    CHECK(app::attempt_page(log, "").status == 404);
+    CHECK(app::attempt_page(log, "abc").status == 404);
+
+    std::string error;
+    app::GradeRecord graded;
+    graded.lesson_id = "press-batch";
+    graded.passed = true;
+    graded.passed_count = 1;
+    graded.total = 1;
+    graded.checks.push_back(app::GradeCheck{true, "Output on", "motor: output on"});
+    CHECK(log.append(graded, error));
+
+    // No stored checks is what an older portal wrote: the attempt still opens,
+    // it just cannot show the rubric.
+    app::GradeRecord older;
+    older.lesson_id = "press-batch";
+    older.passed = true;
+    older.passed_count = 1;
+    older.total = 1;
+    CHECK(log.append(older, error));
+
+    CHECK(app::attempt_page(log, "1").status == 200);
+    CHECK(app::attempt_page(log, "2").status == 200);
+    CHECK(app::attempt_page(log, "2").body.find("before per-check detail") !=
+          std::string::npos);
+    CHECK(app::attempt_page(log, "3").status == 404);
+    CHECK(app::attempt_page(log, "1.0").status == 404);
+    CHECK(app::attempt_page(log, "-1").status == 404);
+
+    std::filesystem::remove(path);
+}
+
+TEST(router_prefix_serves_a_family_of_paths) {
+    net::PortalRouter router;
+    router.route(net::HttpMethod::Get, "/grades", [](const net::Request&) {
+        net::Response response;
+        response.body = "index";
+        return response;
+    });
+    router.route_prefix(net::HttpMethod::Get, "/grades/", [](const net::Request& request) {
+        net::Response response;
+        response.body = "attempt " + request.path.substr(8);
+        return response;
+    });
+
+    net::Request exact;
+    exact.path = "/grades";
+    CHECK(router.dispatch(exact).body == "index");
+
+    net::Request attempt;
+    attempt.path = "/grades/7";
+    CHECK(router.dispatch(attempt).body == "attempt 7");
+
+    net::Request wrong_method;
+    wrong_method.method = net::HttpMethod::Post;
+    wrong_method.path = "/grades/7";
+    CHECK(router.dispatch(wrong_method).status == 404);
+
+    net::Request unrelated;
+    unrelated.path = "/gradesX";
+    CHECK(router.dispatch(unrelated).status == 404);
+
+    CHECK(router.route_count() == 2);
+}

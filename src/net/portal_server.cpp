@@ -10,11 +10,25 @@ void PortalRouter::route(HttpMethod method, std::string path, Handler handler) {
     routes_.push_back(Route{method, std::move(path), std::move(handler)});
 }
 
+void PortalRouter::route_prefix(HttpMethod method, std::string prefix, Handler handler) {
+    prefix_routes_.push_back(Route{method, std::move(prefix), std::move(handler)});
+}
+
 Response PortalRouter::dispatch(const Request& request) const {
     for (const Route& entry : routes_) {
         if (entry.method == request.method && entry.path == request.path) {
             return entry.handler(request);
         }
+    }
+    const Route* best = nullptr;
+    for (const Route& entry : prefix_routes_) {
+        if (entry.method == request.method && request.path.rfind(entry.path, 0) == 0 &&
+            (best == nullptr || entry.path.size() > best->path.size())) {
+            best = &entry;
+        }
+    }
+    if (best != nullptr) {
+        return best->handler(request);
     }
     Response missing;
     missing.status = 404;
@@ -87,8 +101,10 @@ std::string page_head(std::string_view title) {
            "textarea{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;"
            "width:100%;box-sizing:border-box}"
            "@media print{body{margin:0;max-width:none}form,.no-print{display:none}"
-           "a{color:#000;text-decoration:none}th{background:none}"
+           "a{color:#000;text-decoration:none}th,pre{background:none}"
            "tr{page-break-inside:avoid}thead{display:table-header-group}}"
+           "pre{background:#f6f6f6;padding:.7rem;border-radius:3px;"
+           "white-space:pre-wrap;overflow-wrap:anywhere}"
            ".pass{color:#1a7f37}.fail{color:#b42318}"
            "</style></head><body><main>";
 }

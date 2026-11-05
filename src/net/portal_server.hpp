@@ -33,8 +33,14 @@ public:
     using Handler = std::function<Response(const Request&)>;
 
     void route(HttpMethod method, std::string path, Handler handler);
+
+    // A family of paths under one prefix, for something like `/grades/<n>` where
+    // the valid suffixes depend on data the router does not hold. Exact routes
+    // win; among prefixes the longest match wins.
+    void route_prefix(HttpMethod method, std::string prefix, Handler handler);
+
     Response dispatch(const Request& request) const;
-    std::size_t route_count() const { return routes_.size(); }
+    std::size_t route_count() const { return routes_.size() + prefix_routes_.size(); }
 
 private:
     struct Route {
@@ -43,6 +49,7 @@ private:
         Handler handler;
     };
     std::vector<Route> routes_;
+    std::vector<Route> prefix_routes_;
 };
 
 std::string json_escape(std::string_view text);

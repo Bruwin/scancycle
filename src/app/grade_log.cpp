@@ -58,11 +58,11 @@ std::string decode_field(std::string_view text) {
     return out;
 }
 
-std::vector<std::string_view> split_fields(std::string_view line) {
+std::vector<std::string_view> split_on(std::string_view line, char separator) {
     std::vector<std::string_view> fields;
     std::size_t pos = 0;
     while (true) {
-        const std::size_t found = line.find(kFieldSeparator, pos);
+        const std::size_t found = line.find(separator, pos);
         if (found == std::string_view::npos) {
             fields.push_back(line.substr(pos));
             return fields;
@@ -87,6 +87,32 @@ bool parse_unsigned(std::string_view text, std::size_t& out) {
     return true;
 }
 
+// Each check is `passed,description,detail` with both texts percent-encoded,
+// which is what stops a description holding a comma or a newline from splitting
+// the entry apart.
+bool parse_checks(std::string_view text, std::vector<GradeCheck>& out) {
+    out.clear();
+    if (text.empty()) {
+        return true;
+    }
+    for (const std::string_view entry : split_on(text, ';')) {
+        const std::vector<std::string_view> parts = split_on(entry, ',');
+        if (parts.size() != 3) {
+            return false;
+        }
+        std::size_t passed = 0;
+        if (!parse_unsigned(parts[0], passed) || passed > 1) {
+            return false;
+        }
+        GradeCheck check;
+        check.passed = passed == 1;
+        check.description = decode_field(parts[1]);
+        check.detail = decode_field(parts[2]);
+        out.push_back(std::move(check));
+    }
+    return true;
+}
+
 }  // namespace
 
 std::string format_grade_record(const GradeRecord& record) {
@@ -101,12 +127,28 @@ std::string format_grade_record(const GradeRecord& record) {
     line += std::to_string(record.total);
     line += kFieldSeparator;
     line += encode_field(record.program);
+    if (!record.checks.empty()) {
+        line += kFieldSeparator;
+        for (std::size_t i = 0; i < record.checks.size(); ++i) {
+            if (i != 0) {
+                line += ';';
+            }
+            const GradeCheck& check = record.checks[i];
+            line += check.passed ? '1' : '0';
+            line += ',';
+            line += encode_field(check.description);
+            line += ',';
+            line += encode_field(check.detail);
+        }
+    }
     return line;
 }
 
 bool parse_grade_record(std::string_view line, GradeRecord& out) {
-    const std::vector<std::string_view> fields = split_fields(line);
-    if (fields.size() != 6) {
+    const std::vector<std::string_view> fields = split_on(line, kFieldSeparator);
+    // Six fields is a record from before per-check detail was stored. Those
+    // still open; they just cannot show the rubric.
+    if (fields.size() != 6 && fields.size() != 7) {
         return false;
     }
 
@@ -128,6 +170,10 @@ bool parse_grade_record(std::string_view line, GradeRecord& out) {
     out.passed_count = passed_count;
     out.total = total;
     out.program = decode_field(fields[5]);
+    out.checks.clear();
+    if (fields.size() == 7 && !parse_checks(fields[6], out.checks)) {
+        return false;
+    }
     return true;
 }
 

@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <ctime>
 #include <string>
+#include <utility>
 
 namespace sc::app {
 namespace {
@@ -74,6 +75,16 @@ void record_if_asked(const GradeOutcome& outcome, GradeLog* log) {
     record.passed_count = outcome.report.passed_count;
     record.total = outcome.report.checks.size();
     record.program = outcome.program;
+    // The report, not just its score: a teacher reopening last week's attempt
+    // needs to see which assertion missed and what the plant did.
+    record.checks.reserve(record.total);
+    for (const lesson::CheckResult& check : outcome.report.checks) {
+        GradeCheck stored;
+        stored.passed = check.passed;
+        stored.description = check.description;
+        stored.detail = check.detail;
+        record.checks.push_back(std::move(stored));
+    }
 
     std::string error;
     (void)log->append(record, error);

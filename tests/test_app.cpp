@@ -365,3 +365,68 @@ TEST(grade_log_skips_a_line_it_cannot_read) {
 
     std::filesystem::remove(path);
 }
+
+TEST(grade_log_keeps_the_per_check_report) {
+    const std::filesystem::path path =
+        std::filesystem::temp_directory_path() / "scancycle-grade-log-checks.tsv";
+    std::filesystem::remove(path);
+    app::GradeLog log(path.string());
+    std::string error;
+
+    app::GradeRecord record;
+    record.at = 1700000002;
+    record.lesson_id = "press-batch";
+    record.passed = false;
+    record.passed_count = 1;
+    record.total = 3;
+    record.program = "PROGRAM X\nEND_PROGRAM\n";
+    record.checks.push_back(app::GradeCheck{true, "Output on", "motor: output on"});
+    record.checks.push_back(app::GradeCheck{false, "Box, counted; once", "saw 1\n"});
+    record.checks.push_back(app::GradeCheck{false, "Latch holds", "output off"});
+    CHECK(log.append(record, error));
+    CHECK(error.empty());
+
+    // A description holding a comma, a semicolon and a newline must not turn one
+    // attempt into several lines.
+    std::size_t lines = 0;
+    {
+        std::ifstream file(path);
+        std::string line;
+        while (std::getline(file, line)) {
+            ++lines;
+        }
+    }
+    CHECK(lines == 1);
+
+    const std::vector<app::GradeRecord> entries = log.entries(error);
+    CHECK(entries.size() == 1);
+    CHECK(entries[0].checks.size() == 3);
+    CHECK(entries[0].checks[0].passed);
+    CHECK(entries[0].checks[0].description == "Output on");
+    CHECK(entries[0].checks[0].detail == "motor: output on");
+    CHECK(!entries[0].checks[1].passed);
+    CHECK(entries[0].checks[1].description == "Box, counted; once");
+    CHECK(entries[0].checks[1].detail == "saw 1\n");
+    CHECK(entries[0].checks[2].detail == "output off");
+
+    std::filesystem::remove(path);
+}
+
+TEST(grade_log_reads_a_line_from_before_checks_were_stored) {
+    const std::filesystem::path path =
+        std::filesystem::temp_directory_path() / "scancycle-grade-log-legacy.tsv";
+    {
+        std::ofstream file(path, std::ios::trunc);
+        file << "1700000000\tpress-batch\t1\t4\t4\t\n";
+    }
+
+    app::GradeLog log(path.string());
+    std::string error;
+    const std::vector<app::GradeRecord> entries = log.entries(error);
+    CHECK(entries.size() == 1);
+    CHECK(entries[0].passed);
+    CHECK(entries[0].total == 4);
+    CHECK(entries[0].checks.empty());
+
+    std::filesystem::remove(path);
+}
