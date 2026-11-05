@@ -1,6 +1,7 @@
 #include "harness.hpp"
 
 #include "app/application.hpp"
+#include "app/watch_text.hpp"
 #include "lesson/lesson.hpp"
 
 #include <utility>
@@ -184,4 +185,67 @@ TEST(stepping_runs_one_scan_and_leaves_the_plant_still) {
     CHECK(app.step_scan());
     CHECK(app.scans() == 1);
     CHECK(app.plant().device(0).distance == distance_before);
+}
+
+TEST(snapshot_carries_the_scan_count_and_the_clock) {
+    Application app(make_config());
+    CHECK(app.initialize());
+    if (!app.plc()) {
+        return;
+    }
+
+    CHECK(app.step_scan());
+    CHECK(app.step_scan());
+
+    const Application::WatchSnapshot shot = app.snapshot({"motor"});
+    CHECK(shot.scan == 2);
+    CHECK(shot.now_ms == 20);
+    CHECK(!shot.faulted);
+    CHECK(shot.tags.size() == 1);
+    CHECK(shot.forces.empty());
+}
+
+TEST(a_snapshot_does_not_move_what_it_observes) {
+    Application app(make_config());
+    CHECK(app.initialize());
+    if (!app.plc()) {
+        return;
+    }
+    CHECK(app.step_scan());
+
+    const Application::WatchSnapshot first = app.snapshot({"motor"});
+    const Application::WatchSnapshot second = app.snapshot({"motor"});
+
+    CHECK(first.scan == second.scan);
+    CHECK(first.now_ms == second.now_ms);
+    CHECK(first.tags.size() == second.tags.size());
+    CHECK(first.tags[0].value.as_bool() == second.tags[0].value.as_bool());
+    CHECK(app.scans() == first.scan);
+}
+
+TEST(watch_text_writes_one_tab_separated_line_per_tag) {
+    Application app(make_config());
+    CHECK(app.initialize());
+    if (!app.plc()) {
+        return;
+    }
+
+    const std::string text = watch_to_text(app.snapshot({"motor", "no_such_var"}));
+    CHECK(text == "scan=0\tnow_ms=0\tfaulted=0\n"
+                  "tag\tmotor\tBOOL\tFALSE\t1\t0\n"
+                  "tag\tno_such_var\t-\t-\t0\t0\n");
+}
+
+TEST(watch_text_reports_a_force_after_the_tags) {
+    Application app(make_config());
+    CHECK(app.initialize());
+    if (!app.plc()) {
+        return;
+    }
+    CHECK(app.set_force("motor", true));
+
+    const std::string text = watch_to_text(app.snapshot({"motor"}));
+    CHECK(text == "scan=0\tnow_ms=0\tfaulted=0\n"
+                  "tag\tmotor\tBOOL\tFALSE\t1\t1\n"
+                  "force\tmotor\tTRUE\n");
 }

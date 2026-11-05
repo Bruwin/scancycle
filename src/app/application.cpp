@@ -158,6 +158,16 @@ std::vector<Application::Watch> Application::watch(
     return out;
 }
 
+Application::WatchSnapshot Application::snapshot(const std::vector<std::string>& names) const {
+    WatchSnapshot out;
+    out.scan = scans();
+    out.now_ms = now_ms_;
+    out.faulted = faulted_;
+    out.tags = watch(names);
+    out.forces = forces_.entries();
+    return out;
+}
+
 i64 Application::scans() const { return driver_ ? driver_->scans() : 0; }
 
 lesson::GradeReport Application::grade(const lesson::Lesson& lesson) const {

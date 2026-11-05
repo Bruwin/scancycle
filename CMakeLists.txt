@@ -101,6 +101,7 @@ target_link_libraries(sc_net PUBLIC sc_core sc_lesson PRIVATE sc_warnings)
 
 add_library(sc_app
     src/app/application.cpp
+    src/app/watch_text.cpp
     src/app/lesson_runner.cpp
 )
 target_link_libraries(sc_app PUBLIC sc_core sc_sim sc_plc sc_io sc_lesson PRIVATE sc_warnings)

@@ -72,6 +72,19 @@ public:
     // typo instead of quietly dropping it.
     std::vector<Watch> watch(const std::vector<std::string>& names) const;
 
+    // A complete picture of the monitor at one instant: the tag values, what is
+    // pinned, and which scan produced them. Pure and cheap, so an editor or a
+    // debugger can poll it as often as it likes without changing what it sees.
+    struct WatchSnapshot {
+        i64 scan = 0;
+        i64 now_ms = 0;
+        bool faulted = false;
+        std::vector<Watch> tags;
+        std::vector<io::Force> forces;
+    };
+
+    WatchSnapshot snapshot(const std::vector<std::string>& names) const;
+
     const sim::Plant& plant() const { return plant_; }
     plc::Vm* plc() { return vm_.get(); }
     const std::string& error() const { return error_; }
