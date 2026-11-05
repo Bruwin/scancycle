@@ -1356,6 +1356,9 @@ TEST(attempt_page_keeps_the_filter_on_its_back_link) {
     const net::Response filtered = app::attempt_page(log, "1", "press-batch", "Ada");
     CHECK(filtered.body.find("<a href=\"/grades?lesson=press-batch&student=Ada\">"
                              "Scan Cycle class log</a>") != std::string::npos);
+    const net::Response by_result = app::attempt_page(log, "1", "press-batch", "Ada", "fail");
+    CHECK(by_result.body.find("<a href=\"/grades?lesson=press-batch&student=Ada&result=fail\">"
+                              "Scan Cycle class log</a>") != std::string::npos);
     // The missing-attempt page returns to the same view rather than the whole log.
     CHECK(app::attempt_page(log, "9", "press-batch", "Ada")
               .body.find("<a href=\"/grades?lesson=press-batch&student=Ada\">"
@@ -1415,6 +1418,9 @@ TEST(attempt_paging_counts_and_links_keep_the_filter) {
     CHECK(app::log_page_href(2, "press-batch", "Ada") ==
           "/grades?lesson=press-batch&student=Ada&page=2");
     CHECK(app::log_page_href(1, "", "Ada Lovelace") == "/grades?student=Ada%20Lovelace");
+    CHECK(app::log_page_href(2, "", "", "fail") == "/grades?result=fail&page=2");
+    CHECK(app::attempt_pager(1, 2, "", "", "fail")
+              .find("href=\"/grades?result=fail&page=2\"") != std::string::npos);
 
     CHECK(app::attempt_pager(1, 1, "", "").empty());
     CHECK(app::attempt_pager(1, 2, "", "").find("Page 1 of 2") != std::string::npos);
@@ -1573,6 +1579,97 @@ TEST(grades_page_covers_catalog_lessons_nobody_attempted) {
     CHECK(page.body.find("<th><code>hoist-safety</code></th>") != std::string::npos);
     // Nobody attempted it, so the cell is a dash rather than a link.
     CHECK(page.body.find("lesson=hoist-safety") == std::string::npos);
+
+    std::filesystem::remove(path);
+}
+
+TEST(grades_page_narrows_to_one_result) {
+    const std::filesystem::path path =
+        std::filesystem::temp_directory_path() / "scancycle-result-filter.tsv";
+    std::filesystem::remove(path);
+    app::GradeLog log(path.string());
+    std::string error;
+
+    const auto append = [&log, &error](const std::string& student, bool passed) {
+        app::GradeRecord record;
+        record.at = 1700000000;
+        record.lesson_id = "press-batch";
+        record.student = student;
+        record.passed = passed;
+        record.passed_count = passed ? 1 : 0;
+        record.total = 1;
+        return log.append(record, error);
+    };
+
+    CHECK(append("Ada", true));
+    CHECK(append("Bob", false));
+    CHECK(append("Ada", false));
+
+    const net::Response failed = app::grades_page(log, "", "", 1, {}, "fail");
+    CHECK(failed.status == 200);
+    CHECK(failed.body.find("2 attempts with result <code>fail</code>") != std::string::npos);
+    CHECK(failed.body.find("href=\"/grades/2?result=fail\"") != std::string::npos);
+    CHECK(failed.body.find("href=\"/grades/3?result=fail\"") != std::string::npos);
+    CHECK(failed.body.find("href=\"/grades/1") == std::string::npos);
+    CHECK(failed.body.find("href=\"/grades.csv?result=fail\"") != std::string::npos);
+    CHECK(failed.body.find("Show the whole log") != std::string::npos);
+
+    const net::Response passed = app::grades_page(log, "", "", 1, {}, "pass");
+    CHECK(passed.body.find("1 attempt with result <code>pass</code>") != std::string::npos);
+    CHECK(passed.body.find("Bob") == std::string::npos);
+
+    const net::Response both = app::grades_page(log, "", "Ada", 1, {}, "fail");
+    CHECK(both.body.find("1 attempt by <code>Ada</code> with result <code>fail</code>") !=
+          std::string::npos);
+
+    const net::Response unknown = app::grades_page(log, "", "", 1, {}, "maybe");
+    CHECK(unknown.status == 200);
+    CHECK(unknown.body.find("No attempts recorded with result <code>maybe</code>") !=
+          std::string::npos);
+
+    std::filesystem::remove(path);
+}
+
+TEST(grades_csv_exports_one_result) {
+    const std::filesystem::path path =
+        std::filesystem::temp_directory_path() / "scancycle-result-csv.tsv";
+    std::filesystem::remove(path);
+    app::GradeLog log(path.string());
+    std::string error;
+
+    const auto append = [&log, &error](const std::string& student, bool passed) {
+        app::GradeRecord record;
+        record.at = 1700000000;
+        record.lesson_id = "press-batch";
+        record.student = student;
+        record.passed = passed;
+        record.passed_count = passed ? 1 : 0;
+        record.total = 1;
+        return log.append(record, error);
+    };
+
+    CHECK(append("Ada", true));
+    CHECK(append("Bob", false));
+    CHECK(append("Ada", false));
+
+    const net::Response csv = app::grades_csv(log, "", "", "fail");
+    std::vector<std::string> lines;
+    std::size_t pos = 0;
+    while (pos < csv.body.size()) {
+        const std::size_t end = csv.body.find('\n', pos);
+        if (end == std::string::npos) {
+            break;
+        }
+        lines.push_back(csv.body.substr(pos, end - pos));
+        pos = end + 1;
+    }
+    CHECK(lines.size() == 3);
+    if (lines.size() == 3) {
+        CHECK(lines[1].rfind("2,", 0) == 0);
+        CHECK(lines[2].rfind("3,", 0) == 0);
+    }
+    CHECK(csv.body.find(",fail,") != std::string::npos);
+    CHECK(csv.body.find(",pass,") == std::string::npos);
 
     std::filesystem::remove(path);
 }

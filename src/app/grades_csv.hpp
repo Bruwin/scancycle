@@ -15,6 +15,6 @@ namespace sc::app {
 // the matching attempts are written, keeping the original ordinals so filtered
 // rows still match their attempt pages.
 net::Response grades_csv(const GradeLog& log, std::string_view lesson = {},
-                         std::string_view student = {});
+                         std::string_view student = {}, std::string_view result = {});
 
 }  // namespace sc::app

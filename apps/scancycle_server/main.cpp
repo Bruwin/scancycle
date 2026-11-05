@@ -73,16 +73,19 @@ int main(int argc, char** argv) {
                  [&grade_log, &lesson_ids](const sc::net::Request& request) {
                      const std::string lesson = sc::net::form_field(request.query, "lesson");
                      const std::string student = sc::net::form_field(request.query, "student");
+                     const std::string result = sc::net::form_field(request.query, "result");
                      const std::size_t page = sc::app::parse_attempt_page(
                          sc::net::form_field(request.query, "page"));
-                     return sc::app::grades_page(grade_log, lesson, student, page, lesson_ids);
+                     return sc::app::grades_page(grade_log, lesson, student, page, lesson_ids,
+                                                 result);
                  });
 
     router.route(sc::net::HttpMethod::Get, "/grades.csv",
                  [&grade_log](const sc::net::Request& request) {
                      const std::string lesson = sc::net::form_field(request.query, "lesson");
                      const std::string student = sc::net::form_field(request.query, "student");
-                     return sc::app::grades_csv(grade_log, lesson, student);
+                     const std::string result = sc::net::form_field(request.query, "result");
+                     return sc::app::grades_csv(grade_log, lesson, student, result);
                  });
 
     // The log grows while the server runs, so one route per attempt cannot be
@@ -91,8 +94,9 @@ int main(int argc, char** argv) {
                         [&grade_log](const sc::net::Request& request) {
                             const std::string lesson = sc::net::form_field(request.query, "lesson");
                             const std::string student = sc::net::form_field(request.query, "student");
+                            const std::string result = sc::net::form_field(request.query, "result");
                             return sc::app::attempt_page(grade_log, request.path.substr(8), lesson,
-                                                         student);
+                                                         student, result);
                         });
 
     sc::net::HttpServer server(router);

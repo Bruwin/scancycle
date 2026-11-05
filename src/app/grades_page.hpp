@@ -19,16 +19,19 @@ namespace sc::app {
 // the CSV keep describing the whole filtered set. A page past the end shows the
 // last one. `catalog` is the lesson ids the coverage table always shows as
 // columns, so a lesson nobody attempted is still visible; empty would only show
-// lessons that already appear in the log.
+// lessons that already appear in the log. `result` is `pass` or `fail`; anything
+// else is an empty page, like an unknown lesson or student.
 net::Response grades_page(const GradeLog& log, std::string_view lesson = {},
                           std::string_view student = {}, std::size_t page = 1,
-                          std::span<const std::string> catalog = {});
+                          std::span<const std::string> catalog = {},
+                          std::string_view result = {});
 
 // One recorded attempt with its full report, for the page a teacher prints.
 // `ordinal` is the suffix of /grades/<n>, counted from 1 in file order; anything
 // that is not a recorded attempt answers 404. The filters are only carried on
 // the back link, so leaving an attempt returns to the view it was opened from.
 net::Response attempt_page(const GradeLog& log, std::string_view ordinal,
-                           std::string_view lesson = {}, std::string_view student = {});
+                           std::string_view lesson = {}, std::string_view student = {},
+                           std::string_view result = {});
 
 }  // namespace sc::app

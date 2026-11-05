@@ -143,7 +143,8 @@ std::string missed_checks(const std::vector<const GradeRecord*>& records) {
 }  // namespace
 
 net::Response grades_page(const GradeLog& log, std::string_view lesson, std::string_view student,
-                          std::size_t page_number, std::span<const std::string> catalog) {
+                          std::size_t page_number, std::span<const std::string> catalog,
+                          std::string_view result) {
     std::string error;
     const std::vector<GradeRecord> records = log.entries(error);
 
@@ -154,12 +155,13 @@ net::Response grades_page(const GradeLog& log, std::string_view lesson, std::str
     shown.reserve(records.size());
     for (const GradeRecord& record : records) {
         if ((lesson.empty() || record.lesson_id == lesson) &&
-            (student.empty() || record.student == student)) {
+            (student.empty() || record.student == student) &&
+            matches_result(record.passed, result)) {
             shown.push_back(&record);
         }
     }
 
-    const bool filtered = !lesson.empty() || !student.empty();
+    const bool filtered = !lesson.empty() || !student.empty() || !result.empty();
     std::string page = net::page_head("Scan Cycle grades");
     page += "<p class=\"no-print\"><a href=\"/\">Scan Cycle teacher portal</a></p>";
     page += "<h1>Graded attempts</h1>";
@@ -176,6 +178,9 @@ net::Response grades_page(const GradeLog& log, std::string_view lesson, std::str
         if (!lesson.empty()) {
             page += " for lesson <code>" + net::html_escape(lesson) + "</code>";
         }
+        if (!result.empty()) {
+            page += " with result <code>" + net::html_escape(result) + "</code>";
+        }
         page += " in <code>" + net::html_escape(log.path()) + "</code>.</p>";
         page += "<p class=\"no-print\"><a href=\"/grades\">Show the whole log</a></p>";
     }
@@ -190,9 +195,12 @@ net::Response grades_page(const GradeLog& log, std::string_view lesson, std::str
         if (!lesson.empty()) {
             page += " for lesson <code>" + net::html_escape(lesson) + "</code>";
         }
+        if (!result.empty()) {
+            page += " with result <code>" + net::html_escape(result) + "</code>";
+        }
         page += ".</p>";
     } else {
-        const std::string query = filter_query(lesson, student);
+        const std::string query = filter_query(lesson, student, result);
         const std::string csv_href = query.empty() ? std::string("/grades.csv")
                                                    : "/grades.csv?" + query;
         // Paging slices the table only. The summaries still count every filtered
@@ -208,7 +216,7 @@ net::Response grades_page(const GradeLog& log, std::string_view lesson, std::str
         page += student_coverage(shown, catalog);
         page += missed_checks(shown);
         page += "<h2>Attempts</h2>";
-        page += attempt_pager(current, pages, lesson, student);
+        page += attempt_pager(current, pages, lesson, student, result);
         page += "<table><thead><tr><th>When (UTC)</th><th>Student</th><th>Lesson</th>"
                 "<th>Result</th><th>Checks</th><th>Program</th>"
                 "<th class=\"no-print\">Report</th></tr></thead><tbody>";
@@ -245,13 +253,13 @@ net::Response grades_page(const GradeLog& log, std::string_view lesson, std::str
 }
 
 net::Response attempt_page(const GradeLog& log, std::string_view ordinal, std::string_view lesson,
-                           std::string_view student) {
+                           std::string_view student, std::string_view result) {
     net::Response response;
     response.content_type = "text/html; charset=utf-8";
 
     // The filter belongs to the view the report was opened from, not to the
     // attempt, so it only shapes the way back.
-    const std::string query = filter_query(lesson, student);
+    const std::string query = filter_query(lesson, student, result);
     const std::string back = query.empty() ? std::string("/grades") : "/grades?" + query;
 
     std::string error;

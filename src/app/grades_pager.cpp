@@ -12,8 +12,9 @@ std::size_t attempt_page_count(std::size_t attempts) {
     return pages == 0 ? 1 : pages;
 }
 
-std::string log_page_href(std::size_t page, std::string_view lesson, std::string_view student) {
-    std::string query = filter_query(lesson, student);
+std::string log_page_href(std::size_t page, std::string_view lesson, std::string_view student,
+                          std::string_view result) {
+    std::string query = filter_query(lesson, student, result);
     if (page > 1) {
         if (!query.empty()) {
             query += "&";
@@ -24,17 +25,19 @@ std::string log_page_href(std::size_t page, std::string_view lesson, std::string
 }
 
 std::string attempt_pager(std::size_t page, std::size_t pages, std::string_view lesson,
-                          std::string_view student) {
+                          std::string_view student, std::string_view result) {
     if (pages <= 1) {
         return {};
     }
     std::string pager = "<p class=\"no-print\">Page " + std::to_string(page) + " of " +
                         std::to_string(pages);
     if (page > 1) {
-        pager += " | <a href=\"" + log_page_href(page - 1, lesson, student) + "\">Newer</a>";
+        pager += " | <a href=\"" + log_page_href(page - 1, lesson, student, result) +
+                 "\">Newer</a>";
     }
     if (page < pages) {
-        pager += " | <a href=\"" + log_page_href(page + 1, lesson, student) + "\">Older</a>";
+        pager += " | <a href=\"" + log_page_href(page + 1, lesson, student, result) +
+                 "\">Older</a>";
     }
     pager += "</p>";
     return pager;

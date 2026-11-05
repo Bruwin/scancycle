@@ -1,5 +1,6 @@
 #include "app/grades_csv.hpp"
 
+#include "app/grades_query.hpp"
 #include "app/grades_time.hpp"
 
 #include <cstddef>
@@ -45,7 +46,8 @@ std::string csv_field(const std::string& text) {
 
 }  // namespace
 
-net::Response grades_csv(const GradeLog& log, std::string_view lesson, std::string_view student) {
+net::Response grades_csv(const GradeLog& log, std::string_view lesson, std::string_view student,
+                         std::string_view result) {
     std::string error;
     const std::vector<GradeRecord> records = log.entries(error);
 
@@ -53,7 +55,8 @@ net::Response grades_csv(const GradeLog& log, std::string_view lesson, std::stri
     for (std::size_t index = 0; index < records.size(); ++index) {
         const GradeRecord& record = records[index];
         if ((!lesson.empty() && record.lesson_id != lesson) ||
-            (!student.empty() && record.student != student)) {
+            (!student.empty() && record.student != student) ||
+            !matches_result(record.passed, result)) {
             continue;
         }
         std::string missed;

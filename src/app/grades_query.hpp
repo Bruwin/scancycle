@@ -31,7 +31,8 @@ inline std::string query_escape(std::string_view text) {
 
 // The query string that reproduces a filter, without the leading '?'. Empty when
 // nothing is filtered, so callers can leave the URL bare instead of adding '?'.
-inline std::string filter_query(std::string_view lesson, std::string_view student) {
+inline std::string filter_query(std::string_view lesson, std::string_view student,
+                                std::string_view result = {}) {
     std::string query;
     if (!lesson.empty()) {
         query += "lesson=" + query_escape(lesson);
@@ -42,7 +43,29 @@ inline std::string filter_query(std::string_view lesson, std::string_view studen
         }
         query += "student=" + query_escape(student);
     }
+    if (!result.empty()) {
+        if (!query.empty()) {
+            query += "&";
+        }
+        query += "result=" + query_escape(result);
+    }
     return query;
+}
+
+// `?result=` is `pass` or `fail`; empty means either. Anything else matches
+// nothing, which keeps an unknown value an empty page rather than a silent
+// synonym for "unfiltered".
+inline bool matches_result(bool passed, std::string_view result) {
+    if (result.empty()) {
+        return true;
+    }
+    if (result == "pass") {
+        return passed;
+    }
+    if (result == "fail") {
+        return !passed;
+    }
+    return false;
 }
 
 }  // namespace sc::app
