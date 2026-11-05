@@ -32,10 +32,10 @@ bool read_byte_count(std::size_t words, u8& count) {
     return true;
 }
 
-// Shared reply prefix: header, command, transaction, status and address echo.
+// Shared reply prefix: header, command, transaction and status. A reply does not
+// echo the request address or function byte, so nothing else precedes the data.
 bool parse_reply_prefix(std::span<const u8> body, const Df1Header& expected, u8 command,
-                        const PcccAddress& address, Df1Header& header, std::size_t& at,
-                        std::string& error) {
+                        Df1Header& header, std::size_t& at, std::string& error) {
     error.clear();
     if (!df1_parse_header(body, header, at, error)) {
         return false;
@@ -50,16 +50,6 @@ bool parse_reply_prefix(std::span<const u8> body, const Df1Header& expected, u8 
     }
     if (header.status != kPcccStatusOk) {
         error = "controller returned status " + hex_byte(header.status);
-        return false;
-    }
-    if (body.size() < at + 7) {
-        error = "PCCC reply is shorter than its address block";
-        return false;
-    }
-    const PcccAddress echoed{body[at + 2], body[at + 3], read_u16_at(body, at + 4),
-                             body[at + 6]};
-    if (!(echoed == address)) {
-        error = "PCCC reply address does not match the request";
         return false;
     }
     return true;
@@ -97,17 +87,13 @@ std::vector<u8> build_pccc_write_request(const PcccAddress& address,
     return payload;
 }
 
-std::vector<u8> build_pccc_read_reply(const PcccAddress& address,
-                                      std::span<const u16> words) {
+std::vector<u8> build_pccc_read_reply(std::span<const u16> words) {
     u8 byte_count = 0;
     if (!read_byte_count(words.size(), byte_count)) {
         return {};
     }
     std::vector<u8> payload;
-    payload.reserve(7 + byte_count);
-    payload.push_back(kPcccFuncReadReply);
-    payload.push_back(byte_count);
-    push_address(payload, address);
+    payload.reserve(byte_count);
     for (const u16 word : words) {
         payload.push_back(static_cast<u8>(word & 0xFFu));
         payload.push_back(static_cast<u8>(word >> 8));
@@ -115,32 +101,25 @@ std::vector<u8> build_pccc_read_reply(const PcccAddress& address,
     return payload;
 }
 
-std::vector<u8> build_pccc_write_reply(const PcccAddress& address) {
-    std::vector<u8> payload;
-    payload.reserve(7);
-    payload.push_back(kPcccFuncWriteReply);
-    payload.push_back(0);
-    push_address(payload, address);
-    return payload;
-}
+std::vector<u8> build_pccc_write_reply() { return {}; }
 
-std::vector<u8> build_pccc_error_reply(u8 function) { return std::vector<u8>{function}; }
+// A failed command carries its extended status where the data would be; the
+// header status has already said that it failed.
+std::vector<u8> build_pccc_error_reply() { return std::vector<u8>{0x00}; }
 
 bool parse_pccc_read_reply(std::span<const u8> body, const Df1Header& expected,
                            const PcccAddress& address, PcccReply& out, std::string& error) {
     out = PcccReply{};
     Df1Header header;
     std::size_t at = 0;
-    if (!parse_reply_prefix(body, expected, kDf1CmdReadReply, address, header, at, error)) {
+    if (!parse_reply_prefix(body, expected, kDf1CmdReadReply, header, at, error)) {
         return false;
     }
-    if (body[at] != kPcccFuncReadReply) {
-        error = "PCCC reply has an unexpected function byte";
-        return false;
-    }
-    const std::size_t size = body[at + 1];
-    if ((size % 2) != 0 || body.size() != at + 7 + size) {
-        error = "PCCC read reply length does not match its size byte";
+    // Command 0x4F carries the data and nothing else: no function byte, no size
+    // byte and no address echo, so the frame length is the only length signal.
+    const std::size_t size = body.size() - at;
+    if (size == 0 || (size % 2) != 0) {
+        error = "PCCC read reply does not carry a whole number of words";
         return false;
     }
 
@@ -148,23 +127,19 @@ bool parse_pccc_read_reply(std::span<const u8> body, const Df1Header& expected,
     out.address = address;
     out.words.reserve(size / 2);
     for (std::size_t offset = 0; offset < size; offset += 2) {
-        out.words.push_back(read_u16_at(body, at + 7 + offset));
+        out.words.push_back(read_u16_at(body, at + offset));
     }
     return true;
 }
 
 bool parse_pccc_write_reply(std::span<const u8> body, const Df1Header& expected,
-                            const PcccAddress& address, std::string& error) {
+                            std::string& error) {
     Df1Header header;
     std::size_t at = 0;
-    if (!parse_reply_prefix(body, expected, kDf1CmdWriteReply, address, header, at, error)) {
+    if (!parse_reply_prefix(body, expected, kDf1CmdWriteReply, header, at, error)) {
         return false;
     }
-    if (body[at] != kPcccFuncWriteReply) {
-        error = "PCCC reply has an unexpected function byte";
-        return false;
-    }
-    if (body.size() != at + 7) {
+    if (body.size() != at) {
         error = "PCCC write reply carries unexpected data";
         return false;
     }

@@ -62,11 +62,10 @@ bool Df1Slave::handle(std::span<const u8> body, std::vector<u8>& reply, std::str
         return false;
     }
 
-    const u8 function = body.size() > at ? body[at] : 0;
     const bool known = header.command == kDf1CmdProtectedRead ||
                        header.command == kDf1CmdProtectedWrite;
     if (!known || body.size() < at + 7) {
-        reply = error_reply(header, function);
+        reply = error_reply(header);
         return true;
     }
 
@@ -77,13 +76,13 @@ bool Df1Slave::handle(std::span<const u8> body, std::vector<u8>& reply, std::str
     const std::size_t extra = read ? 0 : size;
     File* file = find(address.file, address.file_type);
     if (size == 0 || (size % 2) != 0 || body.size() != at + 7 + extra || file == nullptr) {
-        reply = error_reply(header, function);
+        reply = error_reply(header);
         return true;
     }
 
     const std::size_t words = size / 2;
     if (static_cast<std::size_t>(address.element) + words > file->words.size()) {
-        reply = error_reply(header, function);
+        reply = error_reply(header);
         return true;
     }
 
@@ -97,7 +96,7 @@ bool Df1Slave::handle(std::span<const u8> body, std::vector<u8>& reply, std::str
             file->words.begin() + address.element,
             file->words.begin() + address.element + static_cast<std::ptrdiff_t>(words));
         reply = df1_body(reply_header);
-        const std::vector<u8> payload = build_pccc_read_reply(address, data);
+        const std::vector<u8> payload = build_pccc_read_reply(data);
         reply.insert(reply.end(), payload.begin(), payload.end());
         return true;
     }
@@ -109,19 +108,17 @@ bool Df1Slave::handle(std::span<const u8> body, std::vector<u8>& reply, std::str
     ++writes_;
     reply_header.command = kDf1CmdWriteReply;
     reply = df1_body(reply_header);
-    const std::vector<u8> payload = build_pccc_write_reply(address);
-    reply.insert(reply.end(), payload.begin(), payload.end());
     return true;
 }
 
-std::vector<u8> Df1Slave::error_reply(const Df1Header& request, u8 function) const {
+std::vector<u8> Df1Slave::error_reply(const Df1Header& request) const {
     Df1Header header = request;
     header.destination = request.source;
     header.source = request.destination;
     header.command = static_cast<u8>(request.command + 0x40);
     header.status = kPcccStatusError;
     std::vector<u8> body = df1_body(header);
-    const std::vector<u8> payload = build_pccc_error_reply(function);
+    const std::vector<u8> payload = build_pccc_error_reply();
     body.insert(body.end(), payload.begin(), payload.end());
     return body;
 }

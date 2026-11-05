@@ -128,7 +128,7 @@ bool Df1Client::write_word(u8 file, u8 file_type, u16 element, u16 value,
     if (!transact(kDf1CmdProtectedWrite, payload, request, reply, error)) {
         return false;
     }
-    return parse_pccc_write_reply(reply, request, address, error);
+    return parse_pccc_write_reply(reply, request, error);
 }
 
 bool Df1Client::read_bit(u8 file, u8 file_type, u16 element, u8 bit, bool& value,

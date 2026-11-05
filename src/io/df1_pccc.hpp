@@ -13,14 +13,13 @@
 
 namespace sc::io {
 
-// 0x0F/0x10 are command bytes in the DF1 header. The function byte inside the
-// payload is different: 0xA2 for a protected typed logical read and 0xAA for a
-// write, and a reply echoes that same function byte. Sending the command byte in
-// this slot is a malformed command that controllers silently ignore.
+// 0x0F/0x10 are command bytes in the DF1 header. The function byte inside a
+// request payload is different: 0xA2 for a protected typed logical read and 0xAA
+// for a write. Sending the command byte in this slot is a malformed command that
+// controllers silently ignore. Replies do not echo the function byte: command
+// 0x4F carries the data and 0x50 carries nothing.
 inline constexpr u8 kPcccFuncRead = 0xA2;
 inline constexpr u8 kPcccFuncWrite = 0xAA;
-inline constexpr u8 kPcccFuncReadReply = kPcccFuncRead;
-inline constexpr u8 kPcccFuncWriteReply = kPcccFuncWrite;
 
 // File type identifiers, not file numbers: N7 is file 7 with type 0x89.
 inline constexpr u8 kPcccFileTypeBinary = 0x85;
@@ -55,15 +54,16 @@ struct PcccReply {
 std::vector<u8> build_pccc_read_request(const PcccAddress& address, u8 byte_count);
 std::vector<u8> build_pccc_write_request(const PcccAddress& address,
                                          std::span<const u16> words);
-std::vector<u8> build_pccc_read_reply(const PcccAddress& address, std::span<const u16> words);
-std::vector<u8> build_pccc_write_reply(const PcccAddress& address);
-std::vector<u8> build_pccc_error_reply(u8 function);
+std::vector<u8> build_pccc_read_reply(std::span<const u16> words);
+std::vector<u8> build_pccc_write_reply();
+std::vector<u8> build_pccc_error_reply();
 
 // Parsers take a complete DF1 body (header included) and reject a reply whose
-// command, transaction, status or address does not match the request.
+// command, transaction or status does not match the request. A read reply's
+// payload is the data alone, so the frame length says how much arrived.
 bool parse_pccc_read_reply(std::span<const u8> body, const Df1Header& expected,
                            const PcccAddress& address, PcccReply& out, std::string& error);
 bool parse_pccc_write_reply(std::span<const u8> body, const Df1Header& expected,
-                            const PcccAddress& address, std::string& error);
+                            std::string& error);
 
 }  // namespace sc::io

@@ -48,7 +48,7 @@ private:
     File* find(u8 file, u8 type);
     const File* find(u8 file, u8 type) const;
     bool handle(std::span<const u8> body, std::vector<u8>& reply, std::string& error);
-    std::vector<u8> error_reply(const Df1Header& request, u8 function) const;
+    std::vector<u8> error_reply(const Df1Header& request) const;
 
     std::vector<File> files_;
     Df1Checksum checksum_ = Df1Checksum::Bcc;

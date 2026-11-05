@@ -145,9 +145,9 @@ TEST(pccc_read_reply_parses_little_endian_words) {
 
     const io::PcccAddress address{7, io::kPcccFileTypeInteger, 3, 0};
     const std::vector<u16> words = {0x1234, 0x00FF};
-    const std::vector<u8> payload = io::build_pccc_read_reply(address, words);
-    CHECK(payload.size() == 7 + 4);
-    CHECK(payload[7] == 0x34);
+    const std::vector<u8> payload = io::build_pccc_read_reply(words);
+    CHECK(payload.size() == 4);
+    CHECK(payload[0] == 0x34);
 
     std::vector<u8> body = io::df1_body(header);
     body.insert(body.end(), payload.begin(), payload.end());
@@ -202,7 +202,7 @@ TEST(df1_slave_answers_a_typed_read_and_write) {
                          reply, error));
     body.clear();
     CHECK(io::df1_decode(reply, io::Df1Checksum::Bcc, body, consumed, error));
-    CHECK(io::parse_pccc_write_reply(body, header, address, error));
+    CHECK(io::parse_pccc_write_reply(body, header, error));
     CHECK(slave.word(7, 0) == 0x1234);
     CHECK(slave.writes() == 1);
     CHECK(slave.requests() == 2);
@@ -499,4 +499,27 @@ TEST(df1_read_request_uses_the_protected_typed_logical_payload) {
     const std::vector<u8> payload = io::build_pccc_read_request(address, 2);
     const std::vector<u8> expected = {0xA2, 0x02, 0x07, 0x89, 0x00, 0x00, 0x00};
     CHECK(payload == expected);
+}
+
+TEST(df1_read_reply_captured_from_a_micro_logix_carries_data_only) {
+    // Captured from the bench: command 0x4F, status 0, transaction 1, then the
+    // two data bytes and nothing else. No function byte, no size byte and no
+    // address echo, which is why the address-block parser rejected a valid reply.
+    const std::vector<u8> frame = {0x10, 0x02, 0x00, 0x01, 0x4F, 0x00, 0x01, 0x00,
+                                   0x00, 0x00, 0x10, 0x03, 0x02, 0xC9};
+    std::vector<u8> body;
+    std::size_t consumed = 0;
+    std::string error;
+    CHECK(io::df1_decode(frame, io::Df1Checksum::Crc16, body, consumed, error));
+    CHECK(consumed == frame.size());
+    CHECK(body.size() == 8);
+
+    io::Df1Header expected;
+    expected.transaction = 1;
+    const io::PcccAddress address{7, io::kPcccFileTypeInteger, 0, 0};
+    io::PcccReply reply;
+    CHECK(io::parse_pccc_read_reply(body, expected, address, reply, error));
+    CHECK(error.empty());
+    CHECK(reply.words.size() == 1);
+    CHECK(reply.words[0] == 0);
 }
