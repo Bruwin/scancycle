@@ -34,6 +34,7 @@ Portal or Studio 5000 and recognise everything.
 | Lesson runner: a lesson's reference program drives its own cell | working, tested |
 | Modbus/TCP codec, live loopback driver, software slave, commissioning gate | working, tested |
 | libplctag driver (CIP/S7 booleans), opt-in build, fake-backend tests | working, tested (no hardware) |
+| DF1 codec (DLE, BCC/CRC-16), PCCC typed read/write, loopback data table | working, tested (no hardware) |
 | Procedural materials and parametric machine kits | working, tested |
 | Editor model, lesson schema, grader, portal routing | working, tested |
 | Composition root (plant + PLC + I/O in one headless session) | working, tested |
@@ -206,7 +207,7 @@ src/render    RHI interface, mesh upload, voxel renderer (CPU side)
 src/world     voxel chunks, greedy mesher, world container, world generation
 src/sim       plant devices, factory simulation tick
 src/plc       IEC 61131-3 front ends (ST, ladder/FBD, IL) -> bytecode -> VM
-src/io        tag database, PLC driver interface, Modbus/TCP + libplctag drivers, commissioning
+src/io        tag database, PLC driver interface, Modbus/TCP, libplctag and DF1 drivers, commissioning
 src/assets    procedural material library and machine kit generator
 src/ui        Structured Text editor model (buffer, diagnostics, undo)
 src/lesson    lesson data model, rubric, grader

@@ -150,7 +150,20 @@ which keeps protocol selection in configuration rather than in the driver. The
 real adapter is a single translation unit behind `-DSC_ENABLE_LIBPLCTAG=ON`, off
 by default, because the headless build must not require an external package.
 It has not been run against real hardware; that is what the commissioning gate
-is for. DF1 remains the next M6 step.
+is for.
+
+The third slice is `io::Df1Driver` for SLC 500 and PLC-5 serial DF1. It owns the
+full-duplex DLE framing (BCC or CRC-16), the PCCC typed logical read/write
+payloads for integer and binary files, and one boolean tag per bit of a 16-bit
+word. An output write is a read-modify-write through `CommissioningPolicy`, so
+the other fifteen bits of the word survive, and an unchanged output is not
+written again. The transport is an injected `Df1Link`; `io::Df1Slave` is a
+synchronous software data table that answers on the caller's thread, so the
+whole driver runs in `ctest` with no serial port and no scheduling in the loop.
+A termios or pseudo-terminal link is the next step. Like the other live drivers
+this has not met a real controller: the frame family follows the Rockwell
+documentation, but the software peer is the only peer it has been tested
+against.
 
 ## Drivers and licensing
 
@@ -282,10 +295,10 @@ drives the whole cell)*
   (three on the press cell), the loopback HTTP pages and the WebSocket live feed; the portal is
   still loopback-only with no TLS or authentication)*
 * **M6** live drivers: Modbus TCP against a software slave, then libplctag, then DF1.
-  *(in progress: the in-house Modbus/TCP driver, loopback software slave, write-gated
-  output path and socket tests are done, and the optional libplctag driver is implemented
-  behind an injectable API and tested with a fake backend; DF1 remains, and neither live
-  driver has been run against real hardware)*
+  *(in progress: the in-house Modbus/TCP driver, loopback software slave, the optional
+  libplctag driver, and the DF1 codec with its software data table and driver are implemented
+  and tested headlessly; a real serial transport and hardware commissioning remain, because
+  no live driver has been run against a real controller)*
 * **M7** graphical LD/FBD editors on the existing network model, SFC, content,
   asset variety.
 
