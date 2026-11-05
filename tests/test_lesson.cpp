@@ -1,6 +1,7 @@
 #include "harness.hpp"
 
 #include "app/grade_log.hpp"
+#include "app/grades_csv.hpp"
 #include "app/grades_page.hpp"
 #include "app/lesson_runner.hpp"
 #include "lesson/grader.hpp"
