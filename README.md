@@ -25,6 +25,7 @@ curriculum can open TIA Portal or Studio 5000 and recognise everything.
 | Standard function blocks (TON/TOF/CTU/CTD) | working, tested |
 | Plant simulation, tag database, simulated PLC driver | working, tested |
 | Box flow: belt transfer, photo-eye sensing, jam detection | working, tested |
+| Machine: pull from infeed, cycle time, release to outfeed | working, tested |
 | Modbus/TCP codec, commissioning safety gate | working, tested |
 | Procedural materials and parametric machine kits | working, tested |
 | Editor model, lesson schema, grader, portal routing | working, tested |

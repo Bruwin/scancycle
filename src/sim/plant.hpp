@@ -14,10 +14,10 @@ namespace sc::sim {
 
 inline constexpr u32 kNoDevice = 0xFFFF'FFFFu;
 
-enum class DeviceKind : u8 { Motor = 0, Belt, PhotoEye, Valve, StackLight };
+enum class DeviceKind : u8 { Motor = 0, Belt, PhotoEye, Valve, StackLight, Machine };
 
 struct Box {
-    u32 belt = kNoDevice;  // kNoDevice once it has left the line
+    u32 belt = kNoDevice;  // the belt or machine holding it; kNoDevice once gone
     f64 position = 0.0;    // metres from the infeed end of its belt
     bool jammed = false;
 };
@@ -39,7 +39,7 @@ struct Device {
 
     // Belt geometry and routing.
     f64 length = 4.0;        // metres
-    u32 next = kNoDevice;    // downstream belt
+    u32 next = kNoDevice;    // downstream belt, or a machine's output belt
     f64 spawn_period = 0.0;  // seconds between infeed boxes; 0 disables spawning
     f64 spawn_accumulator = 0.0;
 
@@ -47,6 +47,13 @@ struct Device {
     u32 belt = kNoDevice;
     f64 at = 0.0;
     f64 window = 0.2;  // half-width of the sensing band, metres
+
+    // Machine: pulls one box from `infeed`, holds it for a cycle, releases it.
+    u32 infeed = kNoDevice;
+    f64 cycle_seconds = 2.0;
+    f64 progress = 0.0;  // seconds into the current cycle
+    i64 done_count = 0;  // boxes processed
+    bool busy = false;
 
     i32 x = 0;
     i32 y = 0;
@@ -84,15 +91,17 @@ public:
 private:
     void ramp_devices(f64 dt_seconds);
     void advance_boxes(f64 dt_seconds);
+    void update_machines(f64 dt_seconds);
     void spawn_due_boxes(f64 dt_seconds);
     void update_sensors();
+    void erase_left_line();
 
     std::vector<Device> devices_;
     std::vector<Box> boxes_;
 };
 
-// The M3 vertical slice: an infeed belt feeding a photo-eye and a second belt,
-// with a stack light for state. Enough to program a real interlock against.
+// The M3 vertical slice: infeed belt, entry photo-eye, a machine, an outfeed
+// belt and a stack light. Enough to program a real interlock against.
 Plant make_vertical_slice_plant();
 
 }  // namespace sc::sim

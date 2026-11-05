@@ -214,16 +214,100 @@ TEST(plant_reset_clears_boxes_and_counters) {
 TEST(vertical_slice_plant_is_wired) {
     const sim::Plant plant = sim::make_vertical_slice_plant();
 
-    CHECK(plant.count() == 4);
-    // infeed -> outfeed routing
+    CHECK(plant.count() == 5);
     CHECK(plant.device(0).kind == sim::DeviceKind::Belt);
-    CHECK(plant.device(0).next == 2);
-    // photo-eye mounted on the infeed
+    CHECK(plant.device(0).next == 2);  // the belt feeds the machine
     CHECK(plant.device(1).kind == sim::DeviceKind::PhotoEye);
     CHECK(plant.device(1).belt == 0);
     CHECK(plant.device(1).at > 0.0);
-    CHECK(plant.device(2).kind == sim::DeviceKind::Belt);
-    CHECK(plant.device(3).kind == sim::DeviceKind::StackLight);
+    CHECK(plant.device(2).kind == sim::DeviceKind::Machine);
+    CHECK(plant.device(2).infeed == 0);
+    CHECK(plant.device(2).next == 3);  // the machine discharges to the outfeed
+    CHECK(plant.device(3).kind == sim::DeviceKind::Belt);
+    CHECK(plant.device(4).kind == sim::DeviceKind::StackLight);
+}
+
+TEST(machine_consumes_a_box_after_its_cycle) {
+    sim::Plant plant;
+    const u32 belt = make_instant_belt(plant, "infeed", 1.0);
+    const u32 machine = plant.add(sim::DeviceKind::Machine, "press");
+    plant.device(machine).infeed = belt;
+    plant.device(machine).cycle_seconds = 0.5;
+    plant.device(belt).next = machine;
+    plant.set_output(belt, true);
+    plant.set_output(machine, true);
+    plant.spawn_box(belt);
+
+    for (int tick = 0; tick < 200; ++tick) {
+        plant.tick(0.01);
+    }
+
+    CHECK(plant.device(machine).done_count == 1);
+    CHECK(plant.box_count() == 0);  // consumed, not left on a belt
+    CHECK(plant.input(machine));    // ready for the next one
+}
+
+TEST(machine_holds_the_box_while_it_works) {
+    sim::Plant plant;
+    const u32 belt = make_instant_belt(plant, "infeed", 1.0);
+    const u32 machine = plant.add(sim::DeviceKind::Machine, "press");
+    plant.device(machine).infeed = belt;
+    plant.device(machine).cycle_seconds = 1.0;
+    plant.device(belt).next = machine;
+    plant.set_output(belt, true);
+    plant.set_output(machine, true);
+    plant.spawn_box(belt);
+
+    // The box reaches the end at t=1.0s and is taken; the cycle is still running.
+    for (int tick = 0; tick < 120; ++tick) {
+        plant.tick(0.01);
+    }
+
+    CHECK(plant.device(machine).busy);
+    CHECK(plant.device(machine).done_count == 0);
+    CHECK(!plant.input(machine));
+}
+
+TEST(machine_takes_nothing_until_it_is_enabled) {
+    sim::Plant plant;
+    const u32 belt = make_instant_belt(plant, "infeed", 1.0);
+    const u32 machine = plant.add(sim::DeviceKind::Machine, "press");
+    plant.device(machine).infeed = belt;
+    plant.device(belt).next = machine;
+    plant.set_output(belt, true);
+    plant.spawn_box(belt);
+
+    for (int tick = 0; tick < 200; ++tick) {
+        plant.tick(0.01);
+    }
+
+    CHECK(plant.device(machine).done_count == 0);
+    CHECK(plant.boxes_on(belt) == 1);
+    // A box waiting for a disabled machine is not a jam.
+    CHECK(!plant.device(belt).jammed);
+    CHECK(plant.input(machine));
+}
+
+TEST(machine_releases_into_its_output_belt) {
+    sim::Plant plant;
+    const u32 belt = make_instant_belt(plant, "infeed", 1.0);
+    const u32 machine = plant.add(sim::DeviceKind::Machine, "press");
+    const u32 outfeed = make_instant_belt(plant, "outfeed", 2.0);
+    plant.device(machine).infeed = belt;
+    plant.device(machine).next = outfeed;
+    plant.device(machine).cycle_seconds = 0.3;
+    plant.device(belt).next = machine;
+    plant.set_output(belt, true);
+    plant.set_output(machine, true);
+
+    plant.spawn_box(belt);
+    for (int tick = 0; tick < 300; ++tick) {
+        plant.tick(0.01);
+    }
+
+    CHECK(plant.device(machine).done_count == 1);
+    CHECK(plant.boxes_on(outfeed) == 1);
+    CHECK(plant.device(machine).jammed == false);
 }
 
 TEST(tag_database_round_trip) {

@@ -13,6 +13,17 @@ constexpr f64 kMinimumRamp = 1e-6;
 constexpr f64 kMetresPerSecondAtFullSpeed = 1.0;
 constexpr f64 kEpsilon = 1e-9;
 
+enum class Handoff { None, Transferred, Consumed, Waiting };
+
+bool has_room_at_infeed(const std::vector<Box>& boxes, u32 belt, f64 spacing) {
+    for (const Box& box : boxes) {
+        if (box.belt == belt && box.position < spacing) {
+            return false;
+        }
+    }
+    return true;
+}
+
 }  // namespace
 
 u32 Plant::add(DeviceKind kind, std::string name, i32 x, i32 y, i32 z) {
@@ -62,6 +73,8 @@ void Plant::tick(f64 dt_seconds) {
     }
     ramp_devices(dt_seconds);
     advance_boxes(dt_seconds);
+    update_machines(dt_seconds);
+    erase_left_line();
     spawn_due_boxes(dt_seconds);
     update_sensors();
 }
@@ -97,6 +110,9 @@ void Plant::ramp_devices(f64 dt_seconds) {
             case DeviceKind::PhotoEye:
                 // Sensor state is produced by update_sensors, after boxes move.
                 break;
+            case DeviceKind::Machine:
+                // Machine state is produced by update_machines.
+                break;
         }
     }
 }
@@ -120,10 +136,9 @@ void Plant::advance_boxes(f64 dt_seconds) {
                 on_belt.push_back(i);
             }
         }
-        std::sort(on_belt.begin(), on_belt.end(),
-                  [this](u32 left, u32 right) {
-                      return boxes_[left].position > boxes_[right].position;
-                  });
+        std::sort(on_belt.begin(), on_belt.end(), [this](u32 left, u32 right) {
+            return boxes_[left].position > boxes_[right].position;
+        });
 
         const f64 travel = belt.speed * kMetresPerSecondAtFullSpeed * dt_seconds;
 
@@ -144,40 +159,120 @@ void Plant::advance_boxes(f64 dt_seconds) {
                 continue;
             }
 
-            // At the end of the belt: hand off, leave the line, or jam.
+            // At the end of the belt: hand off, leave the line, or wait for the
+            // machine downstream to pull it (a machine pulls, it is not pushed).
             const u32 next_index = belt.next;
-            bool moved = false;
-            if (next_index != kNoDevice && next_index < devices_.size() &&
-                devices_[next_index].kind == DeviceKind::Belt) {
-                const f64 next_spacing = devices_[next_index].box_spacing;
-                bool room = true;
-                for (const Box& other : boxes_) {
-                    if (other.belt == next_index && other.position < next_spacing) {
-                        room = false;
-                        break;
-                    }
-                }
-                if (room) {
-                    box.belt = next_index;
-                    box.position = 0.0;
-                    moved = true;
-                }
-            } else {
-                // No downstream belt: the box has left the line.
+            Handoff handoff = Handoff::None;
+
+            if (next_index == kNoDevice) {
                 box.belt = kNoDevice;
-                moved = true;
+                handoff = Handoff::Consumed;
+            } else if (next_index < devices_.size()) {
+                const DeviceKind next_kind = devices_[next_index].kind;
+                if (next_kind == DeviceKind::Belt) {
+                    if (has_room_at_infeed(boxes_, next_index, devices_[next_index].box_spacing)) {
+                        box.belt = next_index;
+                        box.position = 0.0;
+                        handoff = Handoff::Transferred;
+                    }
+                } else if (next_kind == DeviceKind::Machine) {
+                    handoff = Handoff::Waiting;
+                }
             }
 
-            if (moved) {
+            if (handoff == Handoff::Transferred || handoff == Handoff::Consumed) {
                 ++belt.box_count;
-                box.jammed = false;
-            } else {
+            } else if (handoff == Handoff::None) {
                 box.jammed = true;
                 belt.jammed = true;
             }
+            // Waiting: the box sits at the end of the belt without a jam.
         }
     }
+}
 
+void Plant::update_machines(f64 dt_seconds) {
+    for (u32 index = 0; index < devices_.size(); ++index) {
+        Device& machine = devices_[index];
+        if (machine.kind != DeviceKind::Machine) {
+            continue;
+        }
+        machine.jammed = false;
+
+        Box* held = nullptr;
+        for (Box& box : boxes_) {
+            if (box.belt == index) {
+                held = &box;
+                break;
+            }
+        }
+
+        if (held == nullptr) {
+            machine.busy = false;
+            machine.progress = 0.0;
+            machine.input = true;  // ready to accept
+
+            if (!machine.output) {
+                continue;
+            }
+            if (machine.infeed == kNoDevice || machine.infeed >= devices_.size()) {
+                continue;
+            }
+            const Device& feeder = devices_[machine.infeed];
+            if (feeder.kind != DeviceKind::Belt) {
+                continue;
+            }
+
+            for (Box& box : boxes_) {
+                if (box.belt == machine.infeed &&
+                    box.position >= feeder.length - kEpsilon) {
+                    box.belt = index;
+                    box.position = 0.0;
+                    machine.busy = true;
+                    machine.progress = 0.0;
+                    machine.input = false;
+                    break;
+                }
+            }
+            continue;
+        }
+
+        // Holding a box: run the cycle. A machine finishes its cycle even if the
+        // enable drops mid-stroke, exactly like a real press.
+        machine.busy = true;
+        machine.input = false;
+        machine.progress += dt_seconds;
+        if (machine.progress < machine.cycle_seconds) {
+            continue;
+        }
+
+        const u32 next = machine.next;
+        bool released = false;
+        if (next != kNoDevice && next < devices_.size() &&
+            devices_[next].kind == DeviceKind::Belt) {
+            if (has_room_at_infeed(boxes_, next, devices_[next].box_spacing)) {
+                held->belt = next;
+                held->position = 0.0;
+                released = true;
+            }
+        } else {
+            // No output belt: the machine consumes the box.
+            held->belt = kNoDevice;
+            released = true;
+        }
+
+        if (released) {
+            ++machine.done_count;
+            machine.progress = 0.0;
+            machine.busy = false;
+            machine.input = true;
+        } else {
+            machine.jammed = true;  // output blocked
+        }
+    }
+}
+
+void Plant::erase_left_line() {
     boxes_.erase(std::remove_if(boxes_.begin(), boxes_.end(),
                                 [](const Box& box) { return box.belt == kNoDevice; }),
                  boxes_.end());
@@ -194,16 +289,9 @@ void Plant::spawn_due_boxes(f64 dt_seconds) {
         while (belt.spawn_accumulator >= belt.spawn_period) {
             belt.spawn_accumulator -= belt.spawn_period;
 
-            bool clear = true;
-            for (const Box& box : boxes_) {
-                if (box.belt == index && box.position < belt.box_spacing) {
-                    clear = false;
-                    break;
-                }
-            }
             // A blocked infeed does not bank up boxes: the slot is simply lost,
             // which is what a real photo-eye-gated feeder does.
-            if (clear) {
+            if (has_room_at_infeed(boxes_, index, belt.box_spacing)) {
                 spawn_box(index);
             }
         }
@@ -241,6 +329,9 @@ void Plant::reset() {
         device.blocked = false;
         device.jammed = false;
         device.spawn_accumulator = 0.0;
+        device.progress = 0.0;
+        device.done_count = 0;
+        device.busy = false;
     }
 }
 
@@ -255,12 +346,16 @@ Plant make_vertical_slice_plant() {
     plant.device(entry_eye).belt = infeed;
     plant.device(entry_eye).at = 2.0;
 
-    const u32 outfeed = plant.add(DeviceKind::Belt, "outfeed_belt", 3, 0, 0);
-    plant.device(outfeed).length = 3.0;
-    plant.device(infeed).next = outfeed;
+    const u32 press = plant.add(DeviceKind::Machine, "press", 3, 0, 0);
+    plant.device(press).infeed = infeed;
+    plant.device(press).cycle_seconds = 1.5;
+    plant.device(infeed).next = press;
 
-    const u32 run_light = plant.add(DeviceKind::StackLight, "run_light", 4, 2, 0);
-    plant.device(run_light).kind = DeviceKind::StackLight;
+    const u32 outfeed = plant.add(DeviceKind::Belt, "outfeed_belt", 4, 0, 0);
+    plant.device(outfeed).length = 3.0;
+    plant.device(press).next = outfeed;
+
+    plant.add(DeviceKind::StackLight, "run_light", 5, 2, 0);
 
     return plant;
 }
