@@ -202,6 +202,18 @@ NetEditResult toggle_negated(Rung& rung, const NetPath& path) {
     return {true, {}};
 }
 
+NetEditResult toggle_junction(Rung& rung, const NetPath& path) {
+    NetNode* node = find_node(rung, path);
+    if (node == nullptr) {
+        return refused("path does not resolve");
+    }
+    if (node->kind != NetKind::Series && node->kind != NetKind::Parallel) {
+        return refused("only a junction can be swapped");
+    }
+    node->kind = node->kind == NetKind::Series ? NetKind::Parallel : NetKind::Series;
+    return {true, {}};
+}
+
 NetEditResult set_contact(Rung& rung, const NetPath& path, std::string name) {
     NetEditResult result;
     if (!check_name(name, result)) {

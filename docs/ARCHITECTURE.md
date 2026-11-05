@@ -76,7 +76,7 @@ state machine and cannot be lowered to straight-line code at all.
 |---|---|---|
 | Structured Text (ST) | `plc/lexer`, `plc/parser`, `plc/compiler` | working and tested |
 | Ladder Diagram (LD) | `plc/ladder_text` parses rung files into `plc/netlist` | working and tested, including negated contacts, coils, `TON`/`TOF` delays and `CTU`/`CTD` counters with a CV readout |
-| Function Block Diagram (FBD) | the same `plc/netlist` model | model working and tested, including timer and counter sinks; the block editor is not |
+| Function Block Diagram (FBD) | the same `plc/netlist` model | working and tested: the ladder page draws either view from one chart, with AND/OR blocks that swap on a click |
 | Instruction List (IL) | `plc/il`: `LD`/`LDN`, `AND`/`ANDN`, `OR`/`ORN`, `ST`/`STN` | working and tested; files carry a `VAR` block |
 | Sequential Function Chart (SFC) | none | not started |
 
@@ -314,8 +314,9 @@ drives the whole cell)*
   has run against a real controller)*
 * **M7** graphical LD/FBD editors on the existing network model, SFC, content,
   asset variety. *(in progress: `scancycle_ide --program=file.ld` serves SVG rungs
-  with click-to-invert contacts and forms for branches, coils and rails; FBD, SFC
-  and the content pass remain)*
+  in either a ladder or a function block view, with click-to-invert contacts,
+  click-to-swap junctions and forms for branches, coils and rails; SFC and the
+  content pass remain)*
 
 ## Deferred
 
