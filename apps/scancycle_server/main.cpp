@@ -1,3 +1,4 @@
+#include "app/grade_events.hpp"
 #include "app/grade_log.hpp"
 #include "app/grades_csv.hpp"
 #include "app/grades_page.hpp"
@@ -8,6 +9,7 @@
 #include "net/http.hpp"
 #include "net/http_server.hpp"
 #include "net/portal_server.hpp"
+#include "net/websocket.hpp"
 
 #include <cstddef>
 #include <cstdio>
@@ -24,6 +26,7 @@
 // can open. Ctrl+C stops it.
 int main(int argc, char** argv) {
     unsigned port = 8080;
+    unsigned ws_port = 8081;
     long requests = 0;  // 0 serves until the process is stopped
     std::string records_path = "scancycle-grades.tsv";
     bool records_given = false;
@@ -42,6 +45,14 @@ int main(int argc, char** argv) {
                 return 2;
             }
             port = static_cast<unsigned>(value);
+        } else if (arg.rfind("--ws-port=", 0) == 0) {
+            char* end = nullptr;
+            const long value = std::strtol(arg.c_str() + 10, &end, 10);
+            if (end == arg.c_str() + 10 || *end != '\0' || value < 0 || value > 65535) {
+                std::fprintf(stderr, "portal: '%s' is not a WebSocket port\n", arg.c_str());
+                return 2;
+            }
+            ws_port = static_cast<unsigned>(value);
         } else if (arg.rfind("--requests=", 0) == 0) {
             requests = std::strtol(arg.c_str() + 11, nullptr, 10);
         } else if (arg.rfind("--records=", 0) == 0) {
@@ -121,19 +132,41 @@ int main(int argc, char** argv) {
         return term_logs ? term_logs->active() : std::string();
     };
 
+    // The live feed is a separate loopback socket so the existing one-request
+    // HTTP server can keep its small blocking accept loop. A page learns the
+    // chosen URL from /api/live, which also makes --ws-port=0 useful in tests.
+    sc::net::WebSocketServer live;
+    if (!live.listen(static_cast<sc::u16>(ws_port))) {
+        std::fprintf(stderr, "portal: %s\n", live.error().c_str());
+        return 1;
+    }
+    const auto publish_grade = [&live](const sc::app::GradeRecord& record) {
+        live.broadcast(sc::app::grade_recorded_json(record));
+    };
+
     sc::net::PortalRouter router = sc::net::make_default_router(lessons);
+    router.route(sc::net::HttpMethod::Get, "/api/live",
+                 [&live](const sc::net::Request&) {
+                     sc::net::Response response;
+                     response.content_type = "application/json";
+                     const std::string live_port = std::to_string(live.port());
+                     response.body = "{\"port\":" + live_port +
+                                     ",\"url\":\"ws://127.0.0.1:" + live_port +
+                                     "/live\"}";
+                     return response;
+                 });
     // A grade always writes to the term that is active at that moment, whichever
     // term a teacher happens to be reading.
     router.route(sc::net::HttpMethod::Post, "/api/grade",
-                 [&lessons, &log_for](const sc::net::Request& request) {
+                 [&lessons, &log_for, &publish_grade](const sc::net::Request& request) {
                      sc::app::GradeLog log = log_for("");
-                     return sc::app::grade_lesson(lessons, request, &log);
+                     return sc::app::grade_lesson(lessons, request, &log, publish_grade);
                  });
 
     router.route(sc::net::HttpMethod::Post, "/grade",
-                 [&lessons, &log_for](const sc::net::Request& request) {
+                 [&lessons, &log_for, &publish_grade](const sc::net::Request& request) {
                      sc::app::GradeLog log = log_for("");
-                     return sc::app::grade_lesson_page(lessons, request, &log);
+                     return sc::app::grade_lesson_page(lessons, request, &log, publish_grade);
                  });
 
     // Starting a new term and switching to it is one action, so a new class
@@ -156,6 +189,7 @@ int main(int argc, char** argv) {
                                  "log</a></p></main></body></html>";
                              return response;
                          }
+                         live.broadcast(sc::app::term_changed_json(term_logs->active()));
                          sc::app::GradeLog log = term_logs->log("");
                          return sc::app::grades_page(log, "", "", 1, lesson_ids, "",
                                                      term_logs->active(), term_logs->terms(),
@@ -217,6 +251,8 @@ int main(int argc, char** argv) {
     std::printf("  http://127.0.0.1:%u/grades   (printable log)\n", bound);
     std::printf("  http://127.0.0.1:%u/grades/<n> (one attempt)\n", bound);
     std::printf("  http://127.0.0.1:%u/grades.csv (spreadsheet)\n", bound);
+    std::printf("  ws://127.0.0.1:%u/live (live grades)\n",
+                static_cast<unsigned>(live.port()));
     std::printf("  records %s\n\n", records_path.c_str());
     for (const sc::lesson::Lesson& lesson : lessons) {
         std::printf("  lesson %-20s %s\n", lesson.id.c_str(), lesson.title.c_str());

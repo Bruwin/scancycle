@@ -10,19 +10,25 @@
 #include "lesson/lesson.hpp"
 #include "net/portal_server.hpp"
 
+#include <functional>
 #include <vector>
 
 namespace sc::app {
 
 class GradeLog;
+struct GradeRecord;
+using GradeObserver = std::function<void(const GradeRecord&)>;
 
 // `log` is optional. When given, every graded attempt is appended, including a
 // toolbox refusal, because a refusal is still an attempt a teacher may want to
-// see in the class log.
+// see in the class log. `on_record` runs only after that append succeeds, so a
+// live feed never announces an attempt the log does not contain.
 net::Response grade_lesson(const std::vector<lesson::Lesson>& lessons,
-                           const net::Request& request, GradeLog* log = nullptr);
+                           const net::Request& request, GradeLog* log = nullptr,
+                           const GradeObserver& on_record = {});
 
 net::Response grade_lesson_page(const std::vector<lesson::Lesson>& lessons,
-                                const net::Request& request, GradeLog* log = nullptr);
+                                const net::Request& request, GradeLog* log = nullptr,
+                                const GradeObserver& on_record = {});
 
 }  // namespace sc::app

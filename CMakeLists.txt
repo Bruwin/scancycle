@@ -107,6 +107,7 @@ add_library(sc_net
     src/net/portal_server.cpp
     src/net/http.cpp
     src/net/http_server.cpp
+    src/net/websocket.cpp
 )
 find_package(Threads REQUIRED)
 target_link_libraries(sc_net PUBLIC sc_core sc_lesson PRIVATE sc_warnings Threads::Threads)
@@ -116,6 +117,7 @@ endif()
 
 add_library(sc_app
     src/app/grade_log.cpp
+    src/app/grade_events.cpp
     src/app/grades_page.cpp
     src/app/grades_pager.cpp
     src/app/grades_csv.cpp
@@ -185,6 +187,7 @@ if(SC_BUILD_TESTS)
         tests/test_tools.cpp
         tests/test_ide.cpp
         tests/test_lesson.cpp
+        tests/test_websocket.cpp
         tests/test_app.cpp
     )
     target_link_libraries(sc_tests PRIVATE

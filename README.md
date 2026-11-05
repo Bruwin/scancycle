@@ -37,7 +37,7 @@ Portal or Studio 5000 and recognise everything.
 | Editor model, lesson schema, grader, portal routing | working, tested |
 | Composition root (plant + PLC + I/O in one headless session) | working, tested |
 | Vulkan 1.3 renderer: GPU cull, chunk streaming, golden frame (opt-in) | working, verified on lavapipe in CI |
-| Teacher portal: pages, toolbox-enforced grading, printable grade log | working, tested |
+| Teacher portal: pages, toolbox-enforced grading, printable grade log, live updates | working, tested |
 | PLC IDE: editor, diagnostics, watch, forcing, single-scan step | working, tested (local web surface) |
 
 ## Build
@@ -119,8 +119,9 @@ with, so a broken exercise fails CI instead of failing a classroom.
 ./build/bin/scancycle_cli ladder examples/interlock.ld --scans=50 --set start_btn=1
 ./build/bin/scancycle_cli ladder examples/interlock.ld --scans=110 --set start_btn=1
 
-# Serve the teacher portal on loopback; graded attempts go to the named log
-./build/bin/scancycle_server --port=8080 --records=grades.tsv
+# Serve the teacher portal on loopback; graded attempts go to the named log.
+# The printable log also listens for live updates on the WebSocket port.
+./build/bin/scancycle_server --port=8080 --ws-port=8081 --records=grades.tsv
 
 # Grade a lesson over the portal (an empty program grades the reference)
 curl -s -X POST -d "lesson=press-batch" http://127.0.0.1:8080/api/grade
@@ -131,8 +132,13 @@ curl -s -X POST -d "lesson=press-batch" http://127.0.0.1:8080/grade
 # Read a lesson objective and rubric before submitting
 curl -s http://127.0.0.1:8080/lessons/press-batch
 
-# Every recorded attempt, newest first (print-friendly)
+# Every recorded attempt, newest first (print-friendly); the page refreshes
+# itself when a grade or active-term event arrives over the live feed.
 curl -s http://127.0.0.1:8080/grades
+
+# The page discovers the live URL from the HTTP origin; --ws-port=0 lets the OS
+# choose a free WebSocket port when the default is already in use.
+curl -s http://127.0.0.1:8080/api/live
 
 # One attempt reopened: its checks, detail and program, ready to print
 curl -s http://127.0.0.1:8080/grades/2
@@ -192,7 +198,7 @@ src/io        tag database, PLC driver interface, Modbus codec, commissioning
 src/assets    procedural material library and machine kit generator
 src/ui        Structured Text editor model (buffer, diagnostics, undo)
 src/lesson    lesson data model, rubric, grader
-src/net       teacher portal request routing
+src/net       teacher portal request routing and live WebSocket transport
 src/app       application composition root, headless session and IDE routes
 apps/         scancycle_cli, scancycle_server, scancycle_ide
 tests/        headless test suite (ctest)

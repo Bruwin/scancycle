@@ -68,7 +68,8 @@ GradeOutcome grade_submission(const std::vector<lesson::Lesson>& lessons,
 
 // A full disk must not cost a student their grade, so a failed append is
 // dropped here; the server's startup line names the file a teacher can check.
-void record_if_asked(const GradeOutcome& outcome, GradeLog* log) {
+void record_if_asked(const GradeOutcome& outcome, GradeLog* log,
+                     const GradeObserver& on_record) {
     if (log == nullptr || outcome.status != 200) {
         return;
     }
@@ -92,7 +93,9 @@ void record_if_asked(const GradeOutcome& outcome, GradeLog* log) {
     }
 
     std::string error;
-    (void)log->append(record, error);
+    if (log->append(record, error) && on_record) {
+        on_record(record);
+    }
 }
 
 net::Response json_error(int status, const std::string& message) {
@@ -164,12 +167,13 @@ std::string error_page(const GradeOutcome& outcome, const std::vector<lesson::Le
 }  // namespace
 
 net::Response grade_lesson(const std::vector<lesson::Lesson>& lessons,
-                           const net::Request& request, GradeLog* log) {
+                           const net::Request& request, GradeLog* log,
+                           const GradeObserver& on_record) {
     const GradeOutcome outcome = grade_submission(lessons, request);
     if (outcome.status != 200) {
         return json_error(outcome.status, outcome.error);
     }
-    record_if_asked(outcome, log);
+    record_if_asked(outcome, log, on_record);
 
     net::Response response;
     response.body = lesson::grade_report_json(outcome.report);
@@ -177,9 +181,10 @@ net::Response grade_lesson(const std::vector<lesson::Lesson>& lessons,
 }
 
 net::Response grade_lesson_page(const std::vector<lesson::Lesson>& lessons,
-                                const net::Request& request, GradeLog* log) {
+                                const net::Request& request, GradeLog* log,
+                                const GradeObserver& on_record) {
     const GradeOutcome outcome = grade_submission(lessons, request);
-    record_if_asked(outcome, log);
+    record_if_asked(outcome, log, on_record);
 
     // The filter rides on the query, not in the submission: it says which log
     // view the student came from, so the report can lead back there.

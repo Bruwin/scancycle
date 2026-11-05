@@ -166,6 +166,7 @@ net::Response grades_page(const GradeLog& log, std::string_view lesson, std::str
     std::string page = net::page_head("Scan Cycle grades");
     page += "<p class=\"no-print\"><a href=\"/\">Scan Cycle teacher portal</a></p>";
     page += "<h1>Graded attempts</h1>";
+    page += "<p class=\"no-print\" id=\"live-status\">Live updates: connecting&hellip;</p>";
     // Switching term keeps the filters: "Ada's failures" is just as meaningful
     // in the previous term as in this one. The form switches where new attempts
     // go, which is how a new class starts without restarting the portal.
@@ -272,7 +273,54 @@ net::Response grades_page(const GradeLog& log, std::string_view lesson, std::str
         }
         page += "</tbody></table>";
     }
-    page += "</main></body></html>";
+    page += "</main>";
+    page += R"js(
+<script>
+(() => {
+  const status = document.getElementById('live-status');
+  if (!status || !window.fetch || !window.WebSocket) return;
+  let retry = null;
+  let reloading = false;
+  const connect = () => {
+    fetch('/api/live', {cache: 'no-store'})
+      .then((response) => {
+        if (!response.ok) throw new Error('live endpoint unavailable');
+        return response.json();
+      })
+      .then((info) => {
+        const socket = new WebSocket(info.url);
+        socket.onopen = () => { status.textContent = 'Live updates connected'; };
+        socket.onmessage = (event) => {
+          let message;
+          try { message = JSON.parse(event.data); } catch { return; }
+          if (message.type !== 'grade' && message.type !== 'term') return;
+          status.textContent = message.type === 'grade'
+            ? 'New grade recorded; refreshing...'
+            : 'Active term changed; refreshing...';
+          if (!reloading) {
+            reloading = true;
+            setTimeout(() => location.reload(), 300);
+          }
+        };
+        socket.onclose = () => {
+          if (reloading) return;
+          status.textContent = 'Live updates reconnecting...';
+          clearTimeout(retry);
+          retry = setTimeout(connect, 2000);
+        };
+        socket.onerror = () => socket.close();
+      })
+      .catch(() => {
+        status.textContent = 'Live updates unavailable';
+        clearTimeout(retry);
+        retry = setTimeout(connect, 5000);
+      });
+  };
+  connect();
+})();
+</script>
+)js";
+    page += "</body></html>";
 
     net::Response response;
     response.content_type = "text/html; charset=utf-8";

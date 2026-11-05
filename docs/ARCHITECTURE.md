@@ -215,8 +215,13 @@ conveyor" is visible even when nobody has attempted it. The stylesheet carries p
 a grade report print without nav links or forms. A line written by an older
 portal still opens, with its counts and no rubric. Both
 grade responses carry the submitted program back in that form, so a rejection or
-a failed compile never costs a student their work. There is no TLS or authentication yet, and the WebSocket half of
-the portal is still open.
+a failed compile never costs a student their work. The grade log also opens a
+one-way WebSocket feed on a second loopback port; `GET /api/live` reports its
+URL, and a successfully appended grade or an active-term switch is pushed to
+connected pages, which refresh themselves without a manual reload. The feed
+sends only the verdict and term metadata, never a submitted program. There is
+no TLS or authentication yet; the portal and its live feed are local loopback
+surfaces.
 
 ## Procedural assets
 
@@ -250,10 +255,10 @@ drives the whole cell)*
   watch, `scancycle_cli trace` prints the table, and `scancycle_ide` serves the local web
   surface: Structured Text editor, compile diagnostics, watch table, force controls and
   single-scan stepping. Graphical LD/FBD editors remain M7.)*
-* **M5** lessons + teacher portal: schema, grader, four real lessons, web UI. *(in progress:
-  schema, grader, the lesson runner that self-tests a reference program, four lessons (three on
-  the press cell) and the loopback HTTP transport are done; the web UI and WebSocket half are
-  not)*
+* **M5** lessons + teacher portal: schema, grader, four real lessons, web UI, live grade feed.
+  *(done: schema, grader, the lesson runner that self-tests a reference program, four lessons
+  (three on the press cell), the loopback HTTP pages and the WebSocket live feed; the portal is
+  still loopback-only with no TLS or authentication)*
 * **M6** live drivers: Modbus TCP against a software slave, then libplctag, then DF1.
 * **M7** graphical LD/FBD editors on the existing network model, SFC, content,
   asset variety.
