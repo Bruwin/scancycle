@@ -152,3 +152,22 @@ TEST(lesson_runner_rejects_a_lesson_without_a_program) {
     CHECK(!run.ok);
     CHECK(!run.error.empty());
 }
+
+TEST(conveyor_lesson_reference_solution_passes_its_own_rubric) {
+    const lesson::Lesson conveyor = lesson::make_conveyor_interlock_lesson();
+    const LessonRunResult run = run_lesson(conveyor);
+
+    CHECK(run.ok);
+    CHECK(!run.faulted);
+    CHECK(run.report.passed());
+}
+
+TEST(lesson_runner_rejects_a_preset_the_program_does_not_declare) {
+    lesson::Lesson broken = lesson::make_conveyor_interlock_lesson();
+    broken.preset_inputs.push_back({"no_such_button", true});
+
+    const LessonRunResult run = run_lesson(broken);
+
+    CHECK(!run.ok);
+    CHECK(run.error.find("no_such_button") != std::string::npos);
+}

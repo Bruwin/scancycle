@@ -33,8 +33,15 @@ Lesson make_conveyor_interlock_lesson() {
     // TON. Anything beyond that is next week's material.
     lesson.allowed_instructions = {"AND", "OR", "NOT", "TON", "BOOL", ":="};
 
-    lesson.rubric.push_back(RubricCheck{"drive-energised", "Motor output is on",
-                                        CheckKind::DeviceOutputTrue, 0, 0.0});
+    lesson.starting_plant.add(sim::DeviceKind::Motor, "motor_run");
+
+    // The student is handed a panel with start already pressed, so the
+    // reference solution can be graded without a human in the loop.
+    lesson.preset_inputs.push_back({"start_btn", true});
+
+    lesson.rubric.push_back(check_on(lesson.starting_plant, "motor_run",
+                                     "drive-energised", "Motor output is on",
+                                     CheckKind::DeviceOutputTrue));
     lesson.rubric.push_back(
         RubricCheck{"program-healthy", "Program runs without a fault",
                     CheckKind::ProgramHealthy, 0, 0.0});

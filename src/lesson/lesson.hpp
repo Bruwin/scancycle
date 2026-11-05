@@ -7,6 +7,7 @@
 
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 namespace sc::lesson {
@@ -39,6 +40,11 @@ struct Lesson {
     // The cell the lesson is taught on, wiring included. A lesson that leaves
     // this empty is graded against whatever plant the caller supplies.
     sim::Plant starting_plant;
+
+    // Operator-panel state applied once, before the first scan: the buttons a
+    // student would already be holding at t=0. A latch that is never pressed
+    // cannot be graded.
+    std::vector<std::pair<std::string, bool>> preset_inputs;
 
     // Empty means "every instruction is available". Otherwise this is the
     // week's toolbox: students may only use what the lesson grants.

@@ -29,6 +29,14 @@ LessonRunResult run_lesson(const lesson::Lesson& lesson, LessonRunConfig config)
         return result;
     }
 
+    for (const std::pair<std::string, bool>& preset : lesson.preset_inputs) {
+        if (!app.plc()->set(preset.first, plc::Value::boolean(preset.second))) {
+            result.error = "lesson presses a button the program never declares: " +
+                           preset.first;
+            return result;
+        }
+    }
+
     const i32 ticks = static_cast<i32>(config.seconds / config.tick_seconds);
     result.ok = app.run_headless(ticks);
     result.scans = app.scans();
