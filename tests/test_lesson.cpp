@@ -1132,6 +1132,79 @@ TEST(grades_csv_exports_one_lesson_and_keeps_ordinals) {
     std::filesystem::remove(path);
 }
 
+TEST(grades_page_summarises_each_student) {
+    const std::filesystem::path path =
+        std::filesystem::temp_directory_path() / "scancycle-grades-student-summary.tsv";
+    std::filesystem::remove(path);
+    app::GradeLog log(path.string());
+    std::string error;
+
+    const auto append = [&log, &error](std::int64_t at, const std::string& student, bool passed) {
+        app::GradeRecord record;
+        record.at = at;
+        record.lesson_id = "press-batch";
+        record.student = student;
+        record.passed = passed;
+        record.passed_count = passed ? 1 : 0;
+        record.total = 1;
+        return log.append(record, error);
+    };
+
+    CHECK(append(1700000000, "Ada", true));
+    CHECK(append(1700000060, "Ada", false));
+    CHECK(append(1700000120, "Bob", true));
+    CHECK(append(1700000180, "", false));
+
+    const net::Response page = app::grades_page(log);
+    CHECK(page.status == 200);
+    CHECK(page.body.find("<h2>By student</h2>") != std::string::npos);
+    CHECK(page.body.find("<td>Ada</td><td>2</td><td>1</td><td>50%</td>") != std::string::npos);
+    CHECK(page.body.find("<td>Bob</td><td>1</td><td>1</td><td>100%</td>") != std::string::npos);
+    CHECK(page.body.find("<em>(unnamed)</em></td><td>1</td><td>0</td><td>0%</td>") !=
+          std::string::npos);
+
+    // Named students are alphabetical and the unnamed attempts come last.
+    const std::size_t ada = page.body.find("<td>Ada</td><td>2</td>");
+    const std::size_t bob = page.body.find("<td>Bob</td><td>1</td>");
+    CHECK(ada < bob);
+    CHECK(bob < page.body.find("<em>(unnamed)</em>"));
+
+    // The tables sit in a stable order above the attempts.
+    CHECK(page.body.find("By lesson") < page.body.find("By student"));
+    CHECK(page.body.find("By student") < page.body.find("Missed checks"));
+
+    std::filesystem::remove(path);
+}
+
+TEST(grades_page_hides_the_student_table_when_no_attempt_was_named) {
+    const std::filesystem::path path =
+        std::filesystem::temp_directory_path() / "scancycle-grades-anonymous-log.tsv";
+    std::filesystem::remove(path);
+    app::GradeLog log(path.string());
+    std::string error;
+
+    app::GradeRecord first;
+    first.at = 1700000000;
+    first.lesson_id = "press-batch";
+    first.passed = true;
+    first.passed_count = 1;
+    first.total = 1;
+    CHECK(log.append(first, error));
+
+    app::GradeRecord second;
+    second.at = 1700000060;
+    second.lesson_id = "press-batch";
+    second.total = 1;
+    CHECK(log.append(second, error));
+
+    const net::Response page = app::grades_page(log);
+    CHECK(page.status == 200);
+    CHECK(page.body.find("By student") == std::string::npos);
+    CHECK(page.body.find("By lesson") != std::string::npos);
+
+    std::filesystem::remove(path);
+}
+
 TEST(grades_carry_the_student_name_from_the_form) {
     const std::vector<lesson::Lesson> lessons = lesson::make_builtin_lessons();
     const std::filesystem::path path =

@@ -1,5 +1,6 @@
 #include "app/grades_page.hpp"
 
+#include "app/grades_students.hpp"
 #include "app/grades_time.hpp"
 
 #include <algorithm>
@@ -201,6 +202,7 @@ net::Response grades_page(const GradeLog& log, std::string_view lesson) {
         page += "<p class=\"no-print\"><a href=\"" + csv_href +
                 "\" download>Download as CSV</a></p>";
         page += lesson_summary(shown);
+        page += student_summary(shown);
         page += missed_checks(shown);
         page += "<h2>Attempts</h2>";
         page += "<table><thead><tr><th>When (UTC)</th><th>Student</th><th>Lesson</th>"

@@ -195,9 +195,10 @@ using an instruction the lesson withholds comes back as a report whose first row
 names the withheld instruction and whose remaining rows say "not run", rather
 than as a transport error. Graded attempts, their per-check reports, the
 submitted program and the student's name, when one was given, are appended to
-a tab-separated log the server names at startup; `GET /grades` lists them newest first, above them a per-lesson pass rate
-and the rubric rows the class misses most, `GET /grades/<n>` reopens one attempt
-in full, and `GET /grades.csv` exports one row per attempt for a gradebook.
+a tab-separated log the server names at startup; `GET /grades` lists them newest first, above them a per-lesson pass
+rate, a per-student one and the rubric rows the class misses most,
+`GET /grades/<n>` reopens one attempt in full, and `GET /grades.csv` exports one
+row per attempt for a gradebook.
 `?lesson=<id>` narrows the log and the export to a single lesson. The stylesheet carries print rules, so the log, an attempt and
 a grade report print without nav links or forms. A line written by an older
 portal still opens, with its counts and no rubric. Both
