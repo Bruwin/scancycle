@@ -1,9 +1,8 @@
 #pragma once
-// Modbus/TCP framing. Written in-house rather than pulling in libmodbus, whose
-// LGPL would complicate static linking into the game binary. Only the MBAP
-// header and the two function codes we need are implemented; the socket layer
-// sits behind PlcDriver and is deliberately absent here so the codec is unit
-// testable without a network.
+// Modbus/TCP framing. Written in-house rather than pulling in libmodbus: the
+// MBAP header and the two function codes we need are the whole protocol surface
+// here, and owning them keeps the codec unit testable without a network. The
+// socket layer sits behind PlcDriver and is deliberately absent.
 #include "core/types.hpp"
 
 #include <string>

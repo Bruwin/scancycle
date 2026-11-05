@@ -100,12 +100,15 @@ with timestamped, double-buffered images and a stale-data watchdog.
 |---|---|---|---|
 | Allen-Bradley CIP, Siemens S7, Modbus/TCP | `libplctag` (choose MPL-2.0) | MPL-2.0 | static linking allowed, no disclosure of our code |
 | OPC UA | `open62541` | MPL-2.0 | modern S7-1500 / CompactLogix |
-| Modbus RTU/TCP | in-house codec | ours | avoids libmodbus's LGPL |
+| Modbus RTU/TCP | in-house codec | ours | small enough that owning it beats vendoring |
 | SLC 500 / PLC-5 serial DF1 | in-house | ours | documented protocol |
 | EtherNet/IP adapter role | `OpENer` | BSD-style + ODVA addendum | only if we need the server role |
 
-**Do not use Snap7.** LGPL-3 with contradictory GPLv3 text in the same package,
-and effectively unmaintained since 2015.
+**Snap7 is licence-compatible, with two caveats.** It is LGPL-3 carrying some
+GPLv3 notices in the same distribution, so read the headers of the files actually
+taken before copying them. It has also been effectively unmaintained since 2015,
+so treat it as a reference implementation to adapt rather than a dependency to
+link, and keep anything derived from it under the LGPL, which this project now is.
 
 Support is published as tiers, never as "any PLC": Tier A tested against real
 hardware in the classroom, Tier B read-only best effort, Tier C unsupported.
@@ -119,6 +122,12 @@ Rendering dependencies, pulled in only when `SC_ENABLE_VULKAN=ON`:
 
 The headless half keeps building with no GPU, no display and no SDL, which is
 what lets CI stay honest on machines that have none of them.
+
+What LGPL-3.0 actually obliges: a component linked from LGPL code may be linked
+dynamically, or statically as long as the objects needed to relink the binary
+accompany it, and modifications to that component stay LGPL. Permissive
+dependencies (zlib, Apache-2.0, MPL-2.0) place no obligation on our own code, and
+our own code stays LGPL rather than becoming GPL.
 
 ## Safety model for real hardware
 

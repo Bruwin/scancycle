@@ -15,7 +15,9 @@ unstated conventions rot fast.
 3. **The simulation must run headless.** Anything you add to `sim`, `plc`, `io`
    or `lesson` must be testable with `ctest` and no GPU and no display.
 4. **No new third-party dependency** without a note in `docs/ARCHITECTURE.md`
-   covering the licence. The shipping product is GPL-3.0-or-later.
+   covering the licence. The shipping product is LGPL-3.0-or-later, so an
+   incoming licence has to be compatible with it; a plain GPL-3.0 dependency is
+   not, because it would force the whole product to GPLv3.
 
 ## Module conventions
 

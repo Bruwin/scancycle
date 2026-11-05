@@ -9,7 +9,9 @@ Structured Text toolchain, a deterministic factory simulation, a SCADA layer and
 drivers that talk to physical controllers, so a student who finishes the
 curriculum can open TIA Portal or Studio 5000 and recognise everything.
 
-* Licence: GPL-3.0-or-later. Free for anyone, forever.
+* Licence: LGPL-3.0-or-later. Free for anyone, forever, and usable inside a
+  project under other terms — including a commercial one — as long as changes to
+  Scan Cycle itself stay under the LGPL and users can relink against them.
 * Status: **vertical slice** — the headless half of the product exists and is
   tested; the renderer, editor widgets and portal transport are interfaces.
   See `docs/ARCHITECTURE.md`.
