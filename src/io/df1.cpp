@@ -10,19 +10,32 @@ u8 df1_bcc(std::span<const u8> body) {
     return static_cast<u8>(0x100u - (sum & 0xFFu));
 }
 
-u16 df1_crc16(std::span<const u8> body) {
-    u16 crc = 0;
-    for (const u8 byte : body) {
-        crc = static_cast<u16>(crc ^ byte);
-        for (int bit = 0; bit < 8; ++bit) {
-            if ((crc & 1u) != 0) {
-                crc = static_cast<u16>((crc >> 1) ^ 0xA001u);
-            } else {
-                crc = static_cast<u16>(crc >> 1);
-            }
+namespace {
+
+u16 crc_step(u16 crc, u8 byte) {
+    crc = static_cast<u16>(crc ^ byte);
+    for (int bit = 0; bit < 8; ++bit) {
+        if ((crc & 1u) != 0) {
+            crc = static_cast<u16>((crc >> 1) ^ 0xA001u);
+        } else {
+            crc = static_cast<u16>(crc >> 1);
         }
     }
     return crc;
+}
+
+}  // namespace
+
+u16 df1_crc16(std::span<const u8> body) {
+    u16 crc = 0;
+    for (const u8 byte : body) {
+        crc = crc_step(crc, byte);
+    }
+    return crc;
+}
+
+u16 df1_message_crc(std::span<const u8> body) {
+    return crc_step(df1_crc16(body), kDf1Etx);
 }
 
 bool df1_encode(std::span<const u8> body, Df1Checksum checksum, std::vector<u8>& frame,
@@ -52,7 +65,7 @@ bool df1_encode(std::span<const u8> body, Df1Checksum checksum, std::vector<u8>&
     if (checksum == Df1Checksum::Bcc) {
         frame.push_back(df1_bcc(body));
     } else {
-        const u16 crc = df1_crc16(body);
+        const u16 crc = df1_message_crc(body);
         frame.push_back(static_cast<u8>(crc & 0xFFu));
         frame.push_back(static_cast<u8>(crc >> 8));
     }
@@ -137,7 +150,7 @@ bool df1_decode(std::span<const u8> bytes, Df1Checksum checksum, std::vector<u8>
         if (checksum == Df1Checksum::Bcc) {
             valid = df1_bcc(body) == bytes[check_at];
         } else {
-            const u16 crc = df1_crc16(body);
+            const u16 crc = df1_message_crc(body);
             valid = static_cast<u8>(crc & 0xFFu) == bytes[check_at] &&
                     static_cast<u8>(crc >> 8) == bytes[check_at + 1];
         }

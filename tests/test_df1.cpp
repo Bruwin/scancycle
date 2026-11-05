@@ -474,3 +474,19 @@ TEST(df1_driver_rejects_an_unsupported_file_type_at_connect) {
     CHECK(!driver.connect());
     CHECK(driver.last_error().find("file type") != std::string::npos);
 }
+
+TEST(df1_message_crc_matches_the_specification_frame) {
+    // The sample frame from the DF1 reference manual (body, DLE, ETX) carries
+    // the check bytes 6B 4C. A body-only CRC produces EB ED for the same body,
+    // which is what a real controller rejects.
+    std::vector<u8> body = {0x07, 0x11, 0x41, 0x00, 0x53, 0xB9};
+    body.resize(18, 0);
+    CHECK(io::df1_message_crc(body) == 0x4C6B);
+
+    std::vector<u8> frame;
+    std::string error;
+    CHECK(io::df1_encode(body, io::Df1Checksum::Crc16, frame, error));
+    CHECK(frame.size() == 24);
+    CHECK(frame[frame.size() - 2] == 0x6B);
+    CHECK(frame[frame.size() - 1] == 0x4C);
+}

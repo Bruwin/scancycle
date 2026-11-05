@@ -45,8 +45,15 @@ u8 df1_bcc(std::span<const u8> body);
 
 // CRC-16/ARC: reflected polynomial 0xA001, zero initial value, low byte first.
 // DF1 uses this polynomial with a zero seed; Modbus uses the same polynomial
-// with a 0xFFFF seed, so the two checksums are not interchangeable.
+// with a 0xFFFF seed, so the two checksums are not interchangeable. This is the
+// bare register operation, useful for checking a vector on its own.
 u16 df1_crc16(std::span<const u8> body);
+
+// The check DF1 actually puts on the wire: the same register with the
+// terminating ETX fed through it after the body. The DLE before ETX and the
+// leading DLE STX are excluded. Omitting the ETX still round-trips against
+// ourselves, which is why the specification's sample frame is a test.
+u16 df1_message_crc(std::span<const u8> body);
 
 bool df1_encode(std::span<const u8> body, Df1Checksum checksum, std::vector<u8>& frame,
                 std::string& error);
