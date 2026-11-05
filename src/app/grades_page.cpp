@@ -189,15 +189,9 @@ net::Response grades_page(const GradeLog& log, std::string_view lesson, std::str
         }
         page += ".</p>";
     } else {
-        std::string csv_href = "/grades.csv";
-        const char* join = "?";
-        if (!lesson.empty()) {
-            csv_href += std::string(join) + "lesson=" + query_escape(lesson);
-            join = "&";
-        }
-        if (!student.empty()) {
-            csv_href += std::string(join) + "student=" + query_escape(student);
-        }
+        const std::string query = filter_query(lesson, student);
+        const std::string csv_href = query.empty() ? std::string("/grades.csv")
+                                                   : "/grades.csv?" + query;
         page += "<p class=\"no-print\"><a href=\"" + csv_href +
                 "\" download>Download as CSV</a></p>";
         page += lesson_summary(shown);
@@ -228,7 +222,8 @@ net::Response grades_page(const GradeLog& log, std::string_view lesson, std::str
                          ? std::string("reference")
                          : std::to_string(record.program.size()) + " bytes") +
                     "</td><td class=\"no-print\"><a href=\"/grades/" +
-                    std::to_string(index + 1) + "\">report</a></td></tr>";
+                    std::to_string(index + 1) +
+                    (query.empty() ? std::string() : "?" + query) + "\">report</a></td></tr>";
         }
         page += "</tbody></table>";
     }
@@ -240,9 +235,15 @@ net::Response grades_page(const GradeLog& log, std::string_view lesson, std::str
     return response;
 }
 
-net::Response attempt_page(const GradeLog& log, std::string_view ordinal) {
+net::Response attempt_page(const GradeLog& log, std::string_view ordinal, std::string_view lesson,
+                           std::string_view student) {
     net::Response response;
     response.content_type = "text/html; charset=utf-8";
+
+    // The filter belongs to the view the report was opened from, not to the
+    // attempt, so it only shapes the way back.
+    const std::string query = filter_query(lesson, student);
+    const std::string back = query.empty() ? std::string("/grades") : "/grades?" + query;
 
     std::string error;
     const std::vector<GradeRecord> records = log.entries(error);
@@ -253,14 +254,15 @@ net::Response attempt_page(const GradeLog& log, std::string_view ordinal) {
                         "<h1>No such attempt</h1><p>The class log holds " +
                         std::to_string(records.size()) + " attempt" +
                         (records.size() == 1 ? "" : "s") +
-                        ".</p><p><a href=\"/grades\">Back to the class log</a></p>"
-                        "</main></body></html>";
+                        ".</p><p><a href=\"" + back +
+                        "\">Back to the class log</a></p></main></body></html>";
         return response;
     }
 
     const GradeRecord& record = records[wanted - 1];
     std::string page = net::page_head("Scan Cycle attempt");
-    page += "<p class=\"no-print\"><a href=\"/grades\">Scan Cycle class log</a></p>";
+    page += "<p class=\"no-print\"><a href=\"" + back +
+            "\">Scan Cycle class log</a></p>";
     page += "<h1>Graded attempt</h1>";
     page += "<p>Attempt " + std::to_string(wanted) + " of " + std::to_string(records.size()) +
             "; lesson <code>" + net::html_escape(record.lesson_id) + "</code>";

@@ -78,7 +78,10 @@ int main(int argc, char** argv) {
     // registered at startup; the prefix route resolves the ordinal per request.
     router.route_prefix(sc::net::HttpMethod::Get, "/grades/",
                         [&grade_log](const sc::net::Request& request) {
-                            return sc::app::attempt_page(grade_log, request.path.substr(8));
+                            const std::string lesson = sc::net::form_field(request.query, "lesson");
+                            const std::string student = sc::net::form_field(request.query, "student");
+                            return sc::app::attempt_page(grade_log, request.path.substr(8), lesson,
+                                                         student);
                         });
 
     sc::net::HttpServer server(router);

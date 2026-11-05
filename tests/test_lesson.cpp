@@ -1068,10 +1068,11 @@ TEST(grades_page_narrows_to_one_lesson) {
     CHECK(filtered.body.find("href=\"/grades.csv?lesson=press-batch\"") !=
           std::string::npos);
     CHECK(filtered.body.find("Show the whole log") != std::string::npos);
-    // Ordinals are file positions: the second press attempt is still attempt 3.
-    CHECK(filtered.body.find("href=\"/grades/3\"") != std::string::npos);
-    CHECK(filtered.body.find("href=\"/grades/1\"") != std::string::npos);
-    CHECK(filtered.body.find("href=\"/grades/2\"") == std::string::npos);
+    // Ordinals are file positions: the second press attempt is still attempt 3,
+    // and the report link carries the filter so the way back keeps it.
+    CHECK(filtered.body.find("href=\"/grades/3?lesson=press-batch\"") != std::string::npos);
+    CHECK(filtered.body.find("href=\"/grades/1?lesson=press-batch\"") != std::string::npos);
+    CHECK(filtered.body.find("href=\"/grades/2") == std::string::npos);
     CHECK(filtered.body.find("<td>Ada</td>") != std::string::npos);
     CHECK(app::attempt_page(log, "1").body.find("student <code>Ada</code>") !=
           std::string::npos);
@@ -1265,9 +1266,11 @@ TEST(grades_page_narrows_to_one_student) {
     CHECK(filtered.body.find("Bob") == std::string::npos);
     CHECK(filtered.body.find("href=\"/grades.csv?student=Ada\"") != std::string::npos);
     CHECK(filtered.body.find("Show the whole log") != std::string::npos);
-    // Ordinals survive: the second Ada attempt is still attempt 3.
-    CHECK(filtered.body.find("href=\"/grades/3\"") != std::string::npos);
-    CHECK(filtered.body.find("href=\"/grades/2\"") == std::string::npos);
+    // Ordinals survive: the second Ada attempt is still attempt 3, and the
+    // report link carries the student filter.
+    CHECK(filtered.body.find("href=\"/grades/3?student=Ada\"") != std::string::npos);
+    CHECK(filtered.body.find("href=\"/grades/1?student=Ada\"") != std::string::npos);
+    CHECK(filtered.body.find("href=\"/grades/2") == std::string::npos);
 
     // Both filters together narrow to one student's work at one lesson.
     const net::Response both = app::grades_page(log, "press-batch", "Ada");
@@ -1322,6 +1325,36 @@ TEST(grades_csv_exports_one_student_and_keeps_ordinals) {
         CHECK(lines[2].find("Ada") != std::string::npos);
         CHECK(csv.body.find("Bob") == std::string::npos);
     }
+
+    std::filesystem::remove(path);
+}
+
+TEST(attempt_page_keeps_the_filter_on_its_back_link) {
+    const std::filesystem::path path =
+        std::filesystem::temp_directory_path() / "scancycle-attempt-back-link.tsv";
+    std::filesystem::remove(path);
+    app::GradeLog log(path.string());
+    std::string error;
+
+    app::GradeRecord record;
+    record.at = 1700000000;
+    record.lesson_id = "press-batch";
+    record.student = "Ada";
+    record.passed = true;
+    record.passed_count = 1;
+    record.total = 1;
+    CHECK(log.append(record, error));
+
+    const net::Response plain = app::attempt_page(log, "1");
+    CHECK(plain.body.find("<a href=\"/grades\">Scan Cycle class log</a>") != std::string::npos);
+
+    const net::Response filtered = app::attempt_page(log, "1", "press-batch", "Ada");
+    CHECK(filtered.body.find("<a href=\"/grades?lesson=press-batch&student=Ada\">"
+                             "Scan Cycle class log</a>") != std::string::npos);
+    // The missing-attempt page returns to the same view rather than the whole log.
+    CHECK(app::attempt_page(log, "9", "press-batch", "Ada")
+              .body.find("<a href=\"/grades?lesson=press-batch&student=Ada\">"
+                         "Back to the class log</a>") != std::string::npos);
 
     std::filesystem::remove(path);
 }

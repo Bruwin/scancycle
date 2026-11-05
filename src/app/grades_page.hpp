@@ -17,7 +17,9 @@ net::Response grades_page(const GradeLog& log, std::string_view lesson = {},
 
 // One recorded attempt with its full report, for the page a teacher prints.
 // `ordinal` is the suffix of /grades/<n>, counted from 1 in file order; anything
-// that is not a recorded attempt answers 404.
-net::Response attempt_page(const GradeLog& log, std::string_view ordinal);
+// that is not a recorded attempt answers 404. The filters are only carried on
+// the back link, so leaving an attempt returns to the view it was opened from.
+net::Response attempt_page(const GradeLog& log, std::string_view ordinal,
+                           std::string_view lesson = {}, std::string_view student = {});
 
 }  // namespace sc::app
