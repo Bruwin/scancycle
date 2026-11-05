@@ -271,11 +271,20 @@ bool VulkanRenderer::pick_physical_device() {
 
             VkPhysicalDeviceVulkan13Features features13{};
             features13.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES;
+            VkPhysicalDeviceVulkan12Features probe12{};
+            probe12.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
+            features13.pNext = &probe12;
             VkPhysicalDeviceFeatures2 features{};
             features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
             features.pNext = &features13;
             vkGetPhysicalDeviceFeatures2(candidate, &features);
             if (features13.dynamicRendering != VK_TRUE || features13.synchronization2 != VK_TRUE) {
+                continue;
+            }
+            // vkCmdDrawIndexedIndirectCount is where the whole chunk path ends up,
+            // so a device without the feature cannot draw the world at all.
+            if (probe12.drawIndirectCount != VK_TRUE || features.features.multiDrawIndirect != VK_TRUE ||
+                features.features.drawIndirectFirstInstance != VK_TRUE) {
                 continue;
             }
 
@@ -289,8 +298,8 @@ bool VulkanRenderer::pick_physical_device() {
     }
 
     if (chosen == VK_NULL_HANDLE) {
-        return fail("no GPU provides Vulkan 1.3 with dynamic rendering, synchronization2 and a "
-                    "presentable graphics queue");
+        return fail("no GPU provides Vulkan 1.3 with dynamic rendering, synchronization2, "
+                    "indirect draw count and a presentable graphics queue");
     }
 
     physical_ = chosen;
@@ -328,6 +337,13 @@ bool VulkanRenderer::create_device() {
     features11.shaderDrawParameters = VK_TRUE;
     features11.pNext = &features13;
 
+    // Core in 1.2 but still gated behind a feature, and this is the command the
+    // entire chunk path collapses into.
+    VkPhysicalDeviceVulkan12Features features12{};
+    features12.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
+    features12.drawIndirectCount = VK_TRUE;
+    features12.pNext = &features11;
+
     VkPhysicalDeviceFeatures features{};
     features.drawIndirectFirstInstance = VK_TRUE;
     features.multiDrawIndirect = VK_TRUE;
@@ -335,7 +351,7 @@ bool VulkanRenderer::create_device() {
     VkPhysicalDeviceFeatures2 features2{};
     features2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
     features2.features = features;
-    features2.pNext = &features11;
+    features2.pNext = &features12;
 
     VkDeviceCreateInfo info{};
     info.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
@@ -830,6 +846,9 @@ void VulkanRenderer::end_frame() {
 }
 
 void VulkanRenderer::destroy() {
+    if (device_ == VK_NULL_HANDLE && instance_ == VK_NULL_HANDLE) {
+        return;  // already torn down
+    }
     if (device_ != VK_NULL_HANDLE) {
         vkDeviceWaitIdle(device_);
     }
@@ -891,6 +910,15 @@ void VulkanRenderer::destroy() {
     if (instance_ != VK_NULL_HANDLE) {
         vkDestroyInstance(instance_, nullptr);
     }
+    // Leave nothing dangling: the viewer destroys the device explicitly and the
+    // owning unique_ptr destroys it again on the way out.
+    instance_ = VK_NULL_HANDLE;
+    physical_ = VK_NULL_HANDLE;
+    device_ = VK_NULL_HANDLE;
+    surface_ = VK_NULL_HANDLE;
+    swapchain_ = VK_NULL_HANDLE;
+    debug_messenger_ = VK_NULL_HANDLE;
+    queue_ = VK_NULL_HANDLE;
 }
 
 }  // namespace

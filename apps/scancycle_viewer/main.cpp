@@ -118,6 +118,9 @@ int main(int argc, char** argv) {
                 static_cast<long long>(frames), final_stats.live_meshes, final_stats.quad_count,
                 final_stats.draw_calls, errors);
 
+    // Order matters: the swapchain holds the surface the platform owns, so the
+    // renderer has to be destroyed before the window is.
+    device.reset();
     platform->shutdown();
     return errors == 0 ? 0 : 1;
 }
