@@ -39,9 +39,18 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            libvulkan-dev vulkan-tools mesa-vulkan-drivers xvfb \
+            libvulkan-dev vulkan-tools vulkan-validationlayers \
+            mesa-vulkan-drivers xvfb \
             libx11-dev libxext-dev libxrandr-dev libxi-dev libxcursor-dev \
-            libxfixes-dev libxkbcommon-dev libwayland-dev libdecor-0-dev
+            libxfixes-dev libxss-dev libxtst-dev libxkbcommon-dev libwayland-dev \
+            libdecor-0-dev
+
+      # The renderer's exit code only means something if validation really ran.
+      - name: Assert the validation layer is installed
+        run: |
+          ls /usr/share/vulkan/explicit_layer.d/
+          ls /usr/share/vulkan/explicit_layer.d/ | grep -qi khronos_validation \
+            || { echo "VK_LAYER_KHRONOS_validation is missing"; exit 1; }
 
       - name: Configure with the renderer enabled
         run: cmake -S . -B build -DSC_ENABLE_VULKAN=ON -DCMAKE_BUILD_TYPE=Debug
@@ -57,6 +66,6 @@ jobs:
       - name: Render 90 frames headlessly
         run: |
           set -o pipefail
-          xvfb-run -a ./build/bin/scancycle_viewer --frames 90 | tee render.log
+          xvfb-run -a -s "-screen 0 1920x1080x24" ./build/bin/scancycle_viewer --frames 90 | tee render.log
           grep -Eq "draws [1-9]" render.log
           grep -Eq "validation errors 0" render.log
