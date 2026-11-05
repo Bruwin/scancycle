@@ -92,8 +92,14 @@ add_library(sc_io
     src/io/df1_profile.cpp
     src/io/df1_serial_link.cpp
     src/io/serial_io.cpp
+    src/io/socket_io.cpp
+    src/io/modbus_tcp.cpp
+    src/io/modbus_slave.cpp
 )
 target_link_libraries(sc_io PUBLIC sc_core sc_sim sc_plc PRIVATE sc_warnings)
+if(WIN32)
+    target_link_libraries(sc_io PRIVATE ws2_32)
+endif()
 
 add_library(sc_assets
     src/assets/material_library.cpp
@@ -197,6 +203,7 @@ if(SC_BUILD_TESTS)
         tests/test_ide.cpp
         tests/test_lesson.cpp
         tests/test_websocket.cpp
+        tests/test_modbus_tcp.cpp
         tests/test_app.cpp
         tests/test_df1.cpp
         tests/test_df1_serial.cpp

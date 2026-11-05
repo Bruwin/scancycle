@@ -60,6 +60,34 @@ std::vector<u8> build_write_single_register(u16 transaction, u8 unit, u16 addres
     return frame;
 }
 
+std::vector<u8> build_read_response(u16 transaction, u8 unit,
+                                    const std::vector<u16>& registers) {
+    std::vector<u8> frame;
+    frame.reserve(9 + registers.size() * 2);
+    push_u16(frame, transaction);
+    push_u16(frame, kModbusProtocolId);
+    push_u16(frame, static_cast<u16>(3 + registers.size() * 2));
+    frame.push_back(unit);
+    frame.push_back(kFuncReadHoldingRegisters);
+    frame.push_back(static_cast<u8>(registers.size() * 2));
+    for (const u16 value : registers) {
+        push_u16(frame, value);
+    }
+    return frame;
+}
+
+std::vector<u8> build_exception_response(u16 transaction, u8 unit, u8 function, u8 code) {
+    std::vector<u8> frame;
+    frame.reserve(9);
+    push_u16(frame, transaction);
+    push_u16(frame, kModbusProtocolId);
+    push_u16(frame, 3);  // unit + function + exception code
+    frame.push_back(unit);
+    frame.push_back(static_cast<u8>(function | 0x80));
+    frame.push_back(code);
+    return frame;
+}
+
 bool parse_read_response(const std::vector<u8>& frame, ModbusResponse& out, std::string& error) {
     error.clear();
     if (!check_header(frame, error)) {
