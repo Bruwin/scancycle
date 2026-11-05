@@ -286,3 +286,116 @@ END_PROGRAM
     CHECK(ladder_column == st_column);
     CHECK(ladder_column == "01110000");
 }
+
+namespace {
+
+Rung timer_rung(NetPtr condition, std::string out, sc::i64 preset_ms) {
+    Rung rung;
+    rung.condition = std::move(condition);
+    rung.timer = TimerSink{std::move(out), preset_ms};
+    return rung;
+}
+
+}  // namespace
+
+TEST(a_timer_rung_holds_its_output_until_the_preset_elapses) {
+    const std::vector<TagDecl> declared = bool_tags({"run", "ready"});
+    std::vector<Rung> rungs;
+    rungs.push_back(timer_rung(contact("run"), "ready", 1000));
+
+    const NetlistResult built = compile_netlist("Delay", rungs, declared);
+    CHECK(built.ok);
+    if (!built.ok) {
+        return;
+    }
+
+    Vm vm(built.program);
+    CHECK(vm.set("run", Value::boolean(true)));
+    CHECK(vm.scan(0));
+    CHECK(!vm.get("ready").as_bool());
+    CHECK(vm.scan(500));
+    CHECK(!vm.get("ready").as_bool());
+    CHECK(vm.scan(999));
+    CHECK(!vm.get("ready").as_bool());
+    CHECK(vm.scan(1000));
+    CHECK(vm.get("ready").as_bool());
+}
+
+TEST(a_timer_restarts_when_its_condition_drops) {
+    const std::vector<TagDecl> declared = bool_tags({"run", "ready"});
+    std::vector<Rung> rungs;
+    rungs.push_back(timer_rung(contact("run"), "ready", 1000));
+
+    const NetlistResult built = compile_netlist("Restart", rungs, declared);
+    CHECK(built.ok);
+    if (!built.ok) {
+        return;
+    }
+
+    Vm vm(built.program);
+    CHECK(vm.set("run", Value::boolean(true)));
+    CHECK(vm.scan(0));
+    CHECK(vm.scan(800));
+    CHECK(!vm.get("ready").as_bool());
+
+    CHECK(vm.set("run", Value::boolean(false)));
+    CHECK(vm.scan(900));
+    CHECK(!vm.get("ready").as_bool());
+
+    // A fresh start at 1000 means the second second is the one that counts.
+    CHECK(vm.set("run", Value::boolean(true)));
+    CHECK(vm.scan(1000));
+    CHECK(!vm.get("ready").as_bool());
+    CHECK(vm.scan(1500));
+    CHECK(!vm.get("ready").as_bool());
+    CHECK(vm.scan(2000));
+    CHECK(vm.get("ready").as_bool());
+}
+
+TEST(a_timer_and_coils_on_one_rung_are_refused) {
+    const std::vector<TagDecl> declared = bool_tags({"a", "ready", "out"});
+    std::vector<Rung> rungs;
+    Rung rung = timer_rung(contact("a"), "ready", 1000);
+    rung.coils.push_back(Coil{"out", false});
+    rungs.push_back(std::move(rung));
+
+    const NetlistResult built = compile_netlist("Mixed", rungs, declared);
+    CHECK(!built.ok);
+    CHECK(built.diagnostics.size() == 1);
+    CHECK(built.diagnostics[0].message.find("not both") != std::string::npos);
+}
+
+TEST(a_timer_output_must_be_a_declared_tag) {
+    const std::vector<TagDecl> declared = bool_tags({"run"});
+    std::vector<Rung> rungs;
+    rungs.push_back(timer_rung(contact("run"), "ready", 1000));
+
+    const NetlistResult built = compile_netlist("Undeclared", rungs, declared);
+    CHECK(!built.ok);
+    CHECK(built.diagnostics.size() == 1);
+    CHECK(built.diagnostics[0].message.find("ready") != std::string::npos);
+}
+
+TEST(a_timer_output_must_be_bool) {
+    std::vector<TagDecl> declared;
+    declared.push_back(TagDecl{"run", ValueType::Bool});
+    declared.push_back(TagDecl{"count", ValueType::Int});
+    std::vector<Rung> rungs;
+    rungs.push_back(timer_rung(contact("run"), "count", 1000));
+
+    const NetlistResult built = compile_netlist("WrongType", rungs, declared);
+    CHECK(!built.ok);
+    CHECK(built.diagnostics.size() == 1);
+    CHECK(built.diagnostics[0].message.find("must be BOOL") != std::string::npos);
+}
+
+TEST(a_timer_preset_must_be_longer_than_zero) {
+    const std::vector<TagDecl> declared = bool_tags({"run", "ready"});
+    std::vector<Rung> rungs;
+    rungs.push_back(timer_rung(contact("run"), "ready", 0));
+
+    const NetlistResult built = compile_netlist("Zero", rungs, declared);
+    CHECK(!built.ok);
+    CHECK(built.diagnostics.size() == 1);
+    CHECK(built.diagnostics[0].message.find("longer than zero") != std::string::npos);
+}

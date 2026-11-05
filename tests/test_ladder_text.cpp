@@ -189,3 +189,82 @@ TEST(an_unterminated_comment_is_a_diagnostic) {
     CHECK(!built.diagnostics.empty());
     CHECK(built.diagnostics[0].message.find("unterminated") != std::string::npos);
 }
+
+TEST(a_timer_rung_delays_its_coil) {
+    const std::string source = std::string(kHeader) + "d = TON(a, 1s)\n";
+    Built built = build(source);
+    CHECK(built.ok);
+    if (!built.ok) {
+        return;
+    }
+
+    Vm vm(built.program);
+    CHECK(vm.set("a", Value::boolean(true)));
+    CHECK(vm.scan(0));
+    CHECK(!vm.get("d").as_bool());
+    CHECK(vm.scan(500));
+    CHECK(!vm.get("d").as_bool());
+    CHECK(vm.scan(1000));
+    CHECK(vm.get("d").as_bool());
+}
+
+TEST(a_timer_rung_may_be_lower_case) {
+    const std::string source = std::string(kHeader) + "d = ton(a, 1s)\n";
+    Built built = build(source);
+    CHECK(built.ok);
+    if (!built.ok) {
+        return;
+    }
+
+    Vm vm(built.program);
+    CHECK(vm.set("a", Value::boolean(true)));
+    CHECK(vm.scan(0));
+    CHECK(!vm.get("d").as_bool());
+    CHECK(vm.scan(1000));
+    CHECK(vm.get("d").as_bool());
+}
+
+TEST(a_timer_preset_may_be_written_in_milliseconds) {
+    const std::string source = std::string(kHeader) + "d = TON(a, 250ms)\n";
+    Built built = build(source);
+    CHECK(built.ok);
+    if (!built.ok) {
+        return;
+    }
+
+    Vm vm(built.program);
+    CHECK(vm.set("a", Value::boolean(true)));
+    CHECK(vm.scan(0));
+    CHECK(vm.scan(200));
+    CHECK(!vm.get("d").as_bool());
+    CHECK(vm.scan(250));
+    CHECK(vm.get("d").as_bool());
+}
+
+TEST(a_timer_preset_needs_a_unit) {
+    Built built = build(std::string(kHeader) + "d = TON(a, 5)\n");
+    CHECK(!built.ok);
+    CHECK(built.diagnostics.size() == 1);
+    CHECK(built.diagnostics[0].message.find("not a duration") != std::string::npos);
+}
+
+TEST(a_timer_without_a_preset_is_a_diagnostic) {
+    Built built = build(std::string(kHeader) + "d = TON(a)\n");
+    CHECK(!built.ok);
+    CHECK(built.diagnostics.size() == 1);
+    CHECK(built.diagnostics[0].message.find("two arguments") != std::string::npos);
+}
+
+TEST(a_zero_timer_preset_is_refused) {
+    Built built = build(std::string(kHeader) + "d = TON(a, 0s)\n");
+    CHECK(!built.ok);
+    CHECK(built.diagnostics.size() == 1);
+    CHECK(built.diagnostics[0].message.find("longer than zero") != std::string::npos);
+}
+
+TEST(a_timer_rung_ends_at_its_closing_paren) {
+    Built built = build(std::string(kHeader) + "d = TON(a, 1s) & b\n");
+    CHECK(!built.ok);
+    CHECK(built.diagnostics.size() == 1);
+    CHECK(built.diagnostics[0].message.find("remove what follows") != std::string::npos);
+}

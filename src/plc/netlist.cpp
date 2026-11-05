@@ -1,5 +1,7 @@
 #include "plc/netlist.hpp"
 
+#include "plc/function_blocks.hpp"
+
 #include <string>
 #include <utility>
 
@@ -71,6 +73,14 @@ void emit(CompiledProgram& program, const NetNode& node) {
     }
 }
 
+void emit_condition(CompiledProgram& program, const NetPtr& condition) {
+    if (condition) {
+        emit(program, *condition);
+    } else {
+        program.code.push_back({Op::PushConst, add_const(program, Value::boolean(true)), 0});
+    }
+}
+
 }  // namespace
 
 NetlistResult compile_netlist(std::string_view name, std::span<const Rung> rungs,
@@ -85,14 +95,35 @@ NetlistResult compile_netlist(std::string_view name, std::span<const Rung> rungs
     for (std::size_t i = 0; i < rungs.size(); ++i) {
         const std::string where = "rung " + std::to_string(i + 1) + ": ";
         const Rung& rung = rungs[i];
-        if (rung.coils.empty()) {
-            result.diagnostics.push_back({0, 0, where + "a rung needs at least one coil"});
+        if (rung.timer && !rung.coils.empty()) {
+            result.diagnostics.push_back(
+                {0, 0, where + "a rung ends in one sink: coils or a timer, not both"});
+            continue;
+        }
+        if (!rung.timer && rung.coils.empty()) {
+            result.diagnostics.push_back({0, 0, where + "a rung needs a coil or a timer"});
             continue;
         }
         if (rung.condition) {
             std::string error;
             if (!validate(*rung.condition, result.program, error)) {
                 result.diagnostics.push_back({0, 0, where + error});
+            }
+        }
+        if (rung.timer) {
+            const i32 slot = result.program.find_var(rung.timer->var);
+            if (slot < 0) {
+                result.diagnostics.push_back(
+                    {0, 0,
+                     where + "timer output '" + rung.timer->var + "' is not a declared variable"});
+            } else if (result.program.vars[static_cast<std::size_t>(slot)].type !=
+                       ValueType::Bool) {
+                result.diagnostics.push_back(
+                    {0, 0, where + "timer output '" + rung.timer->var + "' must be BOOL"});
+            }
+            if (rung.timer->preset_ms <= 0) {
+                result.diagnostics.push_back(
+                    {0, 0, where + "a timer preset must be longer than zero"});
             }
         }
         for (const Coil& coil : rung.coils) {
@@ -107,14 +138,38 @@ NetlistResult compile_netlist(std::string_view name, std::span<const Rung> rungs
         return result;
     }
 
+    // Every timer rung owns one TON instance. The instance name starts with '#' so
+    // it can never collide with a tag: no source language here spells that.
+    i32 timers = 0;
     for (const Rung& rung : rungs) {
-        for (const Coil& coil : rung.coils) {
-            if (rung.condition) {
-                emit(result.program, *rung.condition);
-            } else {
-                result.program.code.push_back(
-                    {Op::PushConst, add_const(result.program, Value::boolean(true)), 0});
+        if (rung.timer) {
+            const FbDecl* ton = find_builtin_fb("ton");
+            if (ton == nullptr) {
+                result.diagnostics.push_back({0, 0, "the TON block is not available"});
+                return result;
             }
+            const i32 fb_index = static_cast<i32>(result.program.fbs.size());
+            result.program.fbs.push_back(*ton);
+
+            VarInfo instance;
+            instance.name = "#ton" + std::to_string(++timers);
+            instance.fb_index = fb_index;
+            result.program.vars.push_back(std::move(instance));
+
+            emit_condition(result.program, rung.condition);
+            result.program.code.push_back({Op::StoreFbField, fb_index, 0});
+            result.program.code.push_back(
+                {Op::PushConst, add_const(result.program, Value::time(rung.timer->preset_ms)),
+                 0});
+            result.program.code.push_back({Op::StoreFbField, fb_index, 1});
+            result.program.code.push_back({Op::CallFb, fb_index, 0});
+            result.program.code.push_back({Op::LoadFbField, fb_index, 2});
+            result.program.code.push_back(
+                {Op::StoreVar, result.program.find_var(rung.timer->var), 0});
+            continue;
+        }
+        for (const Coil& coil : rung.coils) {
+            emit_condition(result.program, rung.condition);
             if (coil.negated) {
                 result.program.code.push_back({Op::Unary, static_cast<i32>(UnOp::Not), 0});
             }

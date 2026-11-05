@@ -15,15 +15,16 @@
 //     reads FALSE forever and a student hunting a bug that is not there.
 //   * A null condition means the rung is wired straight to the rail: always true.
 //   * Conditions must be pure. A multi-coil rung re-emits its condition once per
-//     coil rather than stuffing one value into a temp slot, which is fine for
-//     contacts and wrong for a timer. Stateful blocks wait until the emitter can
-//     hold a value across coils.
+//     coil rather than stuffing one value into a temp slot. A timer is the one
+//     stateful sink: it gets a rung of its own, holds the condition in its own IN
+//     field and lands Q in a BOOL tag, so the network itself stays boolean.
 #include "core/types.hpp"
 #include "plc/declaration.hpp"
 #include "plc/diagnostic.hpp"
 #include "plc/program.hpp"
 
 #include <memory>
+#include <optional>
 #include <span>
 #include <string>
 #include <string_view>
@@ -54,9 +55,18 @@ struct Coil {
     bool negated = false;  // a negated coil writes the inverse
 };
 
+// A timer sink turns the rung's condition into a delay: `var` reads TRUE once the
+// condition has held for `preset_ms`. The TON instance behind it is internal, so a
+// rung still reads as "tag = condition" and the netlist never carries time values.
+struct TimerSink {
+    std::string var;  // BOOL tag that receives Q
+    i64 preset_ms = 0;
+};
+
 struct Rung {
-    NetPtr condition;         // null: always energised
-    std::vector<Coil> coils;  // every coil is written from the same condition
+    NetPtr condition;                // null: always energised
+    std::vector<Coil> coils;         // every coil is written from the same condition
+    std::optional<TimerSink> timer;  // a timer rung drives this instead of coils
 };
 
 struct NetlistResult {
