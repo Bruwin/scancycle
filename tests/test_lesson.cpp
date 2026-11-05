@@ -115,7 +115,7 @@ TEST(portal_router_serves_the_default_surface) {
     CHECK(page.status == 200);
     CHECK(page.content_type.find("text/html") != std::string::npos);
     CHECK(page.body.find("conveyor-interlock") != std::string::npos);
-    CHECK(page.body.find("action=\"/api/grade\"") != std::string::npos);
+    CHECK(page.body.find("action=\"/grade\"") != std::string::npos);
 
     request.path = "/api/missing";
     const net::Response missing = router.dispatch(request);
@@ -390,6 +390,45 @@ TEST(grade_route_grades_a_submitted_program) {
     CHECK(response.status == 200);
     CHECK(response.body.find("\"lesson\":\"press-cycle\"") != std::string::npos);
     CHECK(response.body.find("\"passed\":false") != std::string::npos);
+}
+
+TEST(portal_escapes_page_text) {
+    CHECK(net::html_escape("<a & b>") == "&lt;a &amp; b&gt;");
+    CHECK(net::html_escape("\"quoted\"") == "&quot;quoted&quot;");
+}
+
+TEST(grade_page_renders_the_rubric) {
+    const std::vector<lesson::Lesson> lessons = lesson::make_builtin_lessons();
+
+    net::Request request;
+    request.method = net::HttpMethod::Post;
+    request.path = "/grade";
+    request.body = "lesson=press-batch";
+
+    const net::Response response = app::grade_lesson_page(lessons, request);
+
+    CHECK(response.status == 200);
+    CHECK(response.content_type.rfind("text/html", 0) == 0);
+    CHECK(response.body.find("all 4 checks passed") != std::string::npos);
+    CHECK(response.body.find("Press completes three parts") != std::string::npos);
+    CHECK(response.body.find("<td class=\"pass\">pass") != std::string::npos);
+    CHECK(response.body.find("href=\"/\"") != std::string::npos);
+}
+
+TEST(grade_page_explains_an_unknown_lesson) {
+    const std::vector<lesson::Lesson> lessons = lesson::make_builtin_lessons();
+
+    net::Request request;
+    request.method = net::HttpMethod::Post;
+    request.path = "/grade";
+    request.body = "lesson=no-such-lesson";
+
+    const net::Response response = app::grade_lesson_page(lessons, request);
+
+    CHECK(response.status == 404);
+    CHECK(response.content_type.rfind("text/html", 0) == 0);
+    CHECK(response.body.find("unknown lesson") != std::string::npos);
+    CHECK(response.body.find("Back to the catalog") != std::string::npos);
 }
 
 TEST(portal_transport_grades_over_a_socket) {

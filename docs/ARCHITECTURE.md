@@ -187,8 +187,8 @@ same bytecode before the cell runs it.
 The portal is a local service (`scancycle_server`) so a classroom does not depend
 on the internet. `net/http` parses and formats messages as pure text,
 `net/http_server` serves the router over TCP bound to loopback, `GET /` renders
-the catalog as a page, and `POST /api/grade` runs a lesson and returns its rubric
-report as JSON. There is no TLS or authentication yet, and the WebSocket half of
+the catalog as a page, `POST /api/grade` returns a lesson's rubric report as JSON,
+and `POST /grade` renders the same run as a page for the catalog's form. There is no TLS or authentication yet, and the WebSocket half of
 the portal is still open.
 
 ## Procedural assets

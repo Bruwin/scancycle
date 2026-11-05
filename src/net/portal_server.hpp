@@ -47,6 +47,10 @@ private:
 
 std::string json_escape(std::string_view text);
 
+// Page escaping, next to the JSON one so the catalog and the grade page
+// cannot disagree about what is safe to interpolate.
+std::string html_escape(std::string_view text);
+
 PortalRouter make_default_router(const std::vector<lesson::Lesson>& lessons);
 
 }  // namespace sc::net

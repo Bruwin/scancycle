@@ -39,6 +39,11 @@ int main(int argc, char** argv) {
                      return sc::app::grade_lesson(lessons, request);
                  });
 
+    router.route(sc::net::HttpMethod::Post, "/grade",
+                 [&lessons](const sc::net::Request& request) {
+                     return sc::app::grade_lesson_page(lessons, request);
+                 });
+
     sc::net::HttpServer server(router);
     if (!server.listen(static_cast<sc::u16>(port))) {
         std::fprintf(stderr, "portal: %s\n", server.error().c_str());
@@ -50,7 +55,8 @@ int main(int argc, char** argv) {
     std::printf("  http://127.0.0.1:%u/\n", bound);
     std::printf("  http://127.0.0.1:%u/api/health\n", bound);
     std::printf("  http://127.0.0.1:%u/api/lessons\n", bound);
-    std::printf("  POST http://127.0.0.1:%u/api/grade\n\n", bound);
+    std::printf("  POST http://127.0.0.1:%u/api/grade  (JSON)\n", bound);
+    std::printf("  POST http://127.0.0.1:%u/grade      (page)\n\n", bound);
     for (const sc::lesson::Lesson& lesson : lessons) {
         std::printf("  lesson %-20s %s\n", lesson.id.c_str(), lesson.title.c_str());
     }

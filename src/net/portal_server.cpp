@@ -44,8 +44,6 @@ std::string json_escape(std::string_view text) {
     return out;
 }
 
-namespace {
-
 std::string html_escape(std::string_view text) {
     std::string out;
     out.reserve(text.size());
@@ -71,6 +69,8 @@ std::string html_escape(std::string_view text) {
     return out;
 }
 
+namespace {
+
 // One page, no script: the catalog a teacher opens to see what the classroom
 // server holds, plus a form that posts a program to the grade route. Leaving the
 // textarea empty grades the lesson's own reference solution.
@@ -87,7 +87,7 @@ std::string catalog_page(const std::vector<lesson::Lesson>& lessons) {
     }
 
     page +=
-        "</ul><form method=\"post\" action=\"/api/grade\">"
+        "</ul><form method=\"post\" action=\"/grade\">"
         "<p><label>Lesson <select name=\"lesson\">";
     for (const lesson::Lesson& lesson : lessons) {
         page += "<option value=\"" + html_escape(lesson.id) + "\">" + html_escape(lesson.title) +
