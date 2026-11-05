@@ -11,6 +11,11 @@ option(SC_WERROR "Treat compiler warnings as errors" ON)
 option(SC_BUILD_TESTS "Build the test suite" ON)
 # Off by default: the headless half must build on any machine, and CI has no GPU.
 option(SC_ENABLE_VULKAN "Build the Vulkan 1.3 renderer and the windowed viewer" OFF)
+# Off by default: the headless build and its tests must work without external
+# packages, so the real libplctag binding is strictly opt-in.
+option(SC_ENABLE_LIBPLCTAG "Build the real libplctag binding (requires libplctag)" OFF)
+
+find_package(Threads REQUIRED)
 
 add_library(sc_warnings INTERFACE)
 if(MSVC)
@@ -95,10 +100,25 @@ add_library(sc_io
     src/io/socket_io.cpp
     src/io/modbus_tcp.cpp
     src/io/modbus_slave.cpp
+    src/io/plc_tag_driver.cpp
+    src/io/libplctag_api.cpp
 )
 target_link_libraries(sc_io PUBLIC sc_core sc_sim sc_plc PRIVATE sc_warnings)
 if(WIN32)
     target_link_libraries(sc_io PRIVATE ws2_32)
+endif()
+if(SC_ENABLE_LIBPLCTAG)
+    # libplctag installs a plain C library, not a CMake config package.
+    find_path(LIBPLCTAG_INCLUDE_DIR NAMES libplctag.h)
+    find_library(LIBPLCTAG_LIBRARY NAMES plctag libplctag)
+    if(NOT LIBPLCTAG_INCLUDE_DIR OR NOT LIBPLCTAG_LIBRARY)
+        message(FATAL_ERROR
+            "SC_ENABLE_LIBPLCTAG=ON but libplctag was not found. Install it, or set "
+            "LIBPLCTAG_INCLUDE_DIR and LIBPLCTAG_LIBRARY to its header and library.")
+    endif()
+    target_include_directories(sc_io PRIVATE ${LIBPLCTAG_INCLUDE_DIR})
+    target_link_libraries(sc_io PRIVATE ${LIBPLCTAG_LIBRARY} Threads::Threads)
+    target_compile_definitions(sc_io PRIVATE SC_WITH_LIBPLCTAG=1)
 endif()
 
 add_library(sc_assets
@@ -123,7 +143,6 @@ add_library(sc_net
     src/net/http_server.cpp
     src/net/websocket.cpp
 )
-find_package(Threads REQUIRED)
 target_link_libraries(sc_net PUBLIC sc_core sc_lesson PRIVATE sc_warnings Threads::Threads)
 if(WIN32)
     target_link_libraries(sc_net PRIVATE ws2_32)
@@ -204,6 +223,7 @@ if(SC_BUILD_TESTS)
         tests/test_lesson.cpp
         tests/test_websocket.cpp
         tests/test_modbus_tcp.cpp
+        tests/test_libplctag.cpp
         tests/test_app.cpp
         tests/test_df1.cpp
         tests/test_df1_serial.cpp

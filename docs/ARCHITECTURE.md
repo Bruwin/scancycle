@@ -163,6 +163,18 @@ node 0), and its N7 and B3 files are what this slice binds. Windows has no seria
 implementation yet and reports that as a value. Like every live driver here it
 has not met a real controller.
 
+The libplctag driver, `io::LibPlcTagDriver`, is the path to Allen-Bradley CIP and
+Siemens S7. It deliberately does not call the C library directly: a `PlcTagApi`
+seam carries `create`, `read`, `get_bool`, `set_bool`, `write` and `destroy`, so
+the latching, changed-output and commissioning rules are tested with a fake
+backend and need no PLC. One binding is one complete libplctag attribute string,
+which keeps protocol selection in configuration rather than in the driver. The
+real adapter is a single translation unit behind `-DSC_ENABLE_LIBPLCTAG=ON`, off
+by default, because the headless build must not require an external package. The
+library is MPL-2.0 (see the table below), so static linking imposes no disclosure
+obligation on our own code. It has not been run against real hardware; that is
+what the commissioning gate is for.
+
 ## Drivers and licensing
 
 | Target | Library | Licence | Note |
@@ -295,7 +307,9 @@ drives the whole cell)*
 * **M6** live drivers: Modbus TCP against a software slave, then libplctag, then DF1.
   *(in progress: the in-house Modbus/TCP driver, loopback software slave, write-gated
   output path and socket tests are done; the DF1 slice has exchanged a valid read with
-  a real MicroLogix 1000, so only libplctag remains)*
+  a real MicroLogix 1000, and the optional libplctag driver is implemented behind an
+  injectable API and tested with a fake backend. libplctag has not run against a plant
+  PLC yet)*
 * **M7** graphical LD/FBD editors on the existing network model, SFC, content,
   asset variety.
 
