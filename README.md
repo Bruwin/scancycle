@@ -138,6 +138,9 @@ with, so a broken exercise fails CI instead of failing a classroom.
 # Run an SFC chart: the chart walks one step per scan and drives its actions.
 ./build/bin/scancycle_cli sfc examples/press_cycle.sfc --scans=5 --set part_in_place=1
 
+# Count a batch: CTU sets its flag at the preset and publishes the count itself.
+./build/bin/scancycle_cli ladder examples/batch_count.ld --scans=20 --set start_btn=1
+
 # Open the graphical editor on a rung file. Click a contact to invert it, or a
 # junction to swap AND for OR; the View link redraws the same chart as a function
 # block diagram. The forms add a branch, change the coil or set a rail.
