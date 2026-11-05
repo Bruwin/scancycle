@@ -395,9 +395,11 @@ bool ChunkRenderer::upload_arena() {
                        VK_BUFFER_USAGE_STORAGE_BUFFER_BIT)) {
         return false;
     }
+    // The same buffer is the shader's index source and the bound index buffer:
+    // gl_VertexIndex is only the right value if the draw actually reads it.
     if (!upload_buffer(physical_, device_, command_pool_, queue_, index_buffer_,
                        arena_.indices().data(), index_bytes,
-                       VK_BUFFER_USAGE_STORAGE_BUFFER_BIT)) {
+                       VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT)) {
         return false;
     }
 
@@ -562,6 +564,9 @@ void ChunkRenderer::draw(VkCommandBuffer cmd, VkExtent2D extent) {
     vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, graphics_pipeline_);
     vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_layout_, 0, 1,
                             &descriptor_set_, 0, nullptr);
+    // Indexed draws require a bound index buffer, and the arena's absolute indices
+    // are what make gl_VertexIndex address the shared vertex buffer.
+    vkCmdBindIndexBuffer(cmd, index_buffer_.buffer, 0, VK_INDEX_TYPE_UINT32);
     vkCmdDrawIndexedIndirectCount(cmd, draw_buffer_.buffer, 0, count_buffer_.buffer, 0, capacity_,
                                   sizeof(u32) * 5);
 }
