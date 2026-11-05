@@ -8,8 +8,7 @@
 // layer that the transport will serve, so the classroom surface can be reviewed
 // and tested before any port is opened.
 int main() {
-    std::vector<sc::lesson::Lesson> lessons;
-    lessons.push_back(sc::lesson::make_conveyor_interlock_lesson());
+    std::vector<sc::lesson::Lesson> lessons = sc::lesson::make_builtin_lessons();
 
     sc::net::PortalRouter router = sc::net::make_default_router(lessons);
 

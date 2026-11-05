@@ -188,3 +188,31 @@ TEST(batch_lesson_reference_solution_passes_its_own_rubric) {
     CHECK(run.boxes_processed >= 3);
     CHECK(run.report.passed());
 }
+
+TEST(builtin_lessons_all_reach_the_portal_catalog) {
+    const std::vector<lesson::Lesson> built = lesson::make_builtin_lessons();
+    CHECK(built.size() == 3);
+
+    std::vector<std::string> ids;
+    for (const lesson::Lesson& one : built) {
+        CHECK(!one.id.empty());
+        CHECK(!one.reference_solution.empty());
+        CHECK(one.starting_plant.count() > 0);
+        for (const std::string& seen : ids) {
+            CHECK(seen != one.id);
+        }
+        ids.push_back(one.id);
+    }
+
+    const net::PortalRouter router = net::make_default_router(built);
+
+    net::Request request;
+    request.method = net::HttpMethod::Get;
+    request.path = "/api/lessons";
+    const net::Response catalog = router.dispatch(request);
+
+    CHECK(catalog.status == 200);
+    CHECK(catalog.body.find("conveyor-interlock") != std::string::npos);
+    CHECK(catalog.body.find("press-cycle") != std::string::npos);
+    CHECK(catalog.body.find("press-batch") != std::string::npos);
+}

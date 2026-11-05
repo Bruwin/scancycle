@@ -178,8 +178,9 @@ simulation never writes to hardware on its own.
 Lessons are data, never compiled content: seed, starting plant, objective,
 `allowed_instruction_set`, toolbox locks, rubric. Rubric checks are assertions
 over the deterministic simulation ("conveyor stopped within 200 ms of sensor 3
-blocking, zero escaped boxes"). Each lesson ships a reference `solution.st`
-that CI runs as a regression test of the lesson itself.
+blocking, zero escaped boxes"). Each lesson carries a reference program that CI
+runs against that lesson's own cell as a regression test of the lesson itself, so
+a rubric no solution can satisfy fails the build.
 
 The portal is a local HTTP/WebSocket service (`scancycle_server`) so a classroom
 does not depend on the internet.
@@ -215,9 +216,9 @@ drives the whole cell)*
   the headless half is done - the driver applies forces where a real PLC does, `Application`
   steps one scan and reads a tag watch, and `scancycle_cli trace` prints the table; the IDE
   surface itself is not written)*
-* **M5** lessons + teacher portal: schema, grader, one real lesson, web UI. *(in progress:
-  schema, grader and the lesson runner that self-tests a reference program are done; portal
-transport and web UI are not)*
+* **M5** lessons + teacher portal: schema, grader, three real lessons, web UI. *(in progress:
+  schema, grader, the lesson runner that self-tests a reference program, and three lessons on
+  the press cell are done; portal transport and web UI are not)*
 * **M6** live drivers: Modbus TCP against a software slave, then libplctag, then DF1.
 * **M7** graphical LD/FBD editors on the existing network model, SFC, content,
   asset variety.

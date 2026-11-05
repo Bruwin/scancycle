@@ -65,6 +65,11 @@ Lesson make_press_cycle_lesson();
 // batch is full: a delayed start plus a counter with a visible CV.
 Lesson make_batch_cycle_lesson();
 
+// Every lesson the shipped builds offer. The CLI, the portal server and the
+// lesson gate all read this one list, so a lesson cannot exist in one surface
+// and be missing from another.
+std::vector<Lesson> make_builtin_lessons();
+
 bool instruction_allowed(const Lesson& lesson, std::string_view instruction);
 
 }  // namespace sc::lesson

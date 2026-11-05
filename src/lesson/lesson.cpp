@@ -166,6 +166,14 @@ END_PROGRAM
     return lesson;
 }
 
+std::vector<Lesson> make_builtin_lessons() {
+    std::vector<Lesson> lessons;
+    lessons.push_back(make_conveyor_interlock_lesson());
+    lessons.push_back(make_press_cycle_lesson());
+    lessons.push_back(make_batch_cycle_lesson());
+    return lessons;
+}
+
 bool instruction_allowed(const Lesson& lesson, std::string_view instruction) {
     if (lesson.allowed_instructions.empty()) {
         return true;
