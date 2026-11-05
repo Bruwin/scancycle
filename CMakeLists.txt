@@ -70,6 +70,7 @@ add_library(sc_plc
     src/plc/function_blocks.cpp
     src/plc/vm.cpp
     src/plc/declaration.cpp
+    src/plc/source_text.cpp
     src/plc/netlist.cpp
     src/plc/il.cpp
 )
