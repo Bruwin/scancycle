@@ -43,6 +43,7 @@ Portal or Studio 5000 and recognise everything.
 | Teacher portal: pages, toolbox-enforced grading, printable grade log, live updates | working, tested |
 | PLC IDE: editor, diagnostics, watch, forcing, single-scan step | working, tested (local web surface) |
 | Graphical LD/FBD editor: SVG rungs or blocks, click-to-invert contacts, click-to-swap junctions, branch and coil edits | working, tested (local web surface) |
+| SFC chart page: step drawing with the active step marked | working, tested (local web surface) |
 
 ## Build
 
@@ -134,10 +135,17 @@ with, so a broken exercise fails CI instead of failing a classroom.
 ./build/bin/scancycle_cli ladder examples/interlock.ld --scans=50 --set start_btn=1
 ./build/bin/scancycle_cli ladder examples/interlock.ld --scans=110 --set start_btn=1
 
+# Run an SFC chart: the chart walks one step per scan and drives its actions.
+./build/bin/scancycle_cli sfc examples/press_cycle.sfc --scans=5 --set part_in_place=1
+
 # Open the graphical editor on a rung file. Click a contact to invert it, or a
 # junction to swap AND for OR; the View link redraws the same chart as a function
 # block diagram. The forms add a branch, change the coil or set a rail.
 ./build/bin/scancycle_ide --program=examples/interlock.ld
+
+# Open the chart page on an SFC file: the active step is highlighted and the text
+# below the drawing replaces the chart.
+./build/bin/scancycle_ide --program=examples/press_cycle.sfc
 
 # Serve the teacher portal on loopback; graded attempts go to the named log.
 # The printable log also listens for live updates on the WebSocket port.

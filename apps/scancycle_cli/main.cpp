@@ -12,6 +12,7 @@
 #include "plc/ladder_text.hpp"
 #include "plc/parser.hpp"
 #include "plc/program.hpp"
+#include "plc/sfc.hpp"
 #include "plc/vm.hpp"
 #include "world/mesh.hpp"
 #include "world/voxel_chunk.hpp"
@@ -39,6 +40,7 @@ void print_usage() {
         "  scancycle_cli disasm <program.st>\n"
         "  scancycle_cli il <program.il> [--scans=N] [--dt-ms=N] [--set name=value]\n"
         "  scancycle_cli ladder <program.ld> [--scans=N] [--dt-ms=N] [--set name=value]\n"
+        "  scancycle_cli sfc <chart.sfc> [--scans=N] [--dt-ms=N] [--set name=value]\n"
         "  scancycle_cli bench [--iterations=N]\n"
         "  scancycle_cli trace <program.st> [--scans=N] [--force name=value] [--watch=a,b]\n"
         "                        [--snapshot] [--driver=df1 --port=DEVICE\n"
@@ -397,6 +399,57 @@ bool parse_bool_text(const std::string& text, bool& out) {
 
 // Steps a program against the vertical-slice cell and prints a watch table, which
 // is the headless half of the IDE's monitor view.
+// Runs a chart headlessly, the same way the ladder command runs a rung file: the
+// chart lowers to the same program, so the trace is the one a lesson grades.
+int command_sfc(const std::vector<std::string>& args) {
+    if (args.empty()) {
+        print_usage();
+        return 2;
+    }
+
+    const std::string& path = args[0];
+    int scans = 100;
+    int dt_ms = 10;
+    std::vector<std::string> assignments;
+
+    for (std::size_t i = 1; i < args.size(); ++i) {
+        const std::string& arg = args[i];
+        if (arg.rfind("--scans=", 0) == 0) {
+            scans = std::atoi(arg.c_str() + 8);
+        } else if (arg.rfind("--dt-ms=", 0) == 0) {
+            dt_ms = std::atoi(arg.c_str() + 8);
+        } else if (arg.rfind("--set=", 0) == 0) {
+            assignments.push_back(arg.substr(6));
+        } else if (arg == "--set" && i + 1 < args.size()) {
+            assignments.push_back(args[++i]);
+        } else {
+            std::fprintf(stderr, "unknown option '%s'\n", arg.c_str());
+            return 2;
+        }
+    }
+
+    std::string source;
+    if (!read_file(path, source)) {
+        std::fprintf(stderr, "cannot read '%s'\n", path.c_str());
+        return 1;
+    }
+
+    const sc::plc::SfcParseResult parsed = sc::plc::parse_sfc_source(source);
+    int problems = 0;
+    report_diagnostics(path, parsed.diagnostics, problems);
+    if (problems != 0 || !parsed.ok) {
+        return 1;
+    }
+
+    const sc::plc::SfcResult compiled = sc::plc::compile_sfc(path, parsed.chart);
+    report_diagnostics(path, compiled.diagnostics, problems);
+    if (problems != 0 || !compiled.ok) {
+        return 1;
+    }
+
+    return run_compiled(compiled.program, scans, dt_ms, assignments);
+}
+
 int command_trace(const std::vector<std::string>& args) {
     if (args.empty()) {
         print_usage();
@@ -950,6 +1003,9 @@ int main(int argc, char** argv) {
     }
     if (command == "ladder") {
         return command_ladder(rest);
+    }
+    if (command == "sfc") {
+        return command_sfc(rest);
     }
     if (command == "il") {
         return command_il(rest);
