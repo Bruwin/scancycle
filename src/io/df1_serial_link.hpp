@@ -6,6 +6,7 @@
 #include "io/df1_link.hpp"
 #include "io/serial_io.hpp"
 
+#include <functional>
 #include <span>
 #include <string>
 #include <vector>
@@ -17,6 +18,11 @@ struct Df1SerialConfig {
     int baud = 19200;
     int timeout_ms = 1000;
     Df1Checksum checksum = Df1Checksum::Bcc;
+
+    // Optional sink for the bytes actually on the wire, for bench bring-up:
+    // true carries the request we sent, false every chunk read back. Null when
+    // nothing is watching, so the link itself never prints.
+    std::function<void(bool transmitted, std::span<const u8> bytes)> trace;
 };
 
 class Df1SerialLink final : public Df1Link {

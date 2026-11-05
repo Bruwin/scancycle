@@ -57,6 +57,9 @@ bool Df1SerialLink::exchange(std::span<const u8> request, std::vector<u8>& respo
     if (!serial_write(handle_, request, error)) {
         return false;
     }
+    if (config_.trace) {
+        config_.trace(true, request);
+    }
 
     const auto deadline = std::chrono::steady_clock::now() +
                           std::chrono::milliseconds(config_.timeout_ms);
@@ -79,6 +82,9 @@ bool Df1SerialLink::exchange(std::span<const u8> request, std::vector<u8>& respo
         }
         if (count == 0) {
             continue;  // timeout or EINTR; the deadline check above decides
+        }
+        if (config_.trace) {
+            config_.trace(false, std::span<const u8>(chunk, static_cast<std::size_t>(count)));
         }
         incoming.insert(incoming.end(), chunk, chunk + count);
 

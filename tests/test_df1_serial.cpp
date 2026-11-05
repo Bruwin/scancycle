@@ -13,6 +13,7 @@
 #include "plc/parser.hpp"
 
 #include <atomic>
+#include <span>
 #include <string>
 #include <thread>
 #include <utility>
@@ -242,6 +243,51 @@ TEST(df1_serial_link_reports_a_silent_port) {
     std::vector<u8> reply;
     CHECK(!link.exchange(request, reply, error));
     CHECK(error.find("no DF1 reply") != std::string::npos);
+}
+
+TEST(df1_serial_link_traces_both_directions_when_asked) {
+    PtyPair pty;
+    std::string error;
+    CHECK(pty.open(error));
+    if (pty.master < 0) {
+        return;
+    }
+
+    io::Df1SerialConfig config;
+    config.device = pty.slave;
+    config.timeout_ms = 100;
+    std::vector<u8> sent;
+    std::vector<u8> received;
+    config.trace = [&](bool transmitted, std::span<const u8> bytes) {
+        std::vector<u8>& into = transmitted ? sent : received;
+        into.insert(into.end(), bytes.begin(), bytes.end());
+    };
+
+    io::Df1SerialLink link(config);
+    CHECK(link.open(error));
+
+    // Noise ahead of the exchange proves the receive side is traced even when
+    // no frame ever decodes.
+    const u8 noise[] = {0xFFu, 0x00u, 0x10u};
+    CHECK(::write(pty.master, noise, sizeof(noise)) ==
+          static_cast<ssize_t>(sizeof(noise)));
+
+    io::Df1Header header;
+    header.command = io::kDf1CmdProtectedRead;
+    std::vector<u8> body = io::df1_body(header);
+    const std::vector<u8> payload =
+        io::build_pccc_read_request(io::PcccAddress{7, io::kPcccFileTypeInteger, 0, 0}, 2);
+    body.insert(body.end(), payload.begin(), payload.end());
+
+    std::vector<u8> request;
+    CHECK(io::df1_encode(body, io::Df1Checksum::Bcc, request, error));
+
+    std::vector<u8> reply;
+    CHECK(!link.exchange(request, reply, error));
+    CHECK(sent == request);
+    CHECK(received.size() >= 3);
+    CHECK(received[0] == 0xFFu);
+    CHECK(received[2] == 0x10u);
 }
 
 #endif

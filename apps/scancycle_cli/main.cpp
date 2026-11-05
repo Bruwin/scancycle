@@ -21,6 +21,7 @@
 #include <cstdlib>
 #include <fstream>
 #include <limits>
+#include <span>
 #include <sstream>
 #include <string>
 #include <utility>
@@ -43,7 +44,8 @@ void print_usage() {
         "  scancycle_cli lesson [--id=ID] [--seconds=N]\n"
         "  scancycle_cli df1 --port=DEVICE (--read=ADDR | --write=ADDR=VALUE)\n"
         "                        [--baud=N] [--node=N] [--host=N] [--checksum=crc|bcc]\n"
-        "                        [--timeout-ms=N]   (ADDR like N7:0, B3:5 or N7:0/3)\n");
+        "                        [--timeout-ms=N] [--trace]\n"
+        "                        (ADDR like N7:0, B3:5 or N7:0/3)\n");
 }
 
 bool read_file(const std::string& path, std::string& out) {
@@ -615,6 +617,7 @@ int command_df1(const std::vector<std::string>& args) {
     long timeout_ms = 1000;
     long node = 1;
     long host = 0;
+    bool trace = false;
 
     for (const std::string& arg : args) {
         long parsed = 0;
@@ -650,6 +653,8 @@ int command_df1(const std::vector<std::string>& args) {
                 return 2;
             }
             host = parsed;
+        } else if (arg == "--trace") {
+            trace = true;
         } else {
             std::fprintf(stderr, "unknown option '%s'\n", arg.c_str());
             return 2;
@@ -719,6 +724,17 @@ int command_df1(const std::vector<std::string>& args) {
     serial.baud = static_cast<int>(baud);
     serial.timeout_ms = static_cast<int>(timeout_ms);
     serial.checksum = checksum;
+    if (trace) {
+        serial.trace = [](bool transmitted, std::span<const sc::u8> bytes) {
+            std::string line = transmitted ? "tx" : "rx";
+            char hex[8];
+            for (const sc::u8 byte : bytes) {
+                std::snprintf(hex, sizeof(hex), " %02X", static_cast<unsigned>(byte));
+                line += hex;
+            }
+            std::fprintf(stderr, "%s\n", line.c_str());
+        };
+    }
 
     sc::io::Df1SerialLink link(serial);
     sc::app::Df1ToolResult result;
