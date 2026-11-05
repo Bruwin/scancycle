@@ -78,6 +78,7 @@ add_library(sc_plc
     src/plc/declaration.cpp
     src/plc/source_text.cpp
     src/plc/netlist.cpp
+    src/plc/netlist_edit.cpp
     src/plc/il.cpp
     src/plc/ladder_text.cpp
 )
@@ -214,6 +215,7 @@ if(SC_BUILD_TESTS)
         tests/test_render.cpp
         tests/test_plc.cpp
         tests/test_netlist.cpp
+        tests/test_netlist_edit.cpp
         tests/test_il.cpp
         tests/test_ladder_text.cpp
         tests/test_sim.cpp
