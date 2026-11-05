@@ -45,4 +45,8 @@ private:
 // wire are exercised by the same code path a browser would take.
 std::string http_round_trip(u16 port, std::string_view raw, std::string& error);
 
+// True when the buffered request holds the whole body it declares. A server that
+// dispatched a short body would grade part of a program without saying so.
+bool request_body_complete(std::string_view raw);
+
 }  // namespace sc::net

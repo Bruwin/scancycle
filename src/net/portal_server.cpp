@@ -69,6 +69,28 @@ std::string html_escape(std::string_view text) {
     return out;
 }
 
+std::string lesson_form(const std::vector<lesson::Lesson>& lessons, std::string_view selected,
+                        std::string_view program) {
+    std::string form =
+        "<form method=\"post\" action=\"/grade\">"
+        "<p><label>Lesson <select name=\"lesson\">";
+    for (const lesson::Lesson& lesson : lessons) {
+        form += "<option value=\"" + html_escape(lesson.id) + "\"";
+        if (lesson.id == selected) {
+            form += " selected";
+        }
+        form += ">" + html_escape(lesson.title) + "</option>";
+    }
+    form +=
+        "</select></label></p>"
+        "<p><label>Program<br><textarea name=\"program\" rows=\"12\" cols=\"60\">";
+    form += html_escape(program);
+    form +=
+        "</textarea></label></p>"
+        "<p><button type=\"submit\">Grade</button></p></form>";
+    return form;
+}
+
 namespace {
 
 // One page, no script: the catalog a teacher opens to see what the classroom
@@ -86,19 +108,9 @@ std::string catalog_page(const std::vector<lesson::Lesson>& lessons) {
                 html_escape(lesson.title) + "</li>";
     }
 
-    page +=
-        "</ul><form method=\"post\" action=\"/grade\">"
-        "<p><label>Lesson <select name=\"lesson\">";
-    for (const lesson::Lesson& lesson : lessons) {
-        page += "<option value=\"" + html_escape(lesson.id) + "\">" + html_escape(lesson.title) +
-                "</option>";
-    }
-    page +=
-        "</select></label></p>"
-        "<p><label>Program<br><textarea name=\"program\" rows=\"12\" cols=\"60\">"
-        "</textarea></label></p>"
-        "<p><button type=\"submit\">Grade</button></p></form>"
-        "<p><a href=\"/api/lessons\">JSON catalog</a></p></body></html>";
+    page += "</ul>";
+    page += lesson_form(lessons, "", "");
+    page += "<p><a href=\"/api/lessons\">JSON catalog</a></p></body></html>";
     return page;
 }
 

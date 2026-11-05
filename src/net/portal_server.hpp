@@ -51,6 +51,11 @@ std::string json_escape(std::string_view text);
 // cannot disagree about what is safe to interpolate.
 std::string html_escape(std::string_view text);
 
+// The one lesson form. The catalog renders it empty; the grade page renders
+// it with the submission, so a program is never lost between attempts.
+std::string lesson_form(const std::vector<lesson::Lesson>& lessons,
+                        std::string_view selected, std::string_view program);
+
 PortalRouter make_default_router(const std::vector<lesson::Lesson>& lessons);
 
 }  // namespace sc::net

@@ -13,6 +13,8 @@ const char* status_text(int status) {
             return "Bad Request";
         case 404:
             return "Not Found";
+        case 413:
+            return "Payload Too Large";
         case 500:
             return "Internal Server Error";
         default:

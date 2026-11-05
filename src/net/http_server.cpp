@@ -29,9 +29,10 @@ using SocketHandle = int;
 constexpr SocketHandle kInvalidSocket = -1;
 #endif
 
-// A portal request is a request line and maybe a small JSON body. Anything
-// larger is not a browser talking to us.
-constexpr std::size_t kMaxRequestBytes = 64 * 1024;
+// A portal request is a request line and a lesson program. The cap is far above
+// any lesson that fits in a textarea; the point is that a body which exceeds it
+// is refused rather than graded from its first pages.
+constexpr std::size_t kMaxRequestBytes = 256 * 1024;
 
 bool equals_ci(std::string_view left, std::string_view right) {
     if (left.size() != right.size()) {
@@ -126,6 +127,14 @@ bool send_all(SocketHandle socket, std::string_view text) {
 
 }  // namespace
 
+bool request_body_complete(std::string_view raw) {
+    const std::size_t header_end = raw.find("\r\n\r\n");
+    if (header_end == std::string_view::npos) {
+        return false;
+    }
+    return raw.size() >= header_end + 4 + content_length(raw);
+}
+
 HttpServer::HttpServer(const PortalRouter& router) : router_(&router) {}
 
 HttpServer::~HttpServer() {
@@ -215,7 +224,13 @@ bool HttpServer::serve_one() {
 
     const ParsedRequest parsed = parse_http_request(raw);
     Response response;
-    if (!parsed.ok) {
+    if (!request_body_complete(raw)) {
+        // Refusing is the honest answer: grading the prefix would report on a
+        // program the student never wrote, and echoing it back would replace
+        // their work with the fragment.
+        response.status = 413;
+        response.body = R"({"error":"request body is larger than the portal reads"})";
+    } else if (!parsed.ok) {
         response.status = 400;
         response.body = R"({"error":"bad request"})";
     } else {

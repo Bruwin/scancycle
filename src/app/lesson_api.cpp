@@ -6,7 +6,6 @@
 
 #include <string>
 #include <string_view>
-#include <utility>
 
 namespace sc::app {
 namespace {
@@ -14,35 +13,41 @@ namespace {
 struct GradeOutcome {
     int status = 200;
     std::string error;
+    std::string wanted_lesson;
+    std::string program;
     lesson::GradeReport report;
     const lesson::Lesson* lesson = nullptr;
 };
 
 // One submission, one run. Both routes render this, so the page and the JSON can
-// never disagree about which lesson was graded or what it scored.
+// never disagree about which lesson was graded or what it scored. The form
+// fields are captured before any check runs, because a rejected submission still
+// has to come back to the student with the program they typed.
 GradeOutcome grade_submission(const std::vector<lesson::Lesson>& lessons,
                               const net::Request& request) {
     GradeOutcome outcome;
-    const std::string wanted = net::form_field(request.body, "lesson");
-    if (wanted.empty()) {
+    outcome.wanted_lesson = net::form_field(request.body, "lesson");
+    outcome.program = net::form_field(request.body, "program");
+
+    if (outcome.wanted_lesson.empty()) {
         outcome.status = 400;
         outcome.error = "the form needs a lesson field";
         return outcome;
     }
 
     for (const lesson::Lesson& one : lessons) {
-        if (one.id == wanted) {
+        if (one.id == outcome.wanted_lesson) {
             outcome.lesson = &one;
         }
     }
     if (outcome.lesson == nullptr) {
         outcome.status = 404;
-        outcome.error = "unknown lesson '" + wanted + "'";
+        outcome.error = "unknown lesson '" + outcome.wanted_lesson + "'";
         return outcome;
     }
 
     LessonRunConfig config;
-    config.program = net::form_field(request.body, "program");
+    config.program = outcome.program;
 
     const LessonRunResult run = run_lesson(*outcome.lesson, config);
     if (!run.ok) {
@@ -74,7 +79,9 @@ std::string page_head(std::string_view title) {
 
 // The report as a teacher reads it: the verdict first, then one row per check so
 // a student can see which assertion failed and what the simulation actually did.
-std::string report_page(const GradeOutcome& outcome) {
+// The submission rides along in the form below it, so fixing a near miss is an
+// edit rather than a retype.
+std::string report_page(const GradeOutcome& outcome, const std::vector<lesson::Lesson>& lessons) {
     const lesson::GradeReport& report = outcome.report;
 
     std::string page = page_head("Scan Cycle grade");
@@ -95,13 +102,19 @@ std::string report_page(const GradeOutcome& outcome) {
         page += "</td><td>" + net::html_escape(check.detail) + "</td></tr>";
     }
 
-    page += "</tbody></table><p><a href=\"/\">Grade another lesson</a></p></body></html>";
+    page += "</tbody></table><h2>Edit and grade again</h2>";
+    page += net::lesson_form(lessons, report.lesson_id, outcome.program);
+    page += "<p><a href=\"/\">Grade another lesson</a></p></body></html>";
     return page;
 }
 
-std::string error_page(const std::string& message) {
+// A rejection is still an answer about a submission someone wrote: the message
+// explains what was wrong, and the form comes back filled in.
+std::string error_page(const GradeOutcome& outcome, const std::vector<lesson::Lesson>& lessons) {
     std::string page = page_head("Scan Cycle grade");
-    page += "<h1>Could not grade</h1><p>" + net::html_escape(message) + "</p>";
+    page += "<h1>Could not grade</h1><p>" + net::html_escape(outcome.error) + "</p>";
+    page += "<h2>Your program is still here</h2>";
+    page += net::lesson_form(lessons, outcome.wanted_lesson, outcome.program);
     page += "<p><a href=\"/\">Back to the catalog</a></p></body></html>";
     return page;
 }
@@ -127,7 +140,8 @@ net::Response grade_lesson_page(const std::vector<lesson::Lesson>& lessons,
     net::Response response;
     response.status = outcome.status;
     response.content_type = "text/html; charset=utf-8";
-    response.body = outcome.status == 200 ? report_page(outcome) : error_page(outcome.error);
+    response.body =
+        outcome.status == 200 ? report_page(outcome, lessons) : error_page(outcome, lessons);
     return response;
 }
 

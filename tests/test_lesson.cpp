@@ -431,6 +431,51 @@ TEST(grade_page_explains_an_unknown_lesson) {
     CHECK(response.body.find("Back to the catalog") != std::string::npos);
 }
 
+TEST(grade_page_keeps_the_submitted_program) {
+    const std::vector<lesson::Lesson> lessons = lesson::make_builtin_lessons();
+    const std::string idle =
+        "PROGRAM Idle\nVAR\n    unused : BOOL;\nEND_VAR\n    unused := FALSE;\nEND_PROGRAM\n";
+
+    net::Request request;
+    request.method = net::HttpMethod::Post;
+    request.path = "/grade";
+    request.body = "lesson=press-cycle&program=" + form_encode(idle);
+
+    const net::Response response = app::grade_lesson_page(lessons, request);
+
+    CHECK(response.status == 200);
+    CHECK(response.body.find("unused := FALSE;") != std::string::npos);
+    CHECK(response.body.find("<textarea name=\"program\"") != std::string::npos);
+    CHECK(response.body.find("<option value=\"press-cycle\" selected>") != std::string::npos);
+}
+
+TEST(grade_page_keeps_a_program_that_failed_to_compile) {
+    const std::vector<lesson::Lesson> lessons = lesson::make_builtin_lessons();
+    const std::string broken =
+        "PROGRAM Broken\nVAR\n    x : BOOL;\nEND_VAR\n    x := ;\nEND_PROGRAM\n";
+
+    net::Request request;
+    request.method = net::HttpMethod::Post;
+    request.path = "/grade";
+    request.body = "lesson=conveyor-interlock&program=" + form_encode(broken);
+
+    const net::Response response = app::grade_lesson_page(lessons, request);
+
+    CHECK(response.status == 500);
+    CHECK(response.body.find("Could not grade") != std::string::npos);
+    CHECK(response.body.find("x := ;") != std::string::npos);
+    CHECK(response.body.find("Your program is still here") != std::string::npos);
+}
+
+TEST(portal_detects_a_body_that_did_not_arrive_whole) {
+    CHECK(net::request_body_complete("GET / HTTP/1.1\r\n\r\n"));
+    CHECK(net::request_body_complete(
+        "POST /grade HTTP/1.1\r\nContent-Length: 5\r\n\r\nabcde"));
+    CHECK(!net::request_body_complete(
+        "POST /grade HTTP/1.1\r\nContent-Length: 5\r\n\r\nabc"));
+    CHECK(!net::request_body_complete("POST /grade HTTP/1.1\r\nContent-Len"));
+}
+
 TEST(portal_transport_grades_over_a_socket) {
     const std::vector<lesson::Lesson> lessons = lesson::make_builtin_lessons();
     net::PortalRouter router = net::make_default_router(lessons);
