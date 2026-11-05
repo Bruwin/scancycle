@@ -6,8 +6,9 @@
 #include "platform/platform.hpp"
 #include "render/rhi.hpp"
 #include "render/vulkan/vk_renderer.hpp"
-#include "world/mesh.hpp"
-#include "world/voxel_chunk.hpp"
+#include "render/voxel_renderer.hpp"
+#include "world/world.hpp"
+#include "world/worldgen.hpp"
 
 #include <cmath>
 #include <cstdlib>
@@ -74,26 +75,19 @@ int main(int argc, char** argv) {
     std::printf("backend : %s\n", device->backend_name());
     std::printf("window  : %dx%d\n", desc.width, desc.height);
 
-    // A small stand-in world until world generation is wired to the viewer: a
-    // floor with pillars, four by four chunks, so the first frames have geometry.
-    sc::u32 chunks_uploaded = 0;
-    for (sc::u32 cz = 0; cz < 4; ++cz) {
-        for (sc::u32 cx = 0; cx < 4; ++cx) {
-            sc::VoxelChunk chunk;
-            for (int z = 0; z < sc::kChunkSize; ++z) {
-                for (int x = 0; x < sc::kChunkSize; ++x) {
-                    chunk.set(x, 0, z, 1);
-                }
-            }
-            for (int y = 1; y < 12; ++y) {
-                chunk.set(8, y, 8, 2);
-                chunk.set(24, y, 24, 3);
-            }
-            device->upload_chunk_mesh(cx, 0, cz, sc::greedy_mesh(chunk));
-            ++chunks_uploaded;
-        }
-    }
-    std::printf("chunks  : %u\n", chunks_uploaded);
+    // The generated plant, so every chunk the renderer draws came through
+    // World::mesh with its neighbours folded in, instead of from a hand-built
+    // stand-in that could disagree with the mesher.
+    sc::World world;
+    sc::WorldGenParams params;
+    params.seed = 1;
+    params.chunks_x = 4;
+    params.chunks_z = 4;
+    params.pillar_count = 40;
+    sc::generate_plant(world, params);
+    std::printf("chunks  : %zu in the world\n", world.chunk_count());
+
+    sc::VoxelRenderer renderer(*device);
 
     sc::InputState input;
     sc::i64 frames = 0;
@@ -110,17 +104,23 @@ int main(int argc, char** argv) {
         constants.viewport_width = static_cast<sc::u32>(desc.width);
         constants.viewport_height = static_cast<sc::u32>(desc.height);
 
-        // A slow orbit around the test world, so a static screenshot is still
-        // obvious proof that the frame is being redrawn.
+        // A slow orbit around the plant, low enough that the pillars stand out
+        // against the floor; a static screenshot is still obvious proof of a redraw.
         const sc::f32 angle = constants.time_seconds * 0.3f;
-        const sc::Vec3 eye{64.0f + 70.0f * std::cos(angle), 46.0f,
-                           64.0f + 70.0f * std::sin(angle)};
+        const sc::Vec3 eye{55.0f * std::cos(angle), 24.0f, 55.0f * std::sin(angle)};
         const sc::Mat4 view =
-            sc::look_at(eye, sc::Vec3{64.0f, 0.0f, 64.0f}, sc::Vec3{0.0f, 1.0f, 0.0f});
+            sc::look_at(eye, sc::Vec3{0.0f, 0.0f, 0.0f}, sc::Vec3{0.0f, 1.0f, 0.0f});
         const sc::Mat4 projection = sc::perspective(0.9f, 16.0f / 9.0f, 0.1f, 500.0f);
         const sc::Mat4 view_projection = sc::multiply(projection, view);
         std::memcpy(constants.view_projection, view_projection.m,
                     sizeof(constants.view_projection));
+
+        // Residency follows the camera. The radius is in chunks, so a factory
+        // far larger than the ring still costs a bounded amount per frame.
+        const sc::ChunkCoord center =
+            sc::chunk_of(static_cast<sc::i32>(eye.x), 0, static_cast<sc::i32>(eye.z));
+        renderer.stream(world, center, 4);
+        renderer.upload_pending(world, 4);
 
         device->begin_frame(constants);
         device->draw_frame();

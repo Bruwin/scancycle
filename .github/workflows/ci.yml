@@ -66,12 +66,19 @@ jobs:
       - name: Render 90 frames headlessly
         run: |
           set -o pipefail
+          status=0
+          # Captured at a fixed frame, after streaming has settled, so the
+          # reference does not depend on how fast the frame loop happened to run.
           xvfb-run -a -s "-screen 0 1920x1080x24" ./build/bin/scancycle_viewer \
-            --frames 90 --capture render.ppm \
-            --compare-with tests/data/scene_reference.ppm --tolerance 6 | tee render.log
-          grep -Eq "draws [1-9]" render.log
-          grep -Eq "validation errors 0" render.log
+            --frames 90 --capture render.ppm --capture-frame 60 \
+            --compare-with tests/data/scene_reference.ppm --tolerance 6 | tee render.log \
+            || status=$?
+          grep -Eq "draws [1-9]" render.log || status=1
+          grep -Eq "validation errors 0" render.log || status=1
+          # Dumped even when the comparison failed, because that is how the first
+          # reference for a new scene gets recorded.
           echo "=== capture begin ==="
-          base64 -w 100 render.ppm
+          base64 -w 100 render.ppm || true
           echo "=== capture end ==="
+          exit $status
 
