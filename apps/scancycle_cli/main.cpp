@@ -1,5 +1,6 @@
 #include "app/application.hpp"
 #include "app/lesson_runner.hpp"
+#include "app/watch_text.hpp"
 #include "core/deterministic_rng.hpp"
 #include "lesson/lesson.hpp"
 #include "plc/compiler.hpp"
@@ -31,6 +32,7 @@ void print_usage() {
         "  scancycle_cli disasm <program.st>\n"
         "  scancycle_cli bench [--iterations=N]\n"
         "  scancycle_cli trace <program.st> [--scans=N] [--force name=value] [--watch=a,b]\n"
+        "                        [--snapshot]\n"
         "  scancycle_cli lesson [--id=ID] [--seconds=N]\n");
 }
 
@@ -285,6 +287,7 @@ int command_trace(const std::vector<std::string>& args) {
 
     const std::string& path = args[0];
     int scans = 5;
+    bool snapshot_mode = false;
     std::vector<std::string> force_args;
     std::vector<std::string> watch_names;
 
@@ -310,6 +313,8 @@ int command_trace(const std::vector<std::string>& args) {
                 }
                 start = comma + 1;
             }
+        } else if (arg == "--snapshot") {
+            snapshot_mode = true;
         } else {
             std::fprintf(stderr, "unknown option '%s'\n", arg.c_str());
             return 2;
@@ -350,6 +355,20 @@ int command_trace(const std::vector<std::string>& args) {
                 watch_names.push_back(var.name);
             }
         }
+    }
+
+    if (snapshot_mode) {
+        // Machine-readable: one block per scan and nothing else on stdout, so a
+        // pasted trace can be diffed without stripping a banner first.
+        std::fputs(sc::watch_to_text(app.snapshot(watch_names)).c_str(), stdout);
+        for (int i = 1; i <= scans; ++i) {
+            if (!app.step_scan()) {
+                std::fprintf(stderr, "fault at scan %d: %s\n", i, app.error().c_str());
+                return 1;
+            }
+            std::fputs(sc::watch_to_text(app.snapshot(watch_names)).c_str(), stdout);
+        }
+        return 0;
     }
 
     std::printf("cell    : %u devices, %lld ms per scan\n", app.plant().count(),
