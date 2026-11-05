@@ -95,7 +95,9 @@ net::Response ide_page(const IdeSession& session) {
             }
             page += "</td><td>";
             if (tag.forced) {
-                page += "yes";
+                page += tag.force_value ? "TRUE" : "FALSE";
+            } else {
+                page += "-";
             }
             page += "</td><td class=\"no-print\">";
             if (!tag.forceable) {

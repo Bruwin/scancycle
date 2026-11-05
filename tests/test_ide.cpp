@@ -109,6 +109,17 @@ TEST(ide_page_only_offers_forces_for_bound_io_tags) {
     CHECK(response.body.find("not an I/O tag") != std::string::npos);
 }
 
+TEST(ide_page_shows_the_forced_value) {
+    app::IdeSession session(kIdeProgram);
+    CHECK(session.step());
+    CHECK(session.set_force("run_light", false));
+
+    const net::Response response = app::ide_page(session);
+    const std::string row =
+        "<code>run_light</code></td><td>BOOL</td><td>TRUE</td><td>FALSE</td>";
+    CHECK(response.body.find(row) != std::string::npos);
+}
+
 TEST(ide_page_escapes_the_editor_buffer) {
     app::IdeSession session(std::string("(* <script>alert(1)</script> *)\n") + kIdeProgram);
     CHECK(session.compiled());

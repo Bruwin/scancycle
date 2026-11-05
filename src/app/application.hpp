@@ -75,6 +75,7 @@ public:
         bool present = false;  // false when the program has no such variable
         bool forceable = false;  // true when the name is bound to plant I/O
         bool forced = false;
+        bool force_value = false;  // the pinned value, meaningful only when forced
     };
 
     // Reads the named variables out of the program image without changing it.
