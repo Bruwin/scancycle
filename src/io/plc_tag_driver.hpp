@@ -64,8 +64,8 @@ public:
     const char* name() const override { return "libplctag"; }
     std::string last_error() const override { return error_; }
 
-    bool run_scan(i64 now_ms);
-    i64 scans() const { return scans_; }
+    bool run_scan(i64 now_ms) override;
+    i64 scans() const override { return scans_; }
 
 private:
     bool write_outputs_at(i64 now_ms);

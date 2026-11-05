@@ -52,8 +52,8 @@ public:
     std::string last_error() const override { return error_; }
 
     // The scan contract every live driver must share with SimDriver.
-    bool run_scan(i64 now_ms);
-    i64 scans() const { return scans_; }
+    bool run_scan(i64 now_ms) override;
+    i64 scans() const override { return scans_; }
 
 private:
     u16 next_transaction();
