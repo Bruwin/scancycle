@@ -110,9 +110,13 @@ std::string page_head(std::string_view title) {
 }
 
 std::string lesson_form(const std::vector<lesson::Lesson>& lessons, std::string_view selected,
-                        std::string_view program) {
+                        std::string_view program, std::string_view student) {
     std::string form =
         "<form method=\"post\" action=\"/grade\">"
+        "<p><label>Name or initials "
+        "<input type=\"text\" name=\"student\" maxlength=\"80\" value=\"" +
+        html_escape(student) +
+        "\"></label></p>"
         "<p><label>Lesson <select name=\"lesson\">";
     for (const lesson::Lesson& lesson : lessons) {
         form += "<option value=\"" + html_escape(lesson.id) + "\"";
@@ -149,7 +153,7 @@ std::string catalog_page(const std::vector<lesson::Lesson>& lessons) {
     }
 
     page += "</tbody></table><h2 class=\"no-print\">Grade a program</h2>";
-    page += lesson_form(lessons, "", "");
+    page += lesson_form(lessons, "", "", "");
     page += "<p class=\"no-print\"><a href=\"/api/lessons\">JSON catalog</a></p>"
             "</main></body></html>";
     return page;
@@ -268,7 +272,7 @@ std::string lesson_page(const lesson::Lesson& lesson, const std::vector<lesson::
                 html_escape(rule_text(check, lesson.starting_plant)) + "</td></tr>";
     }
     page += "</tbody></table><h2>Submit a program</h2>";
-    page += lesson_form(lessons, lesson.id, "");
+    page += lesson_form(lessons, lesson.id, "", "");
     page += "</main></body></html>";
     return page;
 }

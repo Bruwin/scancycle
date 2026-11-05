@@ -430,3 +430,57 @@ TEST(grade_log_reads_a_line_from_before_checks_were_stored) {
 
     std::filesystem::remove(path);
 }
+
+TEST(grade_log_keeps_the_student_name) {
+    const std::filesystem::path path =
+        std::filesystem::temp_directory_path() / "scancycle-grade-log-student.tsv";
+    std::filesystem::remove(path);
+    app::GradeLog log(path.string());
+    std::string error;
+
+    app::GradeRecord record;
+    record.at = 1700000003;
+    record.lesson_id = "press-batch";
+    record.passed = true;
+    record.passed_count = 1;
+    record.total = 1;
+    record.student = "Ada, 2B\nLovelace";
+    CHECK(log.append(record, error));
+
+    // The name rides in the last field, so a name holding a comma or a newline
+    // cannot split one attempt across lines.
+    std::size_t lines = 0;
+    {
+        std::ifstream file(path);
+        std::string line;
+        while (std::getline(file, line)) {
+            ++lines;
+        }
+    }
+    CHECK(lines == 1);
+
+    const std::vector<app::GradeRecord> entries = log.entries(error);
+    CHECK(entries.size() == 1);
+    CHECK(entries[0].student == "Ada, 2B\nLovelace");
+    CHECK(entries[0].checks.empty());
+
+    std::filesystem::remove(path);
+}
+
+TEST(grade_log_reads_a_row_written_before_students_were_stored) {
+    const std::filesystem::path path =
+        std::filesystem::temp_directory_path() / "scancycle-grade-log-no-student.tsv";
+    {
+        std::ofstream file(path, std::ios::trunc);
+        file << "1700000000\tpress-batch\t1\t1\t1\t\t1,Output%20on,motor%20on\n";
+    }
+
+    app::GradeLog log(path.string());
+    std::string error;
+    const std::vector<app::GradeRecord> entries = log.entries(error);
+    CHECK(entries.size() == 1);
+    CHECK(entries[0].student.empty());
+    CHECK(entries[0].checks.size() == 1);
+
+    std::filesystem::remove(path);
+}

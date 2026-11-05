@@ -193,9 +193,9 @@ and `POST /grade` renders the same run as a page for the catalog's form.
 submits. The toolbox is enforced against the compiled program: a submission
 using an instruction the lesson withholds comes back as a report whose first row
 names the withheld instruction and whose remaining rows say "not run", rather
-than as a transport error. Graded attempts, their per-check reports and the
-submitted program are appended to a tab-separated log the server names at
-startup; `GET /grades` lists them newest first, above them a per-lesson pass rate
+than as a transport error. Graded attempts, their per-check reports, the
+submitted program and the student's name, when one was given, are appended to
+a tab-separated log the server names at startup; `GET /grades` lists them newest first, above them a per-lesson pass rate
 and the rubric rows the class misses most, `GET /grades/<n>` reopens one attempt
 in full, and `GET /grades.csv` exports one row per attempt for a gradebook.
 `?lesson=<id>` narrows the log and the export to a single lesson. The stylesheet carries print rules, so the log, an attempt and

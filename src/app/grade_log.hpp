@@ -27,6 +27,8 @@ struct GradeRecord {
     std::size_t passed_count = 0;
     std::size_t total = 0;
     std::string program;  // what was submitted; empty means the reference
+    // Who submitted it, when the form supplied a name; empty means unnamed.
+    std::string student;
     // The report behind the counts. Rows written before checks were stored carry
     // none, which is why the counts are kept separately instead of derived.
     std::vector<GradeCheck> checks;

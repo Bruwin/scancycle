@@ -18,6 +18,7 @@ struct GradeOutcome {
     std::string error;
     std::string wanted_lesson;
     std::string program;
+    std::string student;
     lesson::GradeReport report;
     const lesson::Lesson* lesson = nullptr;
 };
@@ -31,6 +32,7 @@ GradeOutcome grade_submission(const std::vector<lesson::Lesson>& lessons,
     GradeOutcome outcome;
     outcome.wanted_lesson = net::form_field(request.body, "lesson");
     outcome.program = net::form_field(request.body, "program");
+    outcome.student = net::form_field(request.body, "student");
 
     if (outcome.wanted_lesson.empty()) {
         outcome.status = 400;
@@ -75,6 +77,7 @@ void record_if_asked(const GradeOutcome& outcome, GradeLog* log) {
     record.passed_count = outcome.report.passed_count;
     record.total = outcome.report.checks.size();
     record.program = outcome.program;
+    record.student = outcome.student;
     // The report, not just its score: a teacher reopening last week's attempt
     // needs to see which assertion missed and what the plant did.
     record.checks.reserve(record.total);
@@ -113,7 +116,11 @@ std::string report_page(const GradeOutcome& outcome, const std::vector<lesson::L
         page += std::to_string(report.passed_count) + " of " +
                 std::to_string(report.checks.size()) + " checks passed.";
     }
-    page += "</p><table><thead><tr><th>Check</th><th>Result</th><th>Detail</th></tr>"
+    page += "</p>";
+    if (!outcome.student.empty()) {
+        page += "<p>Submitted by <code>" + net::html_escape(outcome.student) + "</code>.</p>";
+    }
+    page += "<table><thead><tr><th>Check</th><th>Result</th><th>Detail</th></tr>"
             "</thead><tbody>";
 
     for (const lesson::CheckResult& check : report.checks) {
@@ -123,7 +130,7 @@ std::string report_page(const GradeOutcome& outcome, const std::vector<lesson::L
     }
 
     page += "</tbody></table><h2 class=\"no-print\">Edit and grade again</h2>";
-    page += net::lesson_form(lessons, report.lesson_id, outcome.program);
+    page += net::lesson_form(lessons, report.lesson_id, outcome.program, outcome.student);
     page += "<p class=\"no-print\"><a href=\"/\">Grade another lesson</a></p>"
             "</main></body></html>";
     return page;
@@ -135,7 +142,7 @@ std::string error_page(const GradeOutcome& outcome, const std::vector<lesson::Le
     std::string page = net::page_head("Scan Cycle grade");
     page += "<h1>Could not grade</h1><p>" + net::html_escape(outcome.error) + "</p>";
     page += "<h2>Your program is still here</h2>";
-    page += net::lesson_form(lessons, outcome.wanted_lesson, outcome.program);
+    page += net::lesson_form(lessons, outcome.wanted_lesson, outcome.program, outcome.student);
     page += "<p class=\"no-print\"><a href=\"/\">Back to the catalog</a></p>"
             "</main></body></html>";
     return page;

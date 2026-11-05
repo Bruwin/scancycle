@@ -973,6 +973,7 @@ TEST(grades_csv_exports_one_row_per_attempt) {
     app::GradeRecord pass;
     pass.at = 1700000000;
     pass.lesson_id = "press-batch";
+    pass.student = "Ada, 2B";
     pass.passed = true;
     pass.passed_count = 1;
     pass.total = 1;
@@ -992,7 +993,8 @@ TEST(grades_csv_exports_one_row_per_attempt) {
     const net::Response csv = app::grades_csv(log);
     CHECK(csv.status == 200);
     CHECK(csv.content_type.rfind("text/csv", 0) == 0);
-    CHECK(csv.body.rfind("attempt,when_utc,lesson,result,passed,total,missed_checks\n", 0) == 0);
+    CHECK(csv.body.rfind("attempt,when_utc,student,lesson,result,passed,total,missed_checks\n",
+                         0) == 0);
 
     std::size_t lines = 0;
     for (const char character : csv.body) {
@@ -1000,8 +1002,10 @@ TEST(grades_csv_exports_one_row_per_attempt) {
     }
     CHECK(lines == 3);
 
-    CHECK(csv.body.find("1,2023-11-14 22:13,press-batch,pass,1,1,\n") != std::string::npos);
-    CHECK(csv.body.find("2,2023-11-14 22:14,conveyor-interlock,fail,1,3,") !=
+    // The named attempt quotes its name; the unnamed one leaves the cell empty.
+    CHECK(csv.body.find("1,2023-11-14 22:13,\"Ada, 2B\",press-batch,pass,1,1,\n") !=
+          std::string::npos);
+    CHECK(csv.body.find("2,2023-11-14 22:14,,conveyor-interlock,fail,1,3,") !=
           std::string::npos);
     // Commas, quotes and line breaks survive inside one quoted cell, and the
     // passed check is left out of the missed list.
@@ -1018,7 +1022,8 @@ TEST(grades_csv_is_only_the_header_when_nothing_was_recorded) {
 
     const net::Response csv = app::grades_csv(log);
     CHECK(csv.status == 200);
-    CHECK(csv.body == "attempt,when_utc,lesson,result,passed,total,missed_checks\n");
+    CHECK(csv.body ==
+          "attempt,when_utc,student,lesson,result,passed,total,missed_checks\n");
 
     std::filesystem::remove(path);
 }
@@ -1033,6 +1038,7 @@ TEST(grades_page_narrows_to_one_lesson) {
     app::GradeRecord first;
     first.at = 1700000000;
     first.lesson_id = "press-batch";
+    first.student = "Ada";
     first.passed = true;
     first.passed_count = 1;
     first.total = 1;
@@ -1066,6 +1072,9 @@ TEST(grades_page_narrows_to_one_lesson) {
     CHECK(filtered.body.find("href=\"/grades/3\"") != std::string::npos);
     CHECK(filtered.body.find("href=\"/grades/1\"") != std::string::npos);
     CHECK(filtered.body.find("href=\"/grades/2\"") == std::string::npos);
+    CHECK(filtered.body.find("<td>Ada</td>") != std::string::npos);
+    CHECK(app::attempt_page(log, "1").body.find("student <code>Ada</code>") !=
+          std::string::npos);
 
     // Without the field the page still shows everything.
     const net::Response all = app::grades_page(log);
@@ -1118,6 +1127,35 @@ TEST(grades_csv_exports_one_lesson_and_keeps_ordinals) {
         CHECK(lines[1].find("press-batch") != std::string::npos);
         CHECK(lines[2].rfind("3,", 0) == 0);
         CHECK(lines[2].find("press-batch") != std::string::npos);
+    }
+
+    std::filesystem::remove(path);
+}
+
+TEST(grades_carry_the_student_name_from_the_form) {
+    const std::vector<lesson::Lesson> lessons = lesson::make_builtin_lessons();
+    const std::filesystem::path path =
+        std::filesystem::temp_directory_path() / "scancycle-student-log-test.tsv";
+    std::filesystem::remove(path);
+    app::GradeLog log(path.string());
+
+    net::Request request;
+    request.method = net::HttpMethod::Post;
+    request.body = "lesson=press-batch&student=Ada+Lovelace";
+
+    const net::Response page = app::grade_lesson_page(lessons, request, &log);
+    CHECK(page.status == 200);
+    CHECK(page.body.find("Submitted by <code>Ada Lovelace</code>") != std::string::npos);
+    // The form keeps the name, so grading again does not make the student anonymous.
+    CHECK(page.body.find("value=\"Ada Lovelace\"") != std::string::npos);
+
+    std::string error;
+    const std::vector<app::GradeRecord> records = log.entries(error);
+    CHECK(records.size() == 1);
+    if (records.size() == 1) {
+        CHECK(records[0].student == "Ada Lovelace");
+        CHECK(records[0].lesson_id == "press-batch");
+        CHECK(records[0].program.empty());
     }
 
     std::filesystem::remove(path);

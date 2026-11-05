@@ -49,7 +49,7 @@ net::Response grades_csv(const GradeLog& log, std::string_view lesson) {
     std::string error;
     const std::vector<GradeRecord> records = log.entries(error);
 
-    std::string csv = "attempt,when_utc,lesson,result,passed,total,missed_checks\n";
+    std::string csv = "attempt,when_utc,student,lesson,result,passed,total,missed_checks\n";
     for (std::size_t index = 0; index < records.size(); ++index) {
         const GradeRecord& record = records[index];
         if (!lesson.empty() && record.lesson_id != lesson) {
@@ -67,7 +67,8 @@ net::Response grades_csv(const GradeLog& log, std::string_view lesson) {
         }
 
         csv += std::to_string(index + 1) + "," + csv_field(format_utc_minutes(record.at)) + "," +
-               csv_field(record.lesson_id) + "," + (record.passed ? "pass" : "fail") + "," +
+               csv_field(record.student) + "," + csv_field(record.lesson_id) + "," +
+               (record.passed ? "pass" : "fail") + "," +
                std::to_string(record.passed_count) + "," + std::to_string(record.total) + "," +
                csv_field(missed) + "\n";
     }

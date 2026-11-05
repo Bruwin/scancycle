@@ -127,7 +127,9 @@ std::string format_grade_record(const GradeRecord& record) {
     line += std::to_string(record.total);
     line += kFieldSeparator;
     line += encode_field(record.program);
-    if (!record.checks.empty()) {
+    // The name is an eighth field, written after the checks so a row from before
+    // names existed still parses. An unnamed attempt with checks stays at seven.
+    if (!record.checks.empty() || !record.student.empty()) {
         line += kFieldSeparator;
         for (std::size_t i = 0; i < record.checks.size(); ++i) {
             if (i != 0) {
@@ -141,14 +143,19 @@ std::string format_grade_record(const GradeRecord& record) {
             line += encode_field(check.detail);
         }
     }
+    if (!record.student.empty()) {
+        line += kFieldSeparator;
+        line += encode_field(record.student);
+    }
     return line;
 }
 
 bool parse_grade_record(std::string_view line, GradeRecord& out) {
     const std::vector<std::string_view> fields = split_on(line, kFieldSeparator);
-    // Six fields is a record from before per-check detail was stored. Those
-    // still open; they just cannot show the rubric.
-    if (fields.size() != 6 && fields.size() != 7) {
+    // Six fields is a record from before per-check detail was stored, and seven
+    // from before a student name was. Both still open; they just cannot show
+    // what they never kept.
+    if (fields.size() < 6 || fields.size() > 8) {
         return false;
     }
 
@@ -171,8 +178,12 @@ bool parse_grade_record(std::string_view line, GradeRecord& out) {
     out.total = total;
     out.program = decode_field(fields[5]);
     out.checks.clear();
-    if (fields.size() == 7 && !parse_checks(fields[6], out.checks)) {
+    if (fields.size() >= 7 && !parse_checks(fields[6], out.checks)) {
         return false;
+    }
+    out.student.clear();
+    if (fields.size() == 8) {
+        out.student = decode_field(fields[7]);
     }
     return true;
 }

@@ -203,9 +203,9 @@ net::Response grades_page(const GradeLog& log, std::string_view lesson) {
         page += lesson_summary(shown);
         page += missed_checks(shown);
         page += "<h2>Attempts</h2>";
-        page += "<table><thead><tr><th>When (UTC)</th><th>Lesson</th><th>Result</th>"
-                "<th>Checks</th><th>Program</th><th class=\"no-print\">Report</th>"
-                "</tr></thead><tbody>";
+        page += "<table><thead><tr><th>When (UTC)</th><th>Student</th><th>Lesson</th>"
+                "<th>Result</th><th>Checks</th><th>Program</th>"
+                "<th class=\"no-print\">Report</th></tr></thead><tbody>";
         // Newest first, but the ordinal is the record's place in the file, so a
         // link keeps pointing at the same attempt as more are appended. A filter
         // hides rows, it does not renumber them.
@@ -214,8 +214,11 @@ net::Response grades_page(const GradeLog& log, std::string_view lesson) {
             if (!lesson.empty() && record.lesson_id != lesson) {
                 continue;
             }
-            page += "<tr><td>" + format_utc_minutes(record.at) + "</td><td><code>" +
-                    net::html_escape(record.lesson_id) + "</code></td><td class=\"" +
+            const std::string who =
+                record.student.empty() ? std::string("-") : net::html_escape(record.student);
+            page += "<tr><td>" + format_utc_minutes(record.at) + "</td><td>" + who +
+                    "</td><td><code>" + net::html_escape(record.lesson_id) +
+                    "</code></td><td class=\"" +
                     (record.passed ? "pass\">pass" : "fail\">fail") + "</td><td>" +
                     std::to_string(record.passed_count) + " of " + std::to_string(record.total) +
                     "</td><td>" +
@@ -258,8 +261,11 @@ net::Response attempt_page(const GradeLog& log, std::string_view ordinal) {
     page += "<p class=\"no-print\"><a href=\"/grades\">Scan Cycle class log</a></p>";
     page += "<h1>Graded attempt</h1>";
     page += "<p>Attempt " + std::to_string(wanted) + " of " + std::to_string(records.size()) +
-            "; lesson <code>" + net::html_escape(record.lesson_id) + "</code>; " +
-            format_utc_minutes(record.at) + " UTC.</p>";
+            "; lesson <code>" + net::html_escape(record.lesson_id) + "</code>";
+    if (!record.student.empty()) {
+        page += "; student <code>" + net::html_escape(record.student) + "</code>";
+    }
+    page += "; " + format_utc_minutes(record.at) + " UTC.</p>";
     page += "<p>Result: <span class=\"";
     page += record.passed ? "pass\">pass" : "fail\">fail";
     page += "</span>; " + std::to_string(record.passed_count) + " of " +

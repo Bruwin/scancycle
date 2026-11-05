@@ -65,10 +65,12 @@ std::string html_escape(std::string_view text);
 // catalog, a lesson and a grade look like one product.
 std::string page_head(std::string_view title);
 
-// The one lesson form. The catalog renders it empty; the grade page renders
-// it with the submission, so a program is never lost between attempts.
+// The one lesson form. The catalog renders it empty; the grade page renders it
+// with the submission, so neither a program nor the name on it is lost between
+// attempts. The student field is optional: an unnamed attempt is still graded.
 std::string lesson_form(const std::vector<lesson::Lesson>& lessons,
-                        std::string_view selected, std::string_view program);
+                        std::string_view selected, std::string_view program,
+                        std::string_view student);
 
 PortalRouter make_default_router(const std::vector<lesson::Lesson>& lessons);
 
