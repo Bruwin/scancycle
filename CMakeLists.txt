@@ -117,6 +117,7 @@ endif()
 add_library(sc_app
     src/app/grade_log.cpp
     src/app/grades_page.cpp
+    src/app/grades_pager.cpp
     src/app/grades_csv.cpp
     src/app/grades_students.cpp
     src/app/application.cpp

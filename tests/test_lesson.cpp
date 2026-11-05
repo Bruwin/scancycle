@@ -3,6 +3,7 @@
 #include "app/grade_log.hpp"
 #include "app/grades_csv.hpp"
 #include "app/grades_page.hpp"
+#include "app/grades_pager.hpp"
 #include "app/lesson_runner.hpp"
 #include "lesson/grader.hpp"
 #include "app/lesson_api.hpp"
@@ -1397,4 +1398,89 @@ TEST(grade_again_from_a_filtered_report_returns_to_the_filtered_log) {
     const net::Response plain = app::grade_lesson_page(lessons, bare);
     CHECK(plain.body.find("Back to the filtered class log") == std::string::npos);
     CHECK(plain.body.find("action=\"/grade\"") != std::string::npos);
+}
+
+TEST(attempt_paging_counts_and_links_keep_the_filter) {
+    CHECK(app::attempt_page_count(0) == 1);
+    CHECK(app::attempt_page_count(1) == 1);
+    CHECK(app::attempt_page_count(app::kAttemptsPerPage) == 1);
+    CHECK(app::attempt_page_count(app::kAttemptsPerPage + 1) == 2);
+    CHECK(app::attempt_page_count(app::kAttemptsPerPage * 2) == 2);
+    CHECK(app::attempt_page_count(app::kAttemptsPerPage * 2 + 1) == 3);
+
+    CHECK(app::log_page_href(1, "", "") == "/grades");
+    CHECK(app::log_page_href(2, "", "") == "/grades?page=2");
+    CHECK(app::log_page_href(2, "press-batch", "Ada") ==
+          "/grades?lesson=press-batch&student=Ada&page=2");
+    CHECK(app::log_page_href(1, "", "Ada Lovelace") == "/grades?student=Ada%20Lovelace");
+
+    CHECK(app::attempt_pager(1, 1, "", "").empty());
+    CHECK(app::attempt_pager(1, 2, "", "").find("Page 1 of 2") != std::string::npos);
+    CHECK(app::attempt_pager(2, 2, "", "").find("href=\"/grades\"") != std::string::npos);
+
+    CHECK(app::parse_attempt_page("") == 1);
+    CHECK(app::parse_attempt_page("0") == 1);
+    CHECK(app::parse_attempt_page("7") == 7);
+    CHECK(app::parse_attempt_page("2x") == 1);
+}
+
+TEST(grades_page_browses_a_long_log_a_page_at_a_time) {
+    const std::filesystem::path path =
+        std::filesystem::temp_directory_path() / "scancycle-grades-paging.tsv";
+    std::filesystem::remove(path);
+    app::GradeLog log(path.string());
+    std::string error;
+
+    for (int attempt = 0; attempt < 30; ++attempt) {
+        app::GradeRecord record;
+        record.at = 1700000000 + attempt * 60;
+        record.lesson_id = "press-batch";
+        record.student = "Ada";
+        record.passed = true;
+        record.passed_count = 1;
+        record.total = 1;
+        CHECK(log.append(record, error));
+    }
+
+    // Page one holds the oldest 25 records, shown newest first: 25 down to 1.
+    const net::Response first = app::grades_page(log);
+    CHECK(first.body.find("Page 1 of 2") != std::string::npos);
+    CHECK(first.body.find("href=\"/grades/25\"") != std::string::npos);
+    CHECK(first.body.find("href=\"/grades/1\"") != std::string::npos);
+    CHECK(first.body.find("href=\"/grades/26\"") == std::string::npos);
+    CHECK(first.body.find("href=\"/grades?page=2\"") != std::string::npos);
+
+    const net::Response second = app::grades_page(log, "", "", 2);
+    CHECK(second.body.find("Page 2 of 2") != std::string::npos);
+    CHECK(second.body.find("href=\"/grades/30\"") != std::string::npos);
+    CHECK(second.body.find("href=\"/grades/26\"") != std::string::npos);
+    CHECK(second.body.find("href=\"/grades/25\"") == std::string::npos);
+    CHECK(second.body.find("href=\"/grades\"") != std::string::npos);
+    // The summaries still describe all 30, not the five on this page.
+    CHECK(second.body.find("<td><a href=\"/grades?student=Ada\">Ada</a></td><td>30</td>") !=
+          std::string::npos);
+
+    // A filter rides on both the page links and the report links.
+    const net::Response narrowed = app::grades_page(log, "press-batch", "Ada");
+    CHECK(narrowed.body.find("href=\"/grades?lesson=press-batch&student=Ada&page=2\"") !=
+          std::string::npos);
+    CHECK(narrowed.body.find("href=\"/grades/25?lesson=press-batch&student=Ada\"") !=
+          std::string::npos);
+
+    // A page past the end is the last page, not an empty one.
+    const net::Response clamped = app::grades_page(log, "", "", 99);
+    CHECK(clamped.body.find("Page 2 of 2") != std::string::npos);
+    CHECK(clamped.body.find("href=\"/grades/30\"") != std::string::npos);
+
+    // The export is never paged: a term's gradebook must not shrink to one page.
+    const net::Response csv = app::grades_csv(log);
+    std::size_t lines = 0;
+    for (const char character : csv.body) {
+        if (character == '\n') {
+            ++lines;
+        }
+    }
+    CHECK(lines == 31);
+
+    std::filesystem::remove(path);
 }

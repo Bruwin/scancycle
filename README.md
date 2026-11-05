@@ -146,6 +146,9 @@ curl -s "http://127.0.0.1:8080/grades?lesson=press-batch"
 # One student only, alone or combined with the lesson filter
 curl -s "http://127.0.0.1:8080/grades?student=Ada"
 
+# The attempt table shows 25 rows at a time; page links keep the filter
+curl -s "http://127.0.0.1:8080/grades?student=Ada&page=2"
+
 # A name on the submission travels into the log, the pages and the CSV
 curl -s -X POST -d "lesson=press-batch&student=Ada" http://127.0.0.1:8080/grade
 

@@ -4,6 +4,7 @@
 #include "app/grade_log.hpp"
 #include "net/portal_server.hpp"
 
+#include <cstddef>
 #include <string_view>
 
 namespace sc::app {
@@ -11,9 +12,12 @@ namespace sc::app {
 // `lesson` and `student` are the query fields of the same names. Empty means
 // unfiltered; both empty shows the whole log, and both given narrows to that
 // student's attempts at that lesson. A value nobody attempted is an empty page,
-// not a 404: the log itself exists and the query is well formed.
+// not a 404: the log itself exists and the query is well formed. `page` is the
+// 1-based `page` field: it slices the attempt table only, while the summaries and
+// the CSV keep describing the whole filtered set. A page past the end shows the
+// last one.
 net::Response grades_page(const GradeLog& log, std::string_view lesson = {},
-                          std::string_view student = {});
+                          std::string_view student = {}, std::size_t page = 1);
 
 // One recorded attempt with its full report, for the page a teacher prints.
 // `ordinal` is the suffix of /grades/<n>, counted from 1 in file order; anything

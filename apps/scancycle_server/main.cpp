@@ -1,12 +1,14 @@
 #include "app/grade_log.hpp"
 #include "app/grades_csv.hpp"
 #include "app/grades_page.hpp"
+#include "app/grades_pager.hpp"
 #include "app/lesson_api.hpp"
 #include "lesson/lesson.hpp"
 #include "net/http.hpp"
 #include "net/http_server.hpp"
 #include "net/portal_server.hpp"
 
+#include <cstddef>
 #include <cstdio>
 #include <cstdlib>
 #include <string>
@@ -64,7 +66,9 @@ int main(int argc, char** argv) {
                  [&grade_log](const sc::net::Request& request) {
                      const std::string lesson = sc::net::form_field(request.query, "lesson");
                      const std::string student = sc::net::form_field(request.query, "student");
-                     return sc::app::grades_page(grade_log, lesson, student);
+                     const std::size_t page = sc::app::parse_attempt_page(
+                         sc::net::form_field(request.query, "page"));
+                     return sc::app::grades_page(grade_log, lesson, student, page);
                  });
 
     router.route(sc::net::HttpMethod::Get, "/grades.csv",

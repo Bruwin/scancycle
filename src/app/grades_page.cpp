@@ -1,5 +1,6 @@
 #include "app/grades_page.hpp"
 
+#include "app/grades_pager.hpp"
 #include "app/grades_query.hpp"
 #include "app/grades_students.hpp"
 #include "app/grades_time.hpp"
@@ -140,7 +141,8 @@ std::string missed_checks(const std::vector<const GradeRecord*>& records) {
 
 }  // namespace
 
-net::Response grades_page(const GradeLog& log, std::string_view lesson, std::string_view student) {
+net::Response grades_page(const GradeLog& log, std::string_view lesson, std::string_view student,
+                          std::size_t page_number) {
     std::string error;
     const std::vector<GradeRecord> records = log.entries(error);
 
@@ -192,24 +194,29 @@ net::Response grades_page(const GradeLog& log, std::string_view lesson, std::str
         const std::string query = filter_query(lesson, student);
         const std::string csv_href = query.empty() ? std::string("/grades.csv")
                                                    : "/grades.csv?" + query;
+        // Paging slices the table only. The summaries still count every filtered
+        // attempt, because a rate that changes per page is not a rate.
+        const std::size_t pages = attempt_page_count(shown.size());
+        const std::size_t current = page_number == 0 ? 1 : std::min(page_number, pages);
+        const std::size_t first = (current - 1) * kAttemptsPerPage;
+        const std::size_t stop = std::min(first + kAttemptsPerPage, shown.size());
         page += "<p class=\"no-print\"><a href=\"" + csv_href +
                 "\" download>Download as CSV</a></p>";
         page += lesson_summary(shown);
         page += student_summary(shown);
         page += missed_checks(shown);
         page += "<h2>Attempts</h2>";
+        page += attempt_pager(current, pages, lesson, student);
         page += "<table><thead><tr><th>When (UTC)</th><th>Student</th><th>Lesson</th>"
                 "<th>Result</th><th>Checks</th><th>Program</th>"
                 "<th class=\"no-print\">Report</th></tr></thead><tbody>";
         // Newest first, but the ordinal is the record's place in the file, so a
         // link keeps pointing at the same attempt as more are appended. A filter
-        // hides rows, it does not renumber them.
-        for (std::size_t index = records.size(); index-- > 0;) {
-            const GradeRecord& record = records[index];
-            if ((!lesson.empty() && record.lesson_id != lesson) ||
-                (!student.empty() && record.student != student)) {
-                continue;
-            }
+        // hides rows and a page slices them; neither renumbers anything.
+        for (std::size_t offset = stop; offset-- > first;) {
+            const GradeRecord& record = *shown[offset];
+            const std::size_t ordinal =
+                static_cast<std::size_t>(&record - records.data()) + 1;
             const std::string who =
                 record.student.empty() ? std::string("-") : net::html_escape(record.student);
             page += "<tr><td>" + format_utc_minutes(record.at) + "</td><td>" + who +
@@ -222,7 +229,7 @@ net::Response grades_page(const GradeLog& log, std::string_view lesson, std::str
                          ? std::string("reference")
                          : std::to_string(record.program.size()) + " bytes") +
                     "</td><td class=\"no-print\"><a href=\"/grades/" +
-                    std::to_string(index + 1) +
+                    std::to_string(ordinal) +
                     (query.empty() ? std::string() : "?" + query) + "\">report</a></td></tr>";
         }
         page += "</tbody></table>";
