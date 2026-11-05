@@ -3,6 +3,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <ctime>
+#include <map>
 #include <string>
 #include <utility>
 #include <vector>
@@ -47,6 +48,48 @@ bool parse_ordinal(std::string_view text, std::size_t& out) {
     return true;
 }
 
+struct LessonTally {
+    std::size_t attempts = 0;
+    std::size_t passed = 0;
+    std::int64_t latest_at = 0;
+    bool latest_passed = false;
+};
+
+// A teacher scanning a term's log wants the class, not the file: how each lesson
+// is going and whether anyone has touched it lately. Ordered by lesson id so the
+// table does not shuffle between page loads. The rate is a whole percentage,
+// rounded down, because "33%" is what a person reads off three attempts.
+std::string lesson_summary(const std::vector<GradeRecord>& records) {
+    std::map<std::string, LessonTally> tallies;
+    for (const GradeRecord& record : records) {
+        LessonTally& tally = tallies[record.lesson_id];
+        ++tally.attempts;
+        if (record.passed) {
+            ++tally.passed;
+        }
+        // Records arrive oldest first, so an equal timestamp means the later
+        // submission is the latest one.
+        if (record.at >= tally.latest_at) {
+            tally.latest_at = record.at;
+            tally.latest_passed = record.passed;
+        }
+    }
+
+    std::string table =
+        "<h2>By lesson</h2><table><thead><tr><th>Lesson</th><th>Attempts</th>"
+        "<th>Passed</th><th>Pass rate</th><th>Latest</th></tr></thead><tbody>";
+    for (const auto& [lesson_id, tally] : tallies) {
+        const std::size_t rate = tally.passed * 100 / tally.attempts;
+        table += "<tr><td><code>" + net::html_escape(lesson_id) + "</code></td><td>" +
+                 std::to_string(tally.attempts) + "</td><td>" + std::to_string(tally.passed) +
+                 "</td><td>" + std::to_string(rate) + "%</td><td>" +
+                 format_time(tally.latest_at) + " <span class=\"";
+        table += tally.latest_passed ? "pass\">pass" : "fail\">fail";
+        table += "</span></td></tr>";
+    }
+    return table + "</tbody></table>";
+}
+
 }  // namespace
 
 net::Response grades_page(const GradeLog& log) {
@@ -63,6 +106,8 @@ net::Response grades_page(const GradeLog& log) {
     if (records.empty()) {
         page += "<p>No graded attempts yet.</p>";
     } else {
+        page += lesson_summary(records);
+        page += "<h2>Attempts</h2>";
         page += "<table><thead><tr><th>When (UTC)</th><th>Lesson</th><th>Result</th>"
                 "<th>Checks</th><th>Program</th><th class=\"no-print\">Report</th>"
                 "</tr></thead><tbody>";

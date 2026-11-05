@@ -691,6 +691,48 @@ TEST(grades_page_lists_the_newest_attempt_first) {
     std::filesystem::remove(path);
 }
 
+TEST(grades_page_summarises_each_lesson) {
+    const std::filesystem::path path =
+        std::filesystem::temp_directory_path() / "scancycle-grades-summary-test.tsv";
+    std::filesystem::remove(path);
+    app::GradeLog log(path.string());
+    std::string error;
+
+    const auto append = [&log, &error](std::int64_t at, const std::string& id, bool passed) {
+        app::GradeRecord record;
+        record.at = at;
+        record.lesson_id = id;
+        record.passed = passed;
+        record.passed_count = passed ? 1 : 0;
+        record.total = 1;
+        return log.append(record, error);
+    };
+
+    CHECK(append(1700000000, "press-batch", true));
+    CHECK(append(1700000060, "press-batch", false));
+    CHECK(append(1700000120, "conveyor-interlock", false));
+    CHECK(append(1700000180, "press-batch", false));
+
+    const net::Response page = app::grades_page(log);
+    CHECK(page.status == 200);
+
+    // Three attempts, one pass: a whole percentage, rounded down.
+    CHECK(page.body.find("<td><code>press-batch</code></td><td>3</td><td>1</td><td>33%</td>") !=
+          std::string::npos);
+    CHECK(page.body.find("<td><code>conveyor-interlock</code></td><td>1</td><td>0</td>"
+                         "<td>0%</td>") != std::string::npos);
+
+    // The latest attempt is the newest record even when it failed.
+    const std::size_t press = page.body.find("<td><code>press-batch</code></td><td>3</td>");
+    CHECK(press != std::string::npos);
+    CHECK(page.body.find("class=\"fail\">fail", press) != std::string::npos);
+
+    // The summary comes before the attempt list.
+    CHECK(page.body.find("By lesson") < page.body.find("Attempts</h2>"));
+
+    std::filesystem::remove(path);
+}
+
 TEST(grades_page_says_so_when_nothing_was_recorded) {
     const std::filesystem::path path =
         std::filesystem::temp_directory_path() / "scancycle-grades-empty-test.tsv";
