@@ -92,8 +92,19 @@ bool Application::initialize() {
     }
 
     vm_ = std::make_unique<plc::Vm>(program_);
-    driver_ = std::make_unique<io::SimDriver>(plant_, tags_, *vm_);
-    driver_->set_forces(&forces_);
+    if (config_.driver_factory) {
+        driver_ = config_.driver_factory(*vm_);
+        if (!driver_) {
+            error_ = "the configured driver could not be created";
+            return false;
+        }
+        sim_driver_ = nullptr;
+    } else {
+        auto sim = std::make_unique<io::SimDriver>(plant_, tags_, *vm_);
+        sim->set_forces(&forces_);
+        sim_driver_ = sim.get();
+        driver_ = std::move(sim);
+    }
     if (!driver_->connect()) {
         error_ = driver_->last_error();
         return false;
@@ -152,6 +163,10 @@ bool Application::step_scan() {
 bool Application::set_force(std::string name, bool value) {
     if (!driver_) {
         error_ = "application is not initialised";
+        return false;
+    }
+    if (sim_driver_ == nullptr) {
+        error_ = "forces are only available on the simulated driver";
         return false;
     }
     if (tags_.find(name) < 0) {

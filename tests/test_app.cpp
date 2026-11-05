@@ -3,10 +3,14 @@
 #include "app/application.hpp"
 #include "app/grade_log.hpp"
 #include "app/watch_text.hpp"
+#include "io/commissioning.hpp"
+#include "io/df1_driver.hpp"
+#include "io/df1_slave.hpp"
 #include "lesson/lesson.hpp"
 
 #include <filesystem>
 #include <fstream>
+#include <memory>
 #include <string>
 #include <utility>
 #include <vector>
@@ -22,6 +26,15 @@ VAR
     motor_fb  : BOOL;
 END_VAR
     motor := start_btn;
+END_PROGRAM
+)st";
+
+const char* kDf1Program = R"st(PROGRAM Bench
+VAR
+    start_btn : BOOL;
+    run       : BOOL;
+END_VAR
+    run := start_btn;
 END_PROGRAM
 )st";
 
@@ -95,6 +108,48 @@ TEST(application_refuses_to_run_before_initialising) {
     Application app(make_config());
     CHECK(!app.run_headless(1));
     CHECK(!app.error().empty());
+}
+
+TEST(application_runs_its_scan_loop_through_an_injected_driver) {
+    io::Df1Slave peer;
+    peer.add_word_file(7, io::kPcccFileTypeInteger, 2);
+    CHECK(peer.set_word(7, 0, 1));
+
+    io::CommissioningPolicy policy;
+    policy.allow_address("run");
+    policy.set_min_write_interval_ms(0);
+    CHECK(policy.begin_session(0, 60'000));
+
+    AppConfig config;
+    config.program_source = kDf1Program;
+    config.driver_factory = [&peer, &policy](plc::Vm& vm) {
+        io::Df1Config df1;
+        df1.station = 1;
+        df1.destination = 0;
+        df1.checksum = io::Df1Checksum::Bcc;
+        df1.tags = {
+            io::Df1Tag{"start_btn", 7, 0, 0, io::kPcccFileTypeInteger,
+                       io::Df1Direction::Input},
+            io::Df1Tag{"run", 7, 1, 0, io::kPcccFileTypeInteger,
+                       io::Df1Direction::Output},
+        };
+        df1.commissioning = &policy;
+        return std::make_unique<io::Df1Driver>(df1, vm, peer);
+    };
+
+    Application app(std::move(config));
+    CHECK(app.initialize());
+    if (!app.plc()) {
+        return;
+    }
+
+    CHECK(app.step_scan());
+    CHECK(app.plc()->get("run").as_bool());
+    CHECK(peer.bit(7, 1, 0));
+
+    // A live controller has no force table; refusing is better than pretending.
+    CHECK(!app.set_force("run", true));
+    CHECK(app.error().find("simulated") != std::string::npos);
 }
 
 TEST(a_forced_output_reaches_the_device_but_not_the_program) {
