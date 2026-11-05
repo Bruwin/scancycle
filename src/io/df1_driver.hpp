@@ -13,6 +13,7 @@
 #include "io/driver.hpp"
 #include "plc/vm.hpp"
 
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -43,6 +44,8 @@ struct Df1Config {
 class Df1Driver final : public PlcDriver {
 public:
     Df1Driver(Df1Config config, plc::Vm& vm, Df1Link& link);
+    // An owned link must not be null; the serial transport is built this way.
+    Df1Driver(Df1Config config, plc::Vm& vm, std::unique_ptr<Df1Link> link);
     ~Df1Driver() override;
 
     Df1Driver(const Df1Driver&) = delete;
@@ -58,8 +61,8 @@ public:
     std::string last_error() const override { return error_; }
 
     // The scan contract every live driver must share with SimDriver.
-    bool run_scan(i64 now_ms);
-    i64 scans() const { return scans_; }
+    bool run_scan(i64 now_ms) override;
+    i64 scans() const override { return scans_; }
     i64 exchanges() const { return client_.exchanges(); }
 
 private:
@@ -69,6 +72,7 @@ private:
 
     Df1Config config_;
     plc::Vm& vm_;
+    std::unique_ptr<Df1Link> owned_link_;
     Df1Client client_;
     std::vector<u8> written_;
     std::vector<u8> last_written_;

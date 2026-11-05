@@ -12,6 +12,11 @@ Df1Driver::Df1Driver(Df1Config config, plc::Vm& vm, Df1Link& link)
     last_written_.assign(config_.tags.size(), 0);
 }
 
+Df1Driver::Df1Driver(Df1Config config, plc::Vm& vm, std::unique_ptr<Df1Link> link)
+    : Df1Driver(std::move(config), vm, *link) {
+    owned_link_ = std::move(link);
+}
+
 Df1Driver::~Df1Driver() { disconnect(); }
 
 bool Df1Driver::connect() {
