@@ -33,6 +33,7 @@ endif()
 #   L4 apps
 
 add_library(sc_core
+    src/core/image.cpp
     src/core/log.cpp
     src/core/job_system.cpp
 )

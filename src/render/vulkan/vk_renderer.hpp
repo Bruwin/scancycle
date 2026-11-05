@@ -23,6 +23,9 @@ struct VulkanConfig {
     // compiler; this is where the blobs are read from at run time.
     std::string shader_directory = "src/render/vulkan/shaders/compiled";
     bool enable_validation = true;
+    // Set to capture one frame for a golden-image check. Empty means never.
+    std::string capture_path;
+    u32 capture_frame = 0;
 };
 
 // Returns nullptr when the machine cannot provide a suitable device. The reason

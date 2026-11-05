@@ -5,6 +5,7 @@
 #include "world/mesh.hpp"
 
 #include <memory>
+#include <vector>
 
 namespace sc {
 
@@ -51,6 +52,15 @@ public:
     // validation; the viewer turns it into a non-zero exit so CI fails
     // loudly instead of rendering something subtly wrong.
     virtual u32 validation_errors() const { return 0; }
+
+    // Copies the frame captured this run as tightly packed RGBA8. False when the
+    // backend has nothing to hand over, so the null device stays honest.
+    virtual bool read_back(std::vector<u8>& pixels, u32& width, u32& height) {
+        (void)pixels;
+        (void)width;
+        (void)height;
+        return false;
+    }
 };
 
 std::unique_ptr<RhiDevice> create_null_rhi_device();

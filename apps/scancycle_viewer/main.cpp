@@ -1,6 +1,7 @@
 // The windowed viewer: one SDL3 window, one Vulkan device, one frame loop.
 // It exists so the renderer can be exercised on real hardware, which is the one
 // thing the GPU-free test suite cannot do.
+#include "core/image.hpp"
 #include "render/camera.hpp"
 #include "platform/platform.hpp"
 #include "render/rhi.hpp"
@@ -12,6 +13,8 @@
 #include <cstdlib>
 #include <cstdio>
 #include <cstring>
+#include <string>
+#include <vector>
 
 int main(int argc, char** argv) {
     sc::WindowDesc desc;
@@ -19,6 +22,9 @@ int main(int argc, char** argv) {
 
     // Bounded runs let CI and a quick hardware check finish on their own.
     sc::i64 frame_limit = 0;
+    std::string capture_path;
+    std::string compare_path;
+    sc::u32 tolerance = 6;
 
     for (int i = 1; i < argc; ++i) {
         if (std::strcmp(argv[i], "--frames") == 0 && i + 1 < argc) {
@@ -27,17 +33,29 @@ int main(int argc, char** argv) {
             config.shader_directory = argv[++i];
         } else if (std::strcmp(argv[i], "--no-validation") == 0) {
             config.enable_validation = false;
+        } else if (std::strcmp(argv[i], "--capture") == 0 && i + 1 < argc) {
+            capture_path = argv[++i];
+        } else if (std::strcmp(argv[i], "--compare-with") == 0 && i + 1 < argc) {
+            compare_path = argv[++i];
+        } else if (std::strcmp(argv[i], "--capture-frame") == 0 && i + 1 < argc) {
+            config.capture_frame = static_cast<sc::u32>(std::atoll(argv[++i]));
+        } else if (std::strcmp(argv[i], "--tolerance") == 0 && i + 1 < argc) {
+            tolerance = static_cast<sc::u32>(std::atoll(argv[++i]));
         } else if (std::strcmp(argv[i], "--help") == 0) {
             std::printf(
                 "scancycle_viewer - Scan Cycle renderer\n"
                 "\n"
-                "usage: scancycle_viewer [--shaders DIR] [--no-validation] [--frames N]\n");
+                "usage: scancycle_viewer [--shaders DIR] [--no-validation] [--frames N]\n"
+                "                         [--capture FILE] [--compare-with FILE]\n"
+                "                         [--capture-frame N] [--tolerance N]\n");
             return 0;
         } else {
             std::fprintf(stderr, "unknown option '%s'\n", argv[i]);
             return 2;
         }
     }
+
+    config.capture_path = capture_path;
 
     std::unique_ptr<sc::Platform> platform = sc::create_sdl_platform();
     if (!platform->create_window(desc)) {
@@ -84,7 +102,11 @@ int main(int argc, char** argv) {
         platform->poll_events(input);
 
         sc::FrameConstants constants;
-        constants.time_seconds = static_cast<sc::f32>(platform->elapsed_seconds());
+        // A captured frame has to be reproducible, or the reference it is checked
+        // against would drift with how fast the machine happened to run.
+        constants.time_seconds =
+            capture_path.empty() ? static_cast<sc::f32>(platform->elapsed_seconds())
+                                 : static_cast<sc::f32>(frames) / 60.0f;
         constants.viewport_width = static_cast<sc::u32>(desc.width);
         constants.viewport_height = static_cast<sc::u32>(desc.height);
 
@@ -118,9 +140,49 @@ int main(int argc, char** argv) {
                 static_cast<long long>(frames), final_stats.live_meshes, final_stats.quad_count,
                 final_stats.draw_calls, errors);
 
+    bool image_ok = true;
+    if (!capture_path.empty()) {
+        std::vector<sc::u8> pixels;
+        sc::u32 pixel_width = 0;
+        sc::u32 pixel_height = 0;
+        if (!device->read_back(pixels, pixel_width, pixel_height)) {
+            std::fprintf(stderr, "capture: the backend returned no frame\n");
+            image_ok = false;
+        } else {
+            const sc::Thumbnail thumb =
+                sc::make_thumbnail(pixels, pixel_width, pixel_height, 64, 36, false);
+            if (thumb.empty() || !sc::write_ppm(capture_path, thumb)) {
+                std::fprintf(stderr, "capture: cannot write '%s'\n", capture_path.c_str());
+                image_ok = false;
+            } else {
+                std::printf("capture : %ux%u from %ux%u -> %s\n", thumb.width, thumb.height,
+                            pixel_width, pixel_height, capture_path.c_str());
+            }
+
+            if (!compare_path.empty()) {
+                sc::Thumbnail expected;
+                if (!sc::read_ppm(compare_path, expected)) {
+                    // First run: no reference committed yet, so record rather than fail.
+                    std::printf("compare : no reference at %s, skipping\n", compare_path.c_str());
+                } else {
+                    const sc::ImageDifference diff = sc::compare_thumbnails(thumb, expected);
+                    std::printf("compare : max %u, mean %.2f, changed %u pixels (tolerance %u)\n",
+                                diff.max_channel_delta, diff.mean_channel_delta,
+                                diff.changed_pixels, tolerance);
+                    if (diff.within(tolerance)) {
+                        std::printf("compare : OK\n");
+                    } else {
+                        std::printf("compare : REGRESSION\n");
+                        image_ok = false;
+                    }
+                }
+            }
+        }
+    }
+
     // Order matters: the swapchain holds the surface the platform owns, so the
     // renderer has to be destroyed before the window is.
     device.reset();
     platform->shutdown();
-    return errors == 0 ? 0 : 1;
+    return (errors == 0 && image_ok) ? 0 : 1;
 }

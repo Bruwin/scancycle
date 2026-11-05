@@ -8,6 +8,7 @@
 #include <array>
 #include <cstdio>
 #include <cstring>
+#include <utility>
 #include <limits>
 #include <vector>
 
@@ -72,6 +73,7 @@ public:
 
     DrawStatistics statistics() const override { return stats_; }
     u32 validation_errors() const override { return validation_errors_; }
+    bool read_back(std::vector<u8>& pixels, u32& width, u32& height) override;
 
 private:
     bool fail(const char* what, VkResult result);
@@ -88,6 +90,7 @@ private:
     bool recreate_swapchain();
 
     void destroy();
+    bool create_capture_buffer();
 
     Platform& platform_;
     VulkanConfig config_;
@@ -124,6 +127,13 @@ private:
 
     std::unique_ptr<ChunkRenderer> chunks_;
     FrameConstants constants_{};
+    // Capture is a diagnostic path: one synchronous frame, only when asked for.
+    Buffer capture_buffer_;
+    std::vector<u8> captured_;
+    u32 captured_width_ = 0;
+    u32 captured_height_ = 0;
+    u32 frame_number_ = 0;
+
     DrawStatistics stats_{};
     u32 validation_errors_ = 0;
 };
@@ -432,6 +442,7 @@ bool VulkanRenderer::create_swapchain() {
         return fail("vkCreateSwapchainKHR", result);
     }
 
+    destroy_buffer(device_, capture_buffer_);
     if (swapchain_ != VK_NULL_HANDLE) {
         vkDestroySwapchainKHR(device_, swapchain_, nullptr);
     }
@@ -587,6 +598,21 @@ bool VulkanRenderer::create_sync_objects() {
     return true;
 }
 
+bool VulkanRenderer::create_capture_buffer() {
+    destroy_buffer(device_, capture_buffer_);
+    if (config_.capture_path.empty()) {
+        return true;
+    }
+    const VkDeviceSize size = static_cast<VkDeviceSize>(extent_.width) * extent_.height * 4;
+    if (!create_buffer(physical_, device_, size, VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+                       VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
+                           VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                       capture_buffer_)) {
+        return fail("cannot allocate the capture buffer");
+    }
+    return true;
+}
+
 bool VulkanRenderer::initialize() {
     if (!create_instance()) {
         return false;
@@ -604,6 +630,9 @@ bool VulkanRenderer::initialize() {
         return false;
     }
     if (!create_depth_target()) {
+        return false;
+    }
+    if (!create_capture_buffer()) {
         return false;
     }
     if (!create_commands()) {
@@ -634,7 +663,10 @@ bool VulkanRenderer::recreate_swapchain() {
     if (!create_swapchain()) {
         return false;
     }
-    return create_depth_target();
+    if (!create_depth_target()) {
+        return false;
+    }
+    return create_capture_buffer();
 }
 
 GpuMeshHandle VulkanRenderer::upload_chunk_mesh(u32 chunk_x, u32 chunk_y, u32 chunk_z,
@@ -769,6 +801,9 @@ void VulkanRenderer::draw_frame() {
     }
     vkCmdEndRendering(cmd);
 
+    const bool capture_now =
+        capture_buffer_.valid() && frame_number_ == config_.capture_frame;
+
     VkImageMemoryBarrier2 to_present = to_color;
     to_present.srcStageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
     to_present.srcAccessMask = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT;
@@ -776,6 +811,35 @@ void VulkanRenderer::draw_frame() {
     to_present.dstAccessMask = 0;
     to_present.oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
     to_present.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+
+    if (capture_now) {
+        // Copy while the image is ours, then hand it to the presentation engine as
+        // usual: the present barrier below starts from TRANSFER_SRC in that case.
+        VkImageMemoryBarrier2 to_copy = to_present;
+        to_copy.oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+        to_copy.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+        to_copy.srcStageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
+        to_copy.srcAccessMask = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT;
+        to_copy.dstStageMask = VK_PIPELINE_STAGE_2_COPY_BIT;
+        to_copy.dstAccessMask = VK_ACCESS_2_TRANSFER_READ_BIT;
+
+        VkDependencyInfo copy_dependency{};
+        copy_dependency.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+        copy_dependency.imageMemoryBarrierCount = 1;
+        copy_dependency.pImageMemoryBarriers = &to_copy;
+        vkCmdPipelineBarrier2(cmd, &copy_dependency);
+
+        VkBufferImageCopy region{};
+        region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        region.imageSubresource.layerCount = 1;
+        region.imageExtent = {extent_.width, extent_.height, 1};
+        vkCmdCopyImageToBuffer(cmd, images_[image_index_], VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                               capture_buffer_.buffer, 1, &region);
+
+        to_present.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+        to_present.srcStageMask = VK_PIPELINE_STAGE_2_COPY_BIT;
+        to_present.srcAccessMask = VK_ACCESS_2_TRANSFER_READ_BIT;
+    }
 
     dependency.imageMemoryBarrierCount = 1;
     dependency.pImageMemoryBarriers = &to_present;
@@ -815,7 +879,38 @@ void VulkanRenderer::draw_frame() {
         return;
     }
 
+    if (capture_now && capture_buffer_.mapped != nullptr) {
+        // One synchronous frame is acceptable for a diagnostic path and is the only
+        // way to read the pixels before the presentation engine takes the image.
+        vkWaitForFences(device_, 1, &frame_fences_[frame_index_], VK_TRUE, UINT64_MAX);
+        const std::size_t bytes = static_cast<std::size_t>(extent_.width) * extent_.height * 4;
+        const auto* base = static_cast<const u8*>(capture_buffer_.mapped);
+        captured_.assign(base, base + bytes);
+        captured_width_ = extent_.width;
+        captured_height_ = extent_.height;
+    }
+    ++frame_number_;
+
     stats_ = chunks_ ? chunks_->statistics() : DrawStatistics{};
+}
+
+bool VulkanRenderer::read_back(std::vector<u8>& pixels, u32& width, u32& height) {
+    if (captured_.empty()) {
+        return false;
+    }
+    pixels = std::move(captured_);
+    captured_.clear();
+    width = captured_width_;
+    height = captured_height_;
+
+    // Callers get RGBA whatever the swapchain offered.
+    if (swapchain_format_ == VK_FORMAT_B8G8R8A8_SRGB ||
+        swapchain_format_ == VK_FORMAT_B8G8R8A8_UNORM) {
+        for (std::size_t i = 0; i + 3 < pixels.size(); i += 4) {
+            std::swap(pixels[i], pixels[i + 2]);
+        }
+    }
+    return true;
 }
 
 void VulkanRenderer::end_frame() {
@@ -890,6 +985,7 @@ void VulkanRenderer::destroy() {
     }
     image_views_.clear();
 
+    destroy_buffer(device_, capture_buffer_);
     if (swapchain_ != VK_NULL_HANDLE) {
         vkDestroySwapchainKHR(device_, swapchain_, nullptr);
     }
