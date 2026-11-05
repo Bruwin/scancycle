@@ -3,6 +3,7 @@
 // exactly the way a physical driver would. This class is the reference
 // implementation of the scan contract that every hardware driver must match.
 #include "io/driver.hpp"
+#include "io/force_table.hpp"
 #include "io/tag_database.hpp"
 #include "plc/vm.hpp"
 #include "sim/plant.hpp"
@@ -32,12 +33,17 @@ public:
 
     i64 scans() const { return scans_; }
 
+    // Optional. Forces are applied where a real PLC applies them: after an input
+    // is latched, and before an output is flushed.
+    void set_forces(const ForceTable* forces) { forces_ = forces; }
+
 private:
     sim::Plant& plant_;
     const TagDatabase& tags_;
     plc::Vm& vm_;
     bool connected_ = false;
     i64 scans_ = 0;
+    const ForceTable* forces_ = nullptr;
     std::string error_;
 };
 

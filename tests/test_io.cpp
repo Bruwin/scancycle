@@ -1,6 +1,7 @@
 #include "harness.hpp"
 
 #include "io/commissioning.hpp"
+#include "io/force_table.hpp"
 #include "io/modbus.hpp"
 
 using namespace sc;
@@ -115,4 +116,33 @@ TEST(commissioning_ends_sessions) {
     policy.end_session();
     CHECK(!policy.session_active(0));
     CHECK(!policy.can_write("DB1.Motor", 0));
+}
+
+TEST(force_table_replaces_and_clears_by_name) {
+    io::ForceTable forces;
+    CHECK(forces.empty());
+
+    forces.set("motor", true);
+    forces.set("eye", false);
+    CHECK(forces.size() == 2);
+
+    bool value = false;
+    CHECK(forces.find("motor", value));
+    CHECK(value);
+
+    // Setting an existing name replaces it instead of adding a second entry.
+    forces.set("motor", false);
+    CHECK(forces.size() == 2);
+    CHECK(forces.find("motor", value));
+    CHECK(!value);
+
+    CHECK(forces.forced("motor"));
+    CHECK(!forces.forced("missing"));
+
+    CHECK(forces.clear("motor"));
+    CHECK(!forces.clear("motor"));
+    CHECK(forces.size() == 1);
+
+    forces.clear_all();
+    CHECK(forces.empty());
 }

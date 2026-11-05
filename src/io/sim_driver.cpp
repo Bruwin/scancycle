@@ -30,6 +30,16 @@ bool SimDriver::read_inputs() {
             error_ = "PLC program has no variable named '" + tag.name + "'";
             return false;
         }
+
+        // The field value was read and then discarded on purpose. Forcing an
+        // input means the program sees the forced value while the device keeps
+        // reporting its own, which is what makes a force visible as a force.
+        bool forced = false;
+        if (forces_ != nullptr && forces_->find(tag.name, forced) &&
+            !vm_.set(tag.name, plc::Value::boolean(forced))) {
+            error_ = "PLC program has no variable named '" + tag.name + "'";
+            return false;
+        }
     }
     return true;
 }
@@ -45,7 +55,16 @@ bool SimDriver::write_outputs() {
         if (tag.direction != TagDirection::Output) {
             continue;
         }
-        const bool value = vm_.get(tag.name).as_bool();
+        bool value = vm_.get(tag.name).as_bool();
+
+        // A forced output overrides what the program computed on its way to the
+        // field. The program image keeps the computed value, so a trace shows
+        // the logic and the force disagreeing, which is the point of a force.
+        bool forced = false;
+        if (forces_ != nullptr && forces_->find(tag.name, forced)) {
+            value = forced;
+        }
+
         if (!tags_.write_bool(index, value, plant_)) {
             error_ = "failed to write output tag '" + tag.name + "'";
             return false;

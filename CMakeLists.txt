@@ -74,6 +74,7 @@ target_link_libraries(sc_plc PUBLIC sc_core PRIVATE sc_warnings)
 
 add_library(sc_io
     src/io/tag_database.cpp
+    src/io/force_table.cpp
     src/io/sim_driver.cpp
     src/io/modbus.cpp
     src/io/commissioning.cpp
