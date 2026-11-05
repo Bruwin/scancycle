@@ -31,7 +31,8 @@ curriculum can open TIA Portal or Studio 5000 and recognise everything.
 | Procedural materials and parametric machine kits | working, tested |
 | Editor model, lesson schema, grader, portal routing | working, tested |
 | Composition root (plant + PLC + I/O in one headless session) | working, tested |
-| Vulkan renderer, editor widgets, portal transport | interfaces only |
+| Vulkan 1.3 device, swapchain and frame loop (opt-in, `SC_ENABLE_VULKAN`) | builds, not yet run on a GPU |
+| Voxel draws, editor widgets, portal transport | interfaces only |
 
 ## Build
 
@@ -46,6 +47,18 @@ ctest --test-dir build --output-on-failure
 
 Cross-compilation presets live in `CMakePresets.json` (`debug`, `release`,
 `windows`, `macos`).
+
+The renderer is opt-in, because the headless half must build anywhere:
+
+```sh
+cmake -S . -B build -DSC_ENABLE_VULKAN=ON -DCMAKE_BUILD_TYPE=RelWithDebInfo
+cmake --build build -j
+./build/bin/scancycle_viewer
+```
+
+That needs a Vulkan 1.3 driver and SDL3; CMake uses an installed SDL3 if it
+finds one and otherwise fetches the pinned release. The viewer opens a window
+and presents a cleared frame today — voxel draws are the next change.
 
 CMake is convenient but not required. Every module is a plain set of translation
 units, so the whole tree also builds with a bare C++20 compiler; that path is

@@ -9,6 +9,8 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
 option(SC_WERROR "Treat compiler warnings as errors" ON)
 option(SC_BUILD_TESTS "Build the test suite" ON)
+# Off by default: the headless half must build on any machine, and CI has no GPU.
+option(SC_ENABLE_VULKAN "Build the Vulkan 1.3 renderer and the windowed viewer" OFF)
 
 add_library(sc_warnings INTERFACE)
 if(MSVC)
@@ -106,6 +108,32 @@ target_link_libraries(scancycle_cli PRIVATE sc_plc sc_world sc_app sc_lesson sc_
 
 add_executable(scancycle_server apps/scancycle_server/main.cpp)
 target_link_libraries(scancycle_server PRIVATE sc_net sc_lesson sc_warnings)
+
+if(SC_ENABLE_VULKAN)
+    find_package(Vulkan REQUIRED)
+    find_package(SDL3 CONFIG QUIET)
+    if(NOT SDL3_FOUND)
+        include(FetchContent)
+        FetchContent_Declare(SDL3
+            GIT_REPOSITORY https://github.com/libsdl-org/SDL.git
+            GIT_TAG release-3.4.20
+            GIT_SHALLOW TRUE)
+        set(SDL_SHARED OFF CACHE BOOL "" FORCE)
+        set(SDL_STATIC ON CACHE BOOL "" FORCE)
+        set(SDL_TEST OFF CACHE BOOL "" FORCE)
+        FetchContent_MakeAvailable(SDL3)
+    endif()
+
+    add_library(sc_platform_sdl src/platform/sdl_platform.cpp)
+    target_link_libraries(sc_platform_sdl PUBLIC sc_platform SDL3::SDL3 PRIVATE sc_warnings)
+
+    add_library(sc_render_vk src/render/vulkan/vk_renderer.cpp)
+    target_link_libraries(sc_render_vk PUBLIC sc_render sc_platform_sdl Vulkan::Vulkan
+                                          PRIVATE sc_warnings)
+
+    add_executable(scancycle_viewer apps/scancycle_viewer/main.cpp)
+    target_link_libraries(scancycle_viewer PRIVATE sc_render_vk sc_world sc_warnings)
+endif()
 
 if(SC_BUILD_TESTS)
     enable_testing()

@@ -1,0 +1,75 @@
+#version 450
+// Chunk culling. One invocation per chunk tests the chunk's bounding sphere
+// against the six frustum planes and, if it survives, appends an indirect draw
+// command. The graphics pass then issues a single
+// vkCmdDrawIndexedIndirectCount, so the CPU never walks the chunk list.
+//
+// Survivors are compacted into the front of the command buffer and the count is
+// bumped atomically, which is why the draw call does not need a fixed count.
+
+layout(local_size_x = 64) in;
+
+layout(set = 0, binding = 0) uniform FrameBlock {
+    mat4 view_projection;
+    vec4 camera_position;
+    vec4 frustum_planes[6];
+    uint chunk_count;
+    uint max_chunks;
+    float max_distance;
+    float pad0;
+} frame;
+
+// xyz = chunk origin, w = bounding radius.
+layout(set = 0, binding = 2) readonly buffer ChunkBuffer { vec4 chunks[]; };
+
+// Five uints per VkDrawIndexedIndirectCommand: indexCount, instanceCount,
+// firstIndex, vertexOffset, firstInstance.
+layout(set = 0, binding = 3) writeonly buffer DrawBuffer { uint draw_commands[]; };
+
+layout(set = 0, binding = 4) buffer CountBuffer { uint draw_count; };
+
+// Per chunk: first index, index count, first vertex, unused.
+layout(set = 0, binding = 5) readonly buffer RangeBuffer { uvec4 ranges[]; };
+
+bool sphere_visible(vec3 center, float radius) {
+    for (int i = 0; i < 6; ++i) {
+        vec4 plane = frame.frustum_planes[i];
+        if (dot(plane.xyz, center) + plane.w < -radius) {
+            return false;
+        }
+    }
+    return true;
+}
+
+void main() {
+    uint index = gl_GlobalInvocationID.x;
+    if (index >= frame.chunk_count) {
+        return;
+    }
+
+    uvec4 range = ranges[index];
+    if (range.y == 0u) {
+        return;  // empty chunk: nothing to draw
+    }
+
+    vec4 chunk = chunks[index];
+    vec3 center = chunk.xyz + vec3(16.0);
+    if (!sphere_visible(center, chunk.w)) {
+        return;
+    }
+    if (distance(frame.camera_position.xyz, center) > frame.max_distance) {
+        return;
+    }
+
+    uint slot = atomicAdd(draw_count, 1u);
+    if (slot >= frame.max_chunks) {
+        return;  // never write past the buffer, even if the count overruns
+    }
+
+    uint base = slot * 5u;
+    draw_commands[base + 0u] = range.y;          // indexCount
+    draw_commands[base + 1u] = 1u;               // instanceCount
+    draw_commands[base + 2u] = range.x;          // firstIndex
+    draw_commands[base + 3u] = int(range.z);     // vertexOffset
+    draw_commands[base + 4u] = index;            // firstInstance = chunk index
+}

@@ -67,10 +67,22 @@ Deliberate omissions for now: user-defined `FUNCTION_BLOCK`s, arrays, UDTs,
   encoding on top is the next memory win.
 * Greedy meshing merges coplanar same-material faces. Vertices are 8 bytes:
   chunk-local integer position, face id, AO, material. No floats.
-* The GPU path is Vulkan 1.3 with MoltenVK for macOS. Draw calls are one
-  `vkCmdDrawIndexedIndirectCount` per frame, fed by a compute cull pass reading
-  vertex data from storage buffers via vertex pulling. Per-chunk vertex buffers
+* The GPU path is Vulkan 1.3 with MoltenVK for macOS, windowed through SDL3. The
+  platform layer owns surface creation, so the renderer never includes a
+  windowing header.
+* Dynamic rendering (1.3 core) replaces render passes: one colour target, one
+  depth target, no framebuffer objects.
+* Draw calls are one `vkCmdDrawIndexedIndirectCount` per frame, fed by a compute
+  cull pass reading vertex data from storage buffers via vertex pulling. The
+  compute pass compacts surviving chunks into indirect commands and bumps an
+  atomic count, so the CPU never walks the chunk list. Per-chunk vertex buffers
   are explicitly rejected.
+* Each indirect command carries its chunk index in `firstInstance`, and the
+  vertex shader reads that chunk's origin. That needs `shaderDrawParameters` and
+  `drawIndirectFirstInstance`, both enabled at device creation.
+* Working hardware floor: a card with Vulkan 1.3 and dynamic rendering. The
+  reference machine is a Radeon RX 580 on an i7-4960X, which also fixes the CPU
+  baseline at AVX without AVX2 or FMA3.
 * **Static world is voxels; machines are instanced procedural meshes.** A moving
   conveyor or robot arm must never be voxelised.
 
@@ -97,6 +109,16 @@ and effectively unmaintained since 2015.
 
 Support is published as tiers, never as "any PLC": Tier A tested against real
 hardware in the classroom, Tier B read-only best effort, Tier C unsupported.
+
+Rendering dependencies, pulled in only when `SC_ENABLE_VULKAN=ON`:
+
+| Target | Library | Licence | Note |
+|---|---|---|---|
+| Window, input, Vulkan surface | SDL3 (pinned `release-3.4.20`) | zlib | permissive, no disclosure obligation |
+| Vulkan headers and loader | Vulkan-Headers, Vulkan-Loader | Apache-2.0 | build-time headers; the loader ships with the driver |
+
+The headless half keeps building with no GPU, no display and no SDL, which is
+what lets CI stay honest on machines that have none of them.
 
 ## Safety model for real hardware
 
