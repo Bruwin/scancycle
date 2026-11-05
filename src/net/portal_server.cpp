@@ -238,6 +238,7 @@ std::string lesson_page(const lesson::Lesson& lesson, const std::vector<lesson::
         page += toolbox_row("Operator", operators);
         page += toolbox_row("Data type", types);
         page += "</tbody></table>";
+        page += "<p>Grading refuses a program that uses anything else.</p>";
     }
 
     page += "<h2>How this is graded</h2><table><thead><tr><th>Check</th>"

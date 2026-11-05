@@ -33,6 +33,10 @@ struct AppConfig {
     u64 world_seed = 1;
     f64 tick_seconds = 1.0 / 60.0;
     i64 plc_scan_ms = 10;
+
+    // The lesson's toolbox. Empty means every instruction is available; otherwise
+    // a program that uses anything else is refused before it can be graded.
+    std::vector<std::string> allowed_instructions;
 };
 
 class Application {

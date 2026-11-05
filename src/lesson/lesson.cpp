@@ -178,6 +178,7 @@ Lesson make_ladder_batch_lesson() {
     lesson.starting_plant = sim::make_vertical_slice_plant();
     lesson.preset_inputs.push_back({"start_btn", true});
     lesson.reference_language = ReferenceLanguage::Ladder;
+    lesson.allowed_instructions = {"BOOL", "INT", ":=", "AND", "OR", "NOT", "TON", "CTU"};
 
     lesson.rubric.push_back(check_on(lesson.starting_plant, "press", "ladder-processed",
                                      "Press completes three parts",
@@ -229,16 +230,20 @@ std::vector<Lesson> make_builtin_lessons() {
     return lessons;
 }
 
-bool instruction_allowed(const Lesson& lesson, std::string_view instruction) {
-    if (lesson.allowed_instructions.empty()) {
+bool toolbox_allows(std::span<const std::string> allowed, std::string_view instruction) {
+    if (allowed.empty()) {
         return true;
     }
-    for (const std::string& allowed : lesson.allowed_instructions) {
-        if (allowed == instruction) {
+    for (const std::string& one : allowed) {
+        if (one == instruction) {
             return true;
         }
     }
     return false;
+}
+
+bool instruction_allowed(const Lesson& lesson, std::string_view instruction) {
+    return toolbox_allows(lesson.allowed_instructions, instruction);
 }
 
 }  // namespace sc::lesson

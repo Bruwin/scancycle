@@ -67,6 +67,7 @@ add_library(sc_plc
     src/plc/parser.cpp
     src/plc/program.cpp
     src/plc/compiler.cpp
+    src/plc/features.cpp
     src/plc/function_blocks.cpp
     src/plc/vm.cpp
     src/plc/declaration.cpp

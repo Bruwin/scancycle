@@ -569,3 +569,36 @@ TEST(portal_transport_grades_over_a_socket) {
     CHECK(answer.find("HTTP/1.1 200 OK") != std::string::npos);
     CHECK(answer.find("\"lesson\":\"press-batch\"") != std::string::npos);
 }
+
+TEST(toolbox_allows_treats_an_empty_list_as_everything) {
+    const std::vector<std::string> none;
+    CHECK(lesson::toolbox_allows(none, "CTU"));
+
+    const std::vector<std::string> granted{"TON", "AND", "BOOL"};
+    CHECK(lesson::toolbox_allows(granted, "TON"));
+    CHECK(!lesson::toolbox_allows(granted, "CTU"));
+}
+
+TEST(grade_route_refuses_an_instruction_the_lesson_withholds) {
+    const std::vector<lesson::Lesson> lessons = lesson::make_builtin_lessons();
+    // conveyor-interlock grants TON but not TOF.
+    const std::string tof_program =
+        "PROGRAM Delay\nVAR\n    enable : BOOL;\n    timer : TOF;\n    out : BOOL;\n"
+        "END_VAR\n    timer(IN := enable, PT := T#100ms);\n    out := timer.Q;\n"
+        "END_PROGRAM\n";
+
+    net::Request request;
+    request.method = net::HttpMethod::Post;
+    request.path = "/grade";
+    request.body = "lesson=conveyor-interlock&program=" + form_encode(tof_program);
+
+    const net::Response page = app::grade_lesson_page(lessons, request);
+    CHECK(page.status == 500);
+    CHECK(page.body.find("does not grant &#39;TOF&#39;") != std::string::npos ||
+          page.body.find("does not grant 'TOF'") != std::string::npos);
+    CHECK(page.body.find("Your program is still here") != std::string::npos);
+
+    const net::Response json = app::grade_lesson(lessons, request);
+    CHECK(json.status == 500);
+    CHECK(json.body.find("TOF") != std::string::npos);
+}

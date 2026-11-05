@@ -59,6 +59,16 @@ bool Application::initialize() {
         program_ = std::move(compiled.program);
     }
 
+    // A lesson that grants a toolbox means it. Checking the compiled program
+    // covers both source languages, and it holds the lesson's own reference
+    // solution to the same list, so an exercise cannot ship an answer it forbids.
+    for (const std::string& feature : plc::features_used(program_)) {
+        if (!lesson::toolbox_allows(config_.allowed_instructions, feature)) {
+            error_ = "this lesson does not grant '" + feature + "'";
+            return false;
+        }
+    }
+
     // Bind by what the program declares, not by what the plant contains. A
     // lesson cell can hold devices a given exercise never touches, and the
     // driver refuses to latch an input whose variable is absent.

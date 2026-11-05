@@ -327,3 +327,31 @@ TEST(replays_are_bit_identical) {
     CHECK(!first.empty());
     CHECK(first == second);
 }
+
+TEST(compiled_program_reports_the_features_it_uses) {
+    sc::plc::ParseResult parsed = sc::plc::parse_program(kConveyor);
+    CHECK(parsed.program != nullptr);
+    if (!parsed.program) {
+        return;
+    }
+    const sc::plc::CompileResult compiled = sc::plc::compile(*parsed.program);
+    CHECK(compiled.ok);
+
+    const std::vector<std::string> features = sc::plc::features_used(compiled.program);
+    const auto has = [&features](const char* name) {
+        for (const std::string& feature : features) {
+            if (feature == name) {
+                return true;
+            }
+        }
+        return false;
+    };
+
+    CHECK(has("TON"));
+    CHECK(has("AND"));
+    CHECK(has("OR"));
+    CHECK(has("NOT"));
+    CHECK(has("BOOL"));
+    CHECK(!has("CTU"));
+    CHECK(features.size() == 5);  // one entry per feature, not per use
+}

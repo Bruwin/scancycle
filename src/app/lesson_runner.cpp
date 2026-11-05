@@ -28,6 +28,7 @@ LessonRunResult run_lesson(const lesson::Lesson& lesson, LessonRunConfig config)
             : ProgramLanguage::StructuredText;
     app_config.tick_seconds = config.tick_seconds;
     app_config.plc_scan_ms = config.plc_scan_ms;
+    app_config.allowed_instructions = lesson.allowed_instructions;
 
     Application app(std::move(app_config), lesson.starting_plant);
     if (!app.initialize()) {

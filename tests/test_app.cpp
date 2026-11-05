@@ -249,3 +249,46 @@ TEST(watch_text_reports_a_force_after_the_tags) {
                   "tag\tmotor\tBOOL\tFALSE\t1\t1\n"
                   "force\tmotor\tTRUE\n");
 }
+
+namespace {
+
+const char* kGatedProgram = R"st(PROGRAM Gate
+VAR
+    a : BOOL;
+    b : BOOL;
+END_VAR
+    a := a AND b;
+END_PROGRAM
+)st";
+
+}  // namespace
+
+TEST(application_enforces_the_toolbox_it_is_given) {
+    AppConfig withheld = make_config();
+    withheld.program_source = kGatedProgram;
+    withheld.allowed_instructions = {"BOOL"};
+
+    Application refused(std::move(withheld));
+    CHECK(!refused.initialize());
+    CHECK(refused.error().find("AND") != std::string::npos);
+    CHECK(refused.error().find("does not grant") != std::string::npos);
+
+    AppConfig granted = make_config();
+    granted.program_source = kGatedProgram;
+    granted.allowed_instructions = {"BOOL", "AND"};
+
+    Application allowed(std::move(granted));
+    CHECK(allowed.initialize());
+}
+
+TEST(application_checks_the_toolbox_before_the_plant) {
+    // The program names a device the config never declares, so a toolbox failure
+    // must be reported first; otherwise a student sees a wiring complaint about a
+    // program that was never going to be accepted.
+    AppConfig config = make_config();
+    config.program_source = kGatedProgram;
+    config.allowed_instructions = {};
+
+    Application open(std::move(config));
+    CHECK(open.initialize());
+}

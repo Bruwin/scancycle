@@ -57,4 +57,11 @@ struct CompiledProgram {
 
 std::string disassemble(const CompiledProgram& program);
 
+// The toolbox vocabulary a compiled program actually uses: function block types
+// (TON, CTU, ...), boolean operators (AND, OR, NOT, XOR) and declared value
+// types (BOOL, INT, ...). Derived from bytecode, so Structured Text and ladder
+// report the same names, and a lesson's reference solution is held to the same
+// list as a student's submission.
+std::vector<std::string> features_used(const CompiledProgram& program);
+
 }  // namespace sc::plc

@@ -5,6 +5,7 @@
 #include "core/types.hpp"
 #include "sim/plant.hpp"
 
+#include <span>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -81,5 +82,9 @@ Lesson make_ladder_batch_lesson();
 std::vector<Lesson> make_builtin_lessons();
 
 bool instruction_allowed(const Lesson& lesson, std::string_view instruction);
+
+// The same rule for a bare list, so the runtime can enforce a toolbox without
+// inventing a Lesson. An empty list grants everything.
+bool toolbox_allows(std::span<const std::string> allowed, std::string_view instruction);
 
 }  // namespace sc::lesson

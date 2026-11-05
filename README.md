@@ -37,7 +37,7 @@ Portal or Studio 5000 and recognise everything.
 | Editor model, lesson schema, grader, portal routing | working, tested |
 | Composition root (plant + PLC + I/O in one headless session) | working, tested |
 | Vulkan 1.3 renderer: GPU cull, chunk streaming, golden frame (opt-in) | working, verified on lavapipe in CI |
-| Teacher portal: loopback HTTP, catalog, lesson and grade pages | working, tested |
+| Teacher portal: catalog, lesson and grade pages, toolbox-enforced grading | working, tested |
 | Editor widgets | interfaces only |
 
 ## Build
