@@ -7,7 +7,8 @@ owner and reviewer; the agent is the implementer; CI and the checks below are th
 judge.
 
 For agents, `.agents/skills/scancycle-agent-workflow/SKILL.md` is the step-by-step
-procedure (branch, gate, PR, hand-off). This file holds the rules it relies on.
+procedure (branch, gate, PR, hand-off). Read it before you start; `docs/SKILL.md`
+is only a pointer to it. This file holds the rules the procedure relies on.
 
 ## Where the project is
 
