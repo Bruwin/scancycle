@@ -135,6 +135,7 @@ void update_function_block(const FbDecl& decl, std::vector<Value>& slots, i64 no
             ++count;
         }
         slots[3] = Value::boolean(count >= preset && count != 0);
+        slots[4] = Value::integer(count);
         slots[5] = Value::boolean(pulse);
         slots[6] = Value::integer(count);
         return;
@@ -153,6 +154,7 @@ void update_function_block(const FbDecl& decl, std::vector<Value>& slots, i64 no
             --count;
         }
         slots[3] = Value::boolean(count <= 0);
+        slots[4] = Value::integer(count);
         slots[5] = Value::boolean(pulse);
         slots[6] = Value::integer(count);
     }

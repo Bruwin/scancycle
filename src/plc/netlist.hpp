@@ -69,11 +69,14 @@ struct TimerSink {
 // A counter sink counts rising edges of the condition and sets `var` when the
 // count reaches `preset` (CTU) or falls to zero (CTD). `reset` is the second
 // input - CTU's R, CTD's LD - and may be left unwired, which holds it FALSE.
+// `value_var` names an integer tag that reads CV, so a lesson can show the count
+// itself and not only the preset flag.
 struct CounterSink {
-    std::string var;    // BOOL tag that receives Q
-    i64 preset = 0;     // PV
-    bool down = false;  // CTD instead of CTU
-    NetPtr reset;       // null: the second input is never energised
+    std::string var;        // BOOL tag that receives Q
+    std::string value_var;  // integer tag that receives CV; empty when unread
+    i64 preset = 0;         // PV
+    bool down = false;      // CTD instead of CTU
+    NetPtr reset;           // null: the second input is never energised
 };
 
 struct Rung {

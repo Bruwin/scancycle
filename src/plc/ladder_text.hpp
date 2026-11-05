@@ -10,6 +10,13 @@
 //
 //     run_latch = (run_latch | start_btn) & !stop_btn
 //
+// A rung may also end in a standard block. TON and TOF delay the tag on the
+// left; CTU and CTD count edges and set it at their preset, with an optional
+// reset network and an optional second tag that reads the count:
+//
+//     ready      = TON(run_latch, 1s)
+//     full, made = CTU(part_seen, reset_btn, 20)
+//
 // This parses into the same plc/netlist model the graphical editor will build, so
 // the file format and the drawing cannot disagree about what a rung is: one is a
 // way of writing the other.

@@ -566,7 +566,10 @@ TEST(a_timer_and_counter_on_one_rung_are_refused) {
     Rung rung;
     rung.condition = contact("a");
     rung.timer = TimerSink{"ready", 1000};
-    rung.counter = CounterSink{"counted", 3, false, nullptr};
+    CounterSink counter;
+    counter.var = "counted";
+    counter.preset = 3;
+    rung.counter = std::move(counter);
     rungs.push_back(std::move(rung));
 
     const NetlistResult built = compile_netlist("TwoSinks", rungs, declared);
@@ -585,4 +588,82 @@ TEST(an_undeclared_reset_contact_is_a_diagnostic) {
     CHECK(built.diagnostics.size() == 1);
     CHECK(built.diagnostics[0].message.find("nope") != std::string::npos);
     CHECK(built.diagnostics[0].message.find("reset input") != std::string::npos);
+}
+
+TEST(a_counter_can_publish_its_count) {
+    std::vector<TagDecl> declared;
+    declared.push_back(TagDecl{"pulse", ValueType::Bool});
+    declared.push_back(TagDecl{"done", ValueType::Bool});
+    declared.push_back(TagDecl{"parts", ValueType::Int});
+    std::vector<Rung> rungs;
+
+    Rung rung;
+    rung.condition = contact("pulse");
+    CounterSink sink;
+    sink.var = "done";
+    sink.value_var = "parts";
+    sink.preset = 5;
+    rung.counter = std::move(sink);
+    rungs.push_back(std::move(rung));
+
+    const NetlistResult built = compile_netlist("Publish", rungs, declared);
+    CHECK(built.ok);
+    if (!built.ok) {
+        return;
+    }
+
+    Vm vm(built.program);
+    CHECK(vm.set("pulse", Value::boolean(true)));
+    CHECK(vm.scan(10));
+    CHECK(vm.get("parts").as_int() == 1);
+    CHECK(!vm.get("done").as_bool());
+
+    CHECK(vm.set("pulse", Value::boolean(false)));
+    CHECK(vm.scan(20));
+    CHECK(vm.get("parts").as_int() == 1);
+
+    CHECK(vm.set("pulse", Value::boolean(true)));
+    CHECK(vm.scan(30));
+    CHECK(vm.get("parts").as_int() == 2);
+}
+
+TEST(a_counter_value_tag_must_be_integer) {
+    std::vector<TagDecl> declared;
+    declared.push_back(TagDecl{"pulse", ValueType::Bool});
+    declared.push_back(TagDecl{"done", ValueType::Bool});
+    declared.push_back(TagDecl{"stamp", ValueType::Bool});
+    std::vector<Rung> rungs;
+
+    Rung rung;
+    rung.condition = contact("pulse");
+    CounterSink sink;
+    sink.var = "done";
+    sink.value_var = "stamp";
+    sink.preset = 5;
+    rung.counter = std::move(sink);
+    rungs.push_back(std::move(rung));
+
+    const NetlistResult built = compile_netlist("BadValueType", rungs, declared);
+    CHECK(!built.ok);
+    CHECK(built.diagnostics.size() == 1);
+    CHECK(built.diagnostics[0].message.find("integer") != std::string::npos);
+}
+
+TEST(a_counter_value_tag_must_be_declared) {
+    const std::vector<TagDecl> declared = bool_tags({"pulse", "done"});
+    std::vector<Rung> rungs;
+
+    Rung rung;
+    rung.condition = contact("pulse");
+    CounterSink sink;
+    sink.var = "done";
+    sink.value_var = "missing";
+    sink.preset = 5;
+    rung.counter = std::move(sink);
+    rungs.push_back(std::move(rung));
+
+    const NetlistResult built = compile_netlist("MissingValue", rungs, declared);
+    CHECK(!built.ok);
+    CHECK(built.diagnostics.size() == 1);
+    CHECK(built.diagnostics[0].message.find("missing") != std::string::npos);
 }

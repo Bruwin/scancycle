@@ -160,6 +160,20 @@ NetlistResult compile_netlist(std::string_view name, std::span<const Rung> rungs
                 result.diagnostics.push_back(
                     {0, 0, where + "a counter preset must be longer than zero"});
             }
+            if (!rung.counter->value_var.empty()) {
+                const i32 value_slot = result.program.find_var(rung.counter->value_var);
+                if (value_slot < 0) {
+                    result.diagnostics.push_back(
+                        {0, 0, where + "counter value '" + rung.counter->value_var +
+                                  "' is not a declared variable"});
+                } else if (!is_integer_type(
+                               result.program.vars[static_cast<std::size_t>(value_slot)]
+                                   .type)) {
+                    result.diagnostics.push_back(
+                        {0, 0, where + "counter value '" + rung.counter->value_var +
+                                  "' must be an integer type"});
+                }
+            }
         }
         for (const Coil& coil : rung.coils) {
             if (result.program.find_var(coil.var) < 0) {
@@ -215,6 +229,11 @@ NetlistResult compile_netlist(std::string_view name, std::span<const Rung> rungs
             const std::string& target = rung.timer ? rung.timer->var : rung.counter->var;
             result.program.code.push_back(
                 {Op::StoreVar, result.program.find_var(target), 0});
+            if (rung.counter && !rung.counter->value_var.empty()) {
+                result.program.code.push_back({Op::LoadFbField, fb_index, 4});
+                result.program.code.push_back(
+                    {Op::StoreVar, result.program.find_var(rung.counter->value_var), 0});
+            }
             continue;
         }
         for (const Coil& coil : rung.coils) {

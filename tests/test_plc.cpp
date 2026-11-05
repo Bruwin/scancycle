@@ -180,6 +180,40 @@ END_PROGRAM
     CHECK(vm.get("done").as_bool());
 }
 
+TEST(ctu_publishes_its_count_through_cv) {
+    const char* source = R"st(PROGRAM Counting
+VAR
+    pulse   : BOOL;
+    counter : CTU;
+    parts   : INT;
+END_VAR
+    counter(CU := pulse, PV := 3);
+    parts := counter.CV;
+END_PROGRAM
+)st";
+
+    sc::plc::ParseResult parsed = sc::plc::parse_program(source);
+    if (!parsed.program) {
+        CHECK(false);
+        return;
+    }
+    sc::plc::CompileResult compiled = sc::plc::compile(*parsed.program);
+    if (!compiled.ok) {
+        CHECK(false);
+        return;
+    }
+    sc::plc::Vm vm(compiled.program);
+
+    const bool pulses[] = {true, false, true, false, true};
+    for (int scan = 0; scan < 5; ++scan) {
+        CHECK(vm.set("pulse", sc::plc::Value::boolean(pulses[scan])));
+        CHECK(vm.scan(static_cast<sc::i64>(scan) * 10));
+    }
+
+    // CV is the count itself, not the preset flag.
+    CHECK(vm.get("parts").as_int() == 3);
+}
+
 TEST(int_declaration_wraps_at_sixteen_bits) {
     const char* source = R"st(PROGRAM Wrapping
 VAR

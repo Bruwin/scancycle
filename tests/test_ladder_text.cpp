@@ -364,3 +364,46 @@ TEST(a_counter_reset_needs_a_condition) {
     CHECK(built.diagnostics[0].message.find("reset input needs a condition") !=
           std::string::npos);
 }
+
+TEST(a_counter_rung_publishes_its_count) {
+    const std::string header =
+        "VAR\n    a : BOOL;\n    d : BOOL;\n    parts : INT;\nEND_VAR\n";
+    Built built = build(header + "d, parts = CTU(a, 5)\n");
+    CHECK(built.ok);
+    if (!built.ok) {
+        return;
+    }
+
+    Vm vm(built.program);
+    CHECK(vm.set("a", Value::boolean(true)));
+    CHECK(vm.scan(10));
+    CHECK(vm.get("parts").as_int() == 1);
+    CHECK(!vm.get("d").as_bool());
+
+    CHECK(vm.set("a", Value::boolean(false)));
+    CHECK(vm.scan(20));
+    CHECK(vm.set("a", Value::boolean(true)));
+    CHECK(vm.scan(30));
+    CHECK(vm.get("parts").as_int() == 2);
+}
+
+TEST(only_a_counter_has_a_second_output) {
+    Built built = build(std::string(kHeader) + "d, a = a\n");
+    CHECK(!built.ok);
+    CHECK(built.diagnostics.size() == 1);
+    CHECK(built.diagnostics[0].message.find("second output") != std::string::npos);
+}
+
+TEST(a_rung_writes_at_most_two_tags) {
+    Built built = build(std::string(kHeader) + "d, a, b = a\n");
+    CHECK(!built.ok);
+    CHECK(built.diagnostics.size() == 1);
+    CHECK(built.diagnostics[0].message.find("at most two tags") != std::string::npos);
+}
+
+TEST(a_counter_value_tag_must_be_declared_on_a_rung) {
+    Built built = build(std::string(kHeader) + "d, missing = CTU(a, 2)\n");
+    CHECK(!built.ok);
+    CHECK(built.diagnostics.size() == 1);
+    CHECK(built.diagnostics[0].message.find("missing") != std::string::npos);
+}

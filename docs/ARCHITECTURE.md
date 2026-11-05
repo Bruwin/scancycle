@@ -75,7 +75,7 @@ state machine and cannot be lowered to straight-line code at all.
 | Language | Front end | State |
 |---|---|---|
 | Structured Text (ST) | `plc/lexer`, `plc/parser`, `plc/compiler` | working and tested |
-| Ladder Diagram (LD) | `plc/ladder_text` parses rung files into `plc/netlist` | working and tested, including negated contacts, coils, `TON`/`TOF` delays and `CTU`/`CTD` counters |
+| Ladder Diagram (LD) | `plc/ladder_text` parses rung files into `plc/netlist` | working and tested, including negated contacts, coils, `TON`/`TOF` delays and `CTU`/`CTD` counters with a CV readout |
 | Function Block Diagram (FBD) | the same `plc/netlist` model | model working and tested, including timer and counter sinks; the block editor is not |
 | Instruction List (IL) | `plc/il`: `LD`/`LDN`, `AND`/`ANDN`, `OR`/`ORN`, `ST`/`STN` | working and tested; files carry a `VAR` block |
 | Sequential Function Chart (SFC) | none | not started |
@@ -86,7 +86,8 @@ instructions. A timer is a sink like a coil: `run_ready = TON(run_latch, 1s)`
 owns an internal `TON` instance and writes its `Q` into the tag, so the network
 stays boolean and a preset never becomes a value on a wire. `TOF`, `CTU` and
 `CTD` have the same shape; a counter's reset (or load) input is a second network
-inside the call, `batch_full = CTU(part_seen, reset_btn, 20)`.
+inside the call, `batch_full = CTU(part_seen, reset_btn, 20)`, and a second tag
+on the left publishes the count itself: `batch_full, parts_made = CTU(...)`.
 
 SFC is different in kind. A chart's steps are *active state*, not a value computed
 once per scan, and its transitions are evaluated against that state. It needs a

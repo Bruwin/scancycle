@@ -407,6 +407,56 @@ SinkParse parse_sink(std::string_view body, std::size_t body_offset, int line,
     return SinkParse::Parsed;
 }
 
+// The tags left of '='. Two are allowed, because a counter has two outputs: Q
+// and CV. Splitting them here keeps the sink parser unaware of the left side.
+bool split_tags(std::string_view text, std::vector<std::string>& out, int line,
+                Diagnostics& diagnostics) {
+    if (text.empty()) {
+        diagnostics.push_back({line, 1, "a rung needs a coil before '='"});
+        return false;
+    }
+
+    std::size_t begin = 0;
+    while (true) {
+        const std::size_t comma = text.find(',', begin);
+        const std::size_t end = comma == std::string_view::npos ? text.size() : comma;
+        const std::string_view piece = trim_text(text.substr(begin, end - begin));
+        const auto column = static_cast<int>(begin) + 1;
+
+        if (piece.empty()) {
+            diagnostics.push_back({line, column, "a rung needs a tag before each comma"});
+            return false;
+        }
+        bool identifier = is_ident_start(piece.front());
+        for (const char c : piece) {
+            if (!is_ident_char(c)) {
+                identifier = false;
+            }
+        }
+        if (!identifier) {
+            diagnostics.push_back(
+                {line, column, "'" + std::string(piece) + "' is not a tag name"});
+            return false;
+        }
+
+        out.emplace_back(piece);
+        if (comma == std::string_view::npos) {
+            break;
+        }
+        begin = comma + 1;
+    }
+
+    if (out.size() > 2) {
+        diagnostics.push_back({line, 1, "a rung writes at most two tags"});
+        return false;
+    }
+    if (out.size() == 2 && out[0] == out[1]) {
+        diagnostics.push_back({line, 1, "a rung cannot write the same tag twice"});
+        return false;
+    }
+    return true;
+}
+
 }  // namespace
 
 LadderParseResult parse_ladder_source(std::string_view source) {
@@ -452,9 +502,9 @@ LadderParseResult parse_ladder_source(std::string_view source) {
             continue;
         }
 
-        const std::string_view coil = trim_text(line.substr(0, equals));
-        if (coil.empty()) {
-            result.diagnostics.push_back({line_number, 1, "a rung needs a coil before '='"});
+        std::vector<std::string> tags;
+        if (!split_tags(trim_text(line.substr(0, equals)), tags, line_number,
+                        result.diagnostics)) {
             continue;
         }
 
@@ -469,26 +519,39 @@ LadderParseResult parse_ladder_source(std::string_view source) {
             rung.condition = std::move(sink.condition);
             if (sink.counter) {
                 CounterSink counter;
-                counter.var = std::string(coil);
+                counter.var = tags[0];
                 counter.preset = sink.preset;
                 counter.down = sink.type == "ctd";
                 counter.reset = std::move(sink.second);
+                if (tags.size() == 2) {
+                    counter.value_var = tags[1];
+                }
                 rung.counter = std::move(counter);
             } else {
+                if (tags.size() == 2) {
+                    result.diagnostics.push_back(
+                        {line_number, 1, "only a counter publishes a second output"});
+                    continue;
+                }
                 TimerSink timer;
-                timer.var = std::string(coil);
+                timer.var = tags[0];
                 timer.preset_ms = sink.preset;
                 timer.off_delay = sink.type == "tof";
                 rung.timer = std::move(timer);
             }
         } else {
+            if (tags.size() == 2) {
+                result.diagnostics.push_back(
+                    {line_number, 1, "only a counter publishes a second output"});
+                continue;
+            }
             ConditionParser parser(body, line_number, equals + 1, result.diagnostics);
             NetPtr condition = parser.parse();
             if (!condition) {
                 continue;
             }
             rung.condition = std::move(condition);
-            rung.coils.push_back(Coil{std::string(coil), false});
+            rung.coils.push_back(Coil{tags[0], false});
         }
         result.source.rungs.push_back(std::move(rung));
     }
