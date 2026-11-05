@@ -68,4 +68,28 @@ GradeReport evaluate(const Lesson& lesson, const sim::Plant& plant, bool program
     return report;
 }
 
+GradeReport refused_report(const Lesson& lesson, std::string_view feature) {
+    GradeReport report;
+    report.lesson_id = lesson.id;
+
+    CheckResult toolbox;
+    toolbox.id = "toolbox";
+    toolbox.description = "Uses only the instructions this lesson grants";
+    toolbox.passed = false;
+    toolbox.detail = "uses '" + std::string(feature) + "', which this lesson does not grant";
+    report.checks.push_back(std::move(toolbox));
+
+    for (const RubricCheck& check : lesson.rubric) {
+        CheckResult skipped;
+        skipped.id = check.id;
+        skipped.description = check.description;
+        skipped.passed = false;
+        skipped.detail = "not run: the program was refused";
+        report.checks.push_back(std::move(skipped));
+    }
+
+    report.passed_count = 0;
+    return report;
+}
+
 }  // namespace sc::lesson

@@ -24,6 +24,10 @@ struct LessonRunConfig {
 
 struct LessonRunResult {
     bool ok = false;   // the run itself completed (not "the student passed")
+
+    // The toolbox refused the program, so nothing ran. report still holds a
+    // grade: the refusal plus every rubric check marked not run.
+    bool refused = false;
     bool faulted = false;
     std::string error;
     lesson::GradeReport report;

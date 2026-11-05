@@ -190,8 +190,10 @@ on the internet. `net/http` parses and formats messages as pure text,
 the catalog as a page, `POST /api/grade` returns a lesson's rubric report as JSON,
 and `POST /grade` renders the same run as a page for the catalog's form.
 `GET /lessons/<id>` shows an objective, its toolbox and its rubric before anyone
-submits. The toolbox is enforced against the compiled program, so a submission
-using an instruction the lesson withholds is refused before it is graded. Both
+submits. The toolbox is enforced against the compiled program: a submission
+using an instruction the lesson withholds comes back as a report whose first row
+names the withheld instruction and whose remaining rows say "not run", rather
+than as a transport error. Both
 grade responses carry the submitted program back in that form, so a rejection or
 a failed compile never costs a student their work. There is no TLS or authentication yet, and the WebSocket half of
 the portal is still open.

@@ -272,6 +272,8 @@ TEST(application_enforces_the_toolbox_it_is_given) {
     CHECK(!refused.initialize());
     CHECK(refused.error().find("AND") != std::string::npos);
     CHECK(refused.error().find("does not grant") != std::string::npos);
+    CHECK(refused.toolbox_refused());
+    CHECK(refused.refused_feature() == "AND");
 
     AppConfig granted = make_config();
     granted.program_source = kGatedProgram;
@@ -279,6 +281,7 @@ TEST(application_enforces_the_toolbox_it_is_given) {
 
     Application allowed(std::move(granted));
     CHECK(allowed.initialize());
+    CHECK(!allowed.toolbox_refused());
 }
 
 TEST(application_checks_the_toolbox_before_the_plant) {

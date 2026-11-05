@@ -593,12 +593,31 @@ TEST(grade_route_refuses_an_instruction_the_lesson_withholds) {
     request.body = "lesson=conveyor-interlock&program=" + form_encode(tof_program);
 
     const net::Response page = app::grade_lesson_page(lessons, request);
-    CHECK(page.status == 500);
-    CHECK(page.body.find("does not grant &#39;TOF&#39;") != std::string::npos ||
-          page.body.find("does not grant 'TOF'") != std::string::npos);
-    CHECK(page.body.find("Your program is still here") != std::string::npos);
+    CHECK(page.status == 200);
+    CHECK(page.body.find("Uses only the instructions this lesson grants") != std::string::npos);
+    CHECK(page.body.find("uses 'TOF'") != std::string::npos);
+    CHECK(page.body.find("not run: the program was refused") != std::string::npos);
+    CHECK(page.body.find("0 of ") != std::string::npos);
+    CHECK(page.body.find("<textarea name=\"program\"") != std::string::npos);
 
     const net::Response json = app::grade_lesson(lessons, request);
-    CHECK(json.status == 500);
-    CHECK(json.body.find("TOF") != std::string::npos);
+    CHECK(json.status == 200);
+    CHECK(json.body.find("\"lesson\":\"conveyor-interlock\"") != std::string::npos);
+    CHECK(json.body.find("\"passed\":false") != std::string::npos);
+    CHECK(json.body.find("\"id\":\"toolbox\"") != std::string::npos);
+}
+
+TEST(refused_report_explains_the_withheld_instruction) {
+    const lesson::Lesson conveyor = lesson::make_conveyor_interlock_lesson();
+    const lesson::GradeReport report = lesson::refused_report(conveyor, "TOF");
+
+    CHECK(report.lesson_id == "conveyor-interlock");
+    CHECK(!report.passed());
+    CHECK(report.passed_count == 0);
+    CHECK(report.checks.size() == conveyor.rubric.size() + 1);
+    CHECK(report.checks.front().id == "toolbox");
+    CHECK(!report.checks.front().passed);
+    CHECK(report.checks.front().detail.find("TOF") != std::string::npos);
+    CHECK(report.checks.front().detail.find("grant") != std::string::npos);
+    CHECK(report.checks.back().detail == "not run: the program was refused");
 }

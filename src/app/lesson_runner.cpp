@@ -32,6 +32,12 @@ LessonRunResult run_lesson(const lesson::Lesson& lesson, LessonRunConfig config)
 
     Application app(std::move(app_config), lesson.starting_plant);
     if (!app.initialize()) {
+        if (app.toolbox_refused()) {
+            result.refused = true;
+            result.error = app.error();
+            result.report = lesson::refused_report(lesson, app.refused_feature());
+            return result;
+        }
         result.error = app.error();
         return result;
     }

@@ -97,6 +97,12 @@ public:
     const sim::Plant& plant() const { return plant_; }
     plc::Vm* plc() { return vm_.get(); }
     const std::string& error() const { return error_; }
+
+    // Set when initialize() refused the program for using an instruction the
+    // lesson withholds. The runner turns that into a failing rubric row, because
+    // a withheld instruction is a grade, not a broken request.
+    bool toolbox_refused() const { return !refused_feature_.empty(); }
+    const std::string& refused_feature() const { return refused_feature_; }
     bool faulted() const { return faulted_; }
     i64 scans() const;
 
@@ -119,6 +125,7 @@ private:
     i64 scan_accumulator_ms_ = 0;
     bool faulted_ = false;
     std::string error_;
+    std::string refused_feature_;
 };
 
 }  // namespace sc

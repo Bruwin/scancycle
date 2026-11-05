@@ -17,6 +17,7 @@ Application::Application(AppConfig config, sim::Plant plant)
 Application::~Application() = default;
 
 bool Application::initialize() {
+    refused_feature_.clear();
     if (config_.plc_scan_ms <= 0) {
         error_ = "plc_scan_ms must be positive";
         return false;
@@ -64,6 +65,7 @@ bool Application::initialize() {
     // solution to the same list, so an exercise cannot ship an answer it forbids.
     for (const std::string& feature : plc::features_used(program_)) {
         if (!lesson::toolbox_allows(config_.allowed_instructions, feature)) {
+            refused_feature_ = feature;
             error_ = "this lesson does not grant '" + feature + "'";
             return false;
         }

@@ -49,7 +49,7 @@ GradeOutcome grade_submission(const std::vector<lesson::Lesson>& lessons,
     config.program = outcome.program;
 
     const LessonRunResult run = run_lesson(*outcome.lesson, config);
-    if (!run.ok) {
+    if (!run.ok && !run.refused) {
         outcome.status = 500;
         outcome.error = run.error;
         return outcome;
