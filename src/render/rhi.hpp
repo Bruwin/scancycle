@@ -1,0 +1,53 @@
+#pragma once
+// Render hardware interface. The Vulkan 1.3 backend implements this in M2; the
+// null device keeps every simulation, editor and grading test GPU-free.
+#include "core/types.hpp"
+#include "world/mesh.hpp"
+
+#include <memory>
+
+namespace sc {
+
+struct FrameConstants {
+    f32 view_projection[16] = {};  // column-major
+    f32 time_seconds = 0.0f;
+    u32 viewport_width = 0;
+    u32 viewport_height = 0;
+};
+
+struct GpuMeshHandle {
+    u32 id = 0;
+    static constexpr u32 kInvalid = 0;
+
+    bool valid() const { return id != kInvalid; }
+};
+
+inline bool operator==(GpuMeshHandle a, GpuMeshHandle b) { return a.id == b.id; }
+
+struct DrawStatistics {
+    u32 live_meshes = 0;
+    u32 quad_count = 0;
+    u32 draw_calls = 0;
+};
+
+class RhiDevice {
+public:
+    virtual ~RhiDevice() = default;
+
+    virtual const char* backend_name() const = 0;
+
+    // One contiguous upload per chunk. Handles are stable until released.
+    virtual GpuMeshHandle upload_chunk_mesh(u32 chunk_x, u32 chunk_y, u32 chunk_z,
+                                            const MeshData& mesh) = 0;
+    virtual void release_mesh(GpuMeshHandle handle) = 0;
+
+    virtual void begin_frame(const FrameConstants& constants) = 0;
+    virtual void draw_frame() = 0;
+    virtual void end_frame() = 0;
+
+    virtual DrawStatistics statistics() const = 0;
+};
+
+std::unique_ptr<RhiDevice> create_null_rhi_device();
+
+}  // namespace sc

@@ -1,0 +1,285 @@
+#include "core/deterministic_rng.hpp"
+#include "plc/compiler.hpp"
+#include "plc/parser.hpp"
+#include "plc/program.hpp"
+#include "plc/vm.hpp"
+#include "world/mesh.hpp"
+#include "world/voxel_chunk.hpp"
+
+#include <algorithm>
+#include <chrono>
+#include <cstdio>
+#include <cstdlib>
+#include <fstream>
+#include <limits>
+#include <sstream>
+#include <string>
+#include <utility>
+#include <vector>
+
+namespace {
+
+void print_usage() {
+    std::printf(
+        "scancycle_cli - Scan Cycle tooling (0.1.0)\n"
+        "\n"
+        "usage:\n"
+        "  scancycle_cli run <program.st> [--scans=N] [--dt-ms=N] [--set name=value]\n"
+        "  scancycle_cli disasm <program.st>\n"
+        "  scancycle_cli bench [--iterations=N]\n");
+}
+
+bool read_file(const std::string& path, std::string& out) {
+    std::ifstream in(path, std::ios::binary);
+    if (!in) {
+        return false;
+    }
+    std::ostringstream buffer;
+    buffer << in.rdbuf();
+    out = buffer.str();
+    return true;
+}
+
+bool split_assignment(const std::string& text, std::string& name, std::string& value) {
+    const std::size_t at = text.find('=');
+    if (at == std::string::npos || at == 0) {
+        return false;
+    }
+    name = text.substr(0, at);
+    value = text.substr(at + 1);
+    return true;
+}
+
+sc::plc::Value parse_value(const std::string& text) {
+    if (text == "true" || text == "TRUE") {
+        return sc::plc::Value::boolean(true);
+    }
+    if (text == "false" || text == "FALSE") {
+        return sc::plc::Value::boolean(false);
+    }
+    if (text.find('.') != std::string::npos) {
+        return sc::plc::Value::real(std::atof(text.c_str()));
+    }
+    return sc::plc::Value::integer(std::atoll(text.c_str()));
+}
+
+void report_diagnostics(const std::string& path, const sc::plc::Diagnostics& diagnostics,
+                        int& problems) {
+    for (const sc::plc::Diagnostic& diagnostic : diagnostics) {
+        if (diagnostic.column > 0) {
+            std::fprintf(stderr, "%s:%d:%d: error: %s\n", path.c_str(), diagnostic.line,
+                         diagnostic.column, diagnostic.message.c_str());
+        } else {
+            std::fprintf(stderr, "%s:%d: error: %s\n", path.c_str(), diagnostic.line,
+                         diagnostic.message.c_str());
+        }
+        ++problems;
+    }
+}
+
+int command_run(const std::vector<std::string>& args) {
+    if (args.empty()) {
+        print_usage();
+        return 2;
+    }
+
+    const std::string& path = args[0];
+    int scans = 100;
+    int dt_ms = 10;
+    std::vector<std::string> assignments;
+
+    for (std::size_t i = 1; i < args.size(); ++i) {
+        const std::string& arg = args[i];
+        if (arg.rfind("--scans=", 0) == 0) {
+            scans = std::atoi(arg.c_str() + 8);
+        } else if (arg.rfind("--dt-ms=", 0) == 0) {
+            dt_ms = std::atoi(arg.c_str() + 8);
+        } else if (arg.rfind("--set=", 0) == 0) {
+            assignments.push_back(arg.substr(6));
+        } else if (arg == "--set" && i + 1 < args.size()) {
+            assignments.push_back(args[++i]);
+        } else {
+            std::fprintf(stderr, "unknown option '%s'\n", arg.c_str());
+            return 2;
+        }
+    }
+
+    std::string source;
+    if (!read_file(path, source)) {
+        std::fprintf(stderr, "cannot read '%s'\n", path.c_str());
+        return 1;
+    }
+
+    sc::plc::ParseResult parsed = sc::plc::parse_program(source);
+    int problems = 0;
+    report_diagnostics(path, parsed.diagnostics, problems);
+    if (!parsed.program) {
+        std::fprintf(stderr, "parse failed\n");
+        return 1;
+    }
+
+    sc::plc::CompileResult compiled = sc::plc::compile(*parsed.program);
+    report_diagnostics(path, compiled.diagnostics, problems);
+    if (problems != 0 || !compiled.ok) {
+        return 1;
+    }
+
+    sc::plc::Vm vm(compiled.program);
+    for (const std::string& assignment : assignments) {
+        std::string name;
+        std::string value;
+        if (!split_assignment(assignment, name, value)) {
+            std::fprintf(stderr, "bad --set '%s' (expected name=value)\n", assignment.c_str());
+            return 2;
+        }
+        if (!vm.set(name, parse_value(value))) {
+            std::fprintf(stderr, "unknown variable '%s'\n", name.c_str());
+            return 2;
+        }
+    }
+
+    sc::i64 best_ns = std::numeric_limits<sc::i64>::max();
+    sc::i64 worst_ns = 0;
+    sc::i64 total_ns = 0;
+    sc::i64 now_ms = 0;
+
+    for (int i = 0; i < scans; ++i) {
+        const auto started = std::chrono::steady_clock::now();
+        const bool healthy = vm.scan(now_ms);
+        const auto finished = std::chrono::steady_clock::now();
+        const sc::i64 elapsed =
+            std::chrono::duration_cast<std::chrono::nanoseconds>(finished - started).count();
+
+        best_ns = std::min(best_ns, elapsed);
+        worst_ns = std::max(worst_ns, elapsed);
+        total_ns += elapsed;
+
+        if (!healthy) {
+            std::fprintf(stderr, "fault at scan %d (t=%lld ms): %s\n", i,
+                         static_cast<long long>(now_ms), vm.fault_message().c_str());
+            return 1;
+        }
+        now_ms += dt_ms;
+    }
+
+    const double average_us = static_cast<double>(total_ns) / static_cast<double>(scans) / 1000.0;
+
+    std::printf("program : %s\n", compiled.program.name.c_str());
+    std::printf("scans   : %d at %d ms scan time\n", scans, dt_ms);
+    std::printf("code    : %zu instructions, %zu constants, %zu function blocks\n",
+                compiled.program.code.size(), compiled.program.constants.size(),
+                compiled.program.fbs.size());
+    std::printf("scan    : avg %.2f us, best %.2f us, worst %.2f us\n", average_us,
+                static_cast<double>(best_ns) / 1000.0, static_cast<double>(worst_ns) / 1000.0);
+    std::printf("     (measured on this machine just now; not a target-hardware figure)\n");
+    std::printf("\nvariables:\n");
+    for (const sc::plc::VarInfo& var : compiled.program.vars) {
+        if (var.fb_index >= 0) {
+            continue;
+        }
+        std::printf("  %-16s = %s\n", var.name.c_str(), vm.get(var.name).to_string().c_str());
+    }
+    return 0;
+}
+
+int command_disasm(const std::vector<std::string>& args) {
+    if (args.empty()) {
+        print_usage();
+        return 2;
+    }
+    std::string source;
+    if (!read_file(args[0], source)) {
+        std::fprintf(stderr, "cannot read '%s'\n", args[0].c_str());
+        return 1;
+    }
+    sc::plc::ParseResult parsed = sc::plc::parse_program(source);
+    int problems = 0;
+    report_diagnostics(args[0], parsed.diagnostics, problems);
+    if (!parsed.program) {
+        return 1;
+    }
+    sc::plc::CompileResult compiled = sc::plc::compile(*parsed.program);
+    report_diagnostics(args[0], compiled.diagnostics, problems);
+    if (problems != 0 || !compiled.ok) {
+        return 1;
+    }
+    std::printf("%s", sc::plc::disassemble(compiled.program).c_str());
+    return 0;
+}
+
+int command_bench(const std::vector<std::string>& args) {
+    int iterations = 200;
+    for (const std::string& arg : args) {
+        if (arg.rfind("--iterations=", 0) == 0) {
+            iterations = std::atoi(arg.c_str() + 13);
+        }
+    }
+    if (iterations <= 0) {
+        iterations = 1;
+    }
+
+    sc::VoxelChunk chunk;
+    for (int z = 0; z < sc::kChunkSize; ++z) {
+        for (int x = 0; x < sc::kChunkSize; ++x) {
+            chunk.set(x, 0, z, 1);
+        }
+    }
+
+    sc::Pcg32 rng(0x5ca11cULL, 7ULL);
+    for (int i = 0; i < 32; ++i) {
+        const int x = static_cast<int>(rng.bounded(static_cast<sc::u32>(sc::kChunkSize)));
+        const int z = static_cast<int>(rng.bounded(static_cast<sc::u32>(sc::kChunkSize)));
+        const int height = 1 + static_cast<int>(rng.bounded(8));
+        for (int y = 1; y <= height && y < sc::kChunkSize; ++y) {
+            chunk.set(x, y, z, 2);
+        }
+    }
+
+    sc::MeshData mesh = sc::greedy_mesh(chunk);
+    const std::size_t quads = mesh.quad_count();
+    const std::size_t vertices = mesh.vertices.size();
+    const std::size_t indices = mesh.indices.size();
+
+    const auto started = std::chrono::steady_clock::now();
+    for (int i = 0; i < iterations; ++i) {
+        mesh = sc::greedy_mesh(chunk);
+    }
+    const auto finished = std::chrono::steady_clock::now();
+    const double total_us =
+        std::chrono::duration<double, std::micro>(finished - started).count();
+
+    std::printf("chunk    : %d^3 voxels, palette %u entries, %d bytes of indices\n",
+                sc::kChunkSize, chunk.palette_size(), sc::kChunkVolume);
+    std::printf("mesh     : %zu quads, %zu vertices, %zu indices (%zu bytes/vertex)\n", quads,
+                vertices, indices, sizeof(sc::PackedVertex));
+    std::printf("meshing  : %.1f us per chunk over %d iterations\n", total_us / iterations,
+                iterations);
+    std::printf("     (single-threaded CPU measurement on this machine, not a GPU figure)\n");
+    return 0;
+}
+
+}  // namespace
+
+int main(int argc, char** argv) {
+    std::vector<std::string> args(argv + 1, argv + argc);
+    if (args.empty()) {
+        print_usage();
+        return 2;
+    }
+
+    const std::string command = args[0];
+    const std::vector<std::string> rest(args.begin() + 1, args.end());
+
+    if (command == "run") {
+        return command_run(rest);
+    }
+    if (command == "disasm") {
+        return command_disasm(rest);
+    }
+    if (command == "bench") {
+        return command_bench(rest);
+    }
+
+    print_usage();
+    return 2;
+}

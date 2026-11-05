@@ -1,0 +1,123 @@
+cmake_minimum_required(VERSION 3.25)
+project(ScanCycle VERSION 0.1.0 LANGUAGES CXX)
+
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+
+option(SC_WERROR "Treat compiler warnings as errors" ON)
+option(SC_BUILD_TESTS "Build the test suite" ON)
+
+add_library(sc_warnings INTERFACE)
+if(MSVC)
+    target_compile_options(sc_warnings INTERFACE /W4 /permissive-)
+    if(SC_WERROR)
+        target_compile_options(sc_warnings INTERFACE /WX)
+    endif()
+else()
+    target_compile_options(sc_warnings INTERFACE -Wall -Wextra -Wpedantic -Wshadow)
+    if(SC_WERROR)
+        target_compile_options(sc_warnings INTERFACE -Werror)
+    endif()
+endif()
+
+# Layers, bottom to top. A target may only link targets declared above it.
+#   L0 core                      types, logging, rng, jobs
+#   L1 platform render world sim plc
+#   L2 io assets ui lesson
+#   L3 net app
+#   L4 apps
+
+add_library(sc_core
+    src/core/log.cpp
+    src/core/job_system.cpp
+)
+target_include_directories(sc_core PUBLIC ${PROJECT_SOURCE_DIR}/src)
+target_link_libraries(sc_core PRIVATE sc_warnings)
+
+add_library(sc_platform src/platform/platform_null.cpp)
+target_link_libraries(sc_platform PUBLIC sc_core PRIVATE sc_warnings)
+
+add_library(sc_world
+    src/world/voxel_chunk.cpp
+    src/world/greedy_mesh.cpp
+    src/world/world.cpp
+    src/world/worldgen.cpp
+)
+target_link_libraries(sc_world PUBLIC sc_core PRIVATE sc_warnings)
+
+add_library(sc_render
+    src/render/rhi_null.cpp
+    src/render/mesh_arena.cpp
+    src/render/voxel_renderer.cpp
+)
+target_link_libraries(sc_render PUBLIC sc_core sc_world PRIVATE sc_warnings)
+
+add_library(sc_sim src/sim/plant.cpp)
+target_link_libraries(sc_sim PUBLIC sc_core PRIVATE sc_warnings)
+
+add_library(sc_plc
+    src/plc/value.cpp
+    src/plc/lexer.cpp
+    src/plc/parser.cpp
+    src/plc/program.cpp
+    src/plc/compiler.cpp
+    src/plc/function_blocks.cpp
+    src/plc/vm.cpp
+)
+target_link_libraries(sc_plc PUBLIC sc_core PRIVATE sc_warnings)
+
+add_library(sc_io
+    src/io/tag_database.cpp
+    src/io/sim_driver.cpp
+    src/io/modbus.cpp
+    src/io/commissioning.cpp
+)
+target_link_libraries(sc_io PUBLIC sc_core sc_sim sc_plc PRIVATE sc_warnings)
+
+add_library(sc_assets
+    src/assets/material_library.cpp
+    src/assets/kit_generator.cpp
+)
+target_link_libraries(sc_assets PUBLIC sc_core sc_world PRIVATE sc_warnings)
+
+add_library(sc_ui src/ui/editor_model.cpp)
+target_link_libraries(sc_ui PUBLIC sc_core sc_plc PRIVATE sc_warnings)
+
+add_library(sc_lesson
+    src/lesson/lesson.cpp
+    src/lesson/grader.cpp
+)
+target_link_libraries(sc_lesson PUBLIC sc_core sc_sim PRIVATE sc_warnings)
+
+add_library(sc_net src/net/portal_server.cpp)
+target_link_libraries(sc_net PUBLIC sc_core sc_lesson PRIVATE sc_warnings)
+
+add_library(sc_app src/app/application.cpp)
+target_link_libraries(sc_app PUBLIC sc_core sc_sim sc_plc sc_io sc_lesson PRIVATE sc_warnings)
+
+add_executable(scancycle_cli apps/scancycle_cli/main.cpp)
+target_link_libraries(scancycle_cli PRIVATE sc_plc sc_world sc_warnings)
+
+add_executable(scancycle_server apps/scancycle_server/main.cpp)
+target_link_libraries(scancycle_server PRIVATE sc_net sc_lesson sc_warnings)
+
+if(SC_BUILD_TESTS)
+    enable_testing()
+    add_executable(sc_tests
+        tests/main.cpp
+        tests/test_core.cpp
+        tests/test_world.cpp
+        tests/test_plc.cpp
+        tests/test_sim.cpp
+        tests/test_io.cpp
+        tests/test_tools.cpp
+        tests/test_lesson.cpp
+        tests/test_app.cpp
+    )
+    target_link_libraries(sc_tests PRIVATE
+        sc_plc sc_world sc_sim sc_io sc_assets sc_ui sc_lesson sc_net sc_app sc_warnings)
+    add_test(NAME sc_tests COMMAND sc_tests)
+endif()
