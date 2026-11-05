@@ -84,6 +84,14 @@ add_library(sc_io
     src/io/sim_driver.cpp
     src/io/modbus.cpp
     src/io/commissioning.cpp
+    src/io/df1.cpp
+    src/io/df1_pccc.cpp
+    src/io/df1_slave.cpp
+    src/io/df1_driver.cpp
+    src/io/df1_client.cpp
+    src/io/df1_profile.cpp
+    src/io/df1_serial_link.cpp
+    src/io/serial_io.cpp
 )
 target_link_libraries(sc_io PUBLIC sc_core sc_sim sc_plc PRIVATE sc_warnings)
 
@@ -130,6 +138,7 @@ add_library(sc_app
     src/app/watch_text.cpp
     src/app/lesson_runner.cpp
     src/app/lesson_api.cpp
+    src/app/df1_tool.cpp
 )
 target_link_libraries(sc_app PUBLIC sc_core sc_sim sc_plc sc_io sc_lesson sc_net sc_ui PRIVATE sc_warnings)
 
@@ -189,6 +198,9 @@ if(SC_BUILD_TESTS)
         tests/test_lesson.cpp
         tests/test_websocket.cpp
         tests/test_app.cpp
+        tests/test_df1.cpp
+        tests/test_df1_serial.cpp
+        tests/test_df1_tool.cpp
     )
     target_link_libraries(sc_tests PRIVATE
         sc_plc sc_world sc_render sc_sim sc_io sc_assets sc_ui sc_lesson sc_net sc_app
