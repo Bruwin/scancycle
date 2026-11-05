@@ -1,5 +1,6 @@
 #include "app/grades_students.hpp"
 
+#include "app/grades_query.hpp"
 #include "app/grades_time.hpp"
 #include "net/portal_server.hpp"
 
@@ -32,10 +33,10 @@ void add_attempt(const GradeRecord& record, StudentTally& tally) {
     }
 }
 
-// `name` is already escaped for HTML.
-std::string row(const std::string& name, const StudentTally& tally) {
+// `cell` is ready markup: a link for a named student, a plain label otherwise.
+std::string row(const std::string& cell, const StudentTally& tally) {
     const std::size_t rate = tally.passed * 100 / tally.attempts;
-    std::string out = "<tr><td>" + name + "</td><td>" + std::to_string(tally.attempts) +
+    std::string out = "<tr><td>" + cell + "</td><td>" + std::to_string(tally.attempts) +
                       "</td><td>" + std::to_string(tally.passed) + "</td><td>" +
                       std::to_string(rate) + "%</td><td>" + format_utc_minutes(tally.latest_at) +
                       " <span class=\"";
@@ -67,7 +68,9 @@ std::string student_summary(const std::vector<const GradeRecord*>& records) {
                         "<th>Attempts</th><th>Passed</th><th>Pass rate</th><th>Latest</th>"
                         "</tr></thead><tbody>";
     for (const auto& [name, tally] : named) {
-        table += row(net::html_escape(name), tally);
+        table += row("<a href=\"/grades?student=" + query_escape(name) + "\">" +
+                         net::html_escape(name) + "</a>",
+                     tally);
     }
     if (has_unnamed) {
         // Last, and labelled as a gap: folding anonymous attempts into a student

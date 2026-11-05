@@ -8,10 +8,12 @@
 
 namespace sc::app {
 
-// `lesson` is the `lesson` query field: empty shows the whole log, otherwise
-// only that lesson's attempts, summary and misses. A lesson nobody attempted is
-// an empty page, not a 404: the log itself exists and the query is well formed.
-net::Response grades_page(const GradeLog& log, std::string_view lesson = {});
+// `lesson` and `student` are the query fields of the same names. Empty means
+// unfiltered; both empty shows the whole log, and both given narrows to that
+// student's attempts at that lesson. A value nobody attempted is an empty page,
+// not a 404: the log itself exists and the query is well formed.
+net::Response grades_page(const GradeLog& log, std::string_view lesson = {},
+                          std::string_view student = {});
 
 // One recorded attempt with its full report, for the page a teacher prints.
 // `ordinal` is the suffix of /grades/<n>, counted from 1 in file order; anything

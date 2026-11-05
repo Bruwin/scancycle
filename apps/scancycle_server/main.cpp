@@ -57,18 +57,21 @@ int main(int argc, char** argv) {
                      return sc::app::grade_lesson_page(lessons, request, &grade_log);
                  });
 
-    // `?lesson=<id>` narrows either view to one lesson; an absent field is the
-    // whole log, and an empty value is treated the same as absent.
+    // `?lesson=<id>` and `?student=<name>` narrow either view; an absent field is
+    // the whole log, an empty value is treated as absent, and both together
+    // narrow further.
     router.route(sc::net::HttpMethod::Get, "/grades",
                  [&grade_log](const sc::net::Request& request) {
                      const std::string lesson = sc::net::form_field(request.query, "lesson");
-                     return sc::app::grades_page(grade_log, lesson);
+                     const std::string student = sc::net::form_field(request.query, "student");
+                     return sc::app::grades_page(grade_log, lesson, student);
                  });
 
     router.route(sc::net::HttpMethod::Get, "/grades.csv",
                  [&grade_log](const sc::net::Request& request) {
                      const std::string lesson = sc::net::form_field(request.query, "lesson");
-                     return sc::app::grades_csv(grade_log, lesson);
+                     const std::string student = sc::net::form_field(request.query, "student");
+                     return sc::app::grades_csv(grade_log, lesson, student);
                  });
 
     // The log grows while the server runs, so one route per attempt cannot be

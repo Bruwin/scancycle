@@ -1,5 +1,6 @@
 #include "app/grades_page.hpp"
 
+#include "app/grades_query.hpp"
 #include "app/grades_students.hpp"
 #include "app/grades_time.hpp"
 
@@ -34,28 +35,6 @@ bool parse_ordinal(std::string_view text, std::size_t& out) {
     }
     out = value;
     return true;
-}
-
-// A lesson id comes from the log, which is a text file a person can edit, so a
-// filter link is built from an escaped id rather than pasted in verbatim.
-std::string query_escape(std::string_view text) {
-    std::string out;
-    out.reserve(text.size());
-    for (const char character : text) {
-        const bool plain = (character >= 'a' && character <= 'z') ||
-                           (character >= 'A' && character <= 'Z') ||
-                           (character >= '0' && character <= '9') || character == '-' ||
-                           character == '_';
-        if (plain) {
-            out.push_back(character);
-        } else {
-            char encoded[4];
-            std::snprintf(encoded, sizeof(encoded), "%%%02X",
-                          static_cast<unsigned>(static_cast<unsigned char>(character)));
-            out += encoded;
-        }
-    }
-    return out;
 }
 
 struct LessonTally {
@@ -161,7 +140,7 @@ std::string missed_checks(const std::vector<const GradeRecord*>& records) {
 
 }  // namespace
 
-net::Response grades_page(const GradeLog& log, std::string_view lesson) {
+net::Response grades_page(const GradeLog& log, std::string_view lesson, std::string_view student) {
     std::string error;
     const std::vector<GradeRecord> records = log.entries(error);
 
@@ -171,34 +150,54 @@ net::Response grades_page(const GradeLog& log, std::string_view lesson) {
     std::vector<const GradeRecord*> shown;
     shown.reserve(records.size());
     for (const GradeRecord& record : records) {
-        if (lesson.empty() || record.lesson_id == lesson) {
+        if ((lesson.empty() || record.lesson_id == lesson) &&
+            (student.empty() || record.student == student)) {
             shown.push_back(&record);
         }
     }
 
+    const bool filtered = !lesson.empty() || !student.empty();
     std::string page = net::page_head("Scan Cycle grades");
     page += "<p class=\"no-print\"><a href=\"/\">Scan Cycle teacher portal</a></p>";
     page += "<h1>Graded attempts</h1>";
-    if (lesson.empty()) {
+    if (!filtered) {
         page += "<p>" + std::to_string(records.size()) +
                 (records.size() == 1 ? " attempt" : " attempts") + " recorded in <code>" +
                 net::html_escape(log.path()) + "</code>.</p>";
     } else {
         page += "<p>" + std::to_string(shown.size()) +
-                (shown.size() == 1 ? " attempt" : " attempts") + " for lesson <code>" +
-                net::html_escape(lesson) + "</code> in <code>" + net::html_escape(log.path()) +
-                "</code>.</p>";
-        page += "<p class=\"no-print\"><a href=\"/grades\">Show all lessons</a></p>";
+                (shown.size() == 1 ? " attempt" : " attempts");
+        if (!student.empty()) {
+            page += " by <code>" + net::html_escape(student) + "</code>";
+        }
+        if (!lesson.empty()) {
+            page += " for lesson <code>" + net::html_escape(lesson) + "</code>";
+        }
+        page += " in <code>" + net::html_escape(log.path()) + "</code>.</p>";
+        page += "<p class=\"no-print\"><a href=\"/grades\">Show the whole log</a></p>";
     }
 
     if (records.empty()) {
         page += "<p>No graded attempts yet.</p>";
     } else if (shown.empty()) {
-        page += "<p>No attempts recorded for <code>" + net::html_escape(lesson) + "</code>.</p>";
+        page += "<p>No attempts recorded";
+        if (!student.empty()) {
+            page += " by <code>" + net::html_escape(student) + "</code>";
+        }
+        if (!lesson.empty()) {
+            page += " for lesson <code>" + net::html_escape(lesson) + "</code>";
+        }
+        page += ".</p>";
     } else {
-        const std::string csv_href = lesson.empty()
-                                         ? std::string("/grades.csv")
-                                         : "/grades.csv?lesson=" + query_escape(lesson);
+        std::string csv_href = "/grades.csv";
+        const char* join = "?";
+        if (!lesson.empty()) {
+            csv_href += std::string(join) + "lesson=" + query_escape(lesson);
+            join = "&";
+        }
+        if (!student.empty()) {
+            csv_href += std::string(join) + "student=" + query_escape(student);
+        }
         page += "<p class=\"no-print\"><a href=\"" + csv_href +
                 "\" download>Download as CSV</a></p>";
         page += lesson_summary(shown);
@@ -213,7 +212,8 @@ net::Response grades_page(const GradeLog& log, std::string_view lesson) {
         // hides rows, it does not renumber them.
         for (std::size_t index = records.size(); index-- > 0;) {
             const GradeRecord& record = records[index];
-            if (!lesson.empty() && record.lesson_id != lesson) {
+            if ((!lesson.empty() && record.lesson_id != lesson) ||
+                (!student.empty() && record.student != student)) {
                 continue;
             }
             const std::string who =

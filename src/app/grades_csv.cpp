@@ -45,14 +45,15 @@ std::string csv_field(const std::string& text) {
 
 }  // namespace
 
-net::Response grades_csv(const GradeLog& log, std::string_view lesson) {
+net::Response grades_csv(const GradeLog& log, std::string_view lesson, std::string_view student) {
     std::string error;
     const std::vector<GradeRecord> records = log.entries(error);
 
     std::string csv = "attempt,when_utc,student,lesson,result,passed,total,missed_checks\n";
     for (std::size_t index = 0; index < records.size(); ++index) {
         const GradeRecord& record = records[index];
-        if (!lesson.empty() && record.lesson_id != lesson) {
+        if ((!lesson.empty() && record.lesson_id != lesson) ||
+            (!student.empty() && record.student != student)) {
             continue;
         }
         std::string missed;

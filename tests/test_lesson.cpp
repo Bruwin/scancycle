@@ -1067,7 +1067,7 @@ TEST(grades_page_narrows_to_one_lesson) {
     CHECK(filtered.body.find("href=\"/grades?lesson=press-batch\"") != std::string::npos);
     CHECK(filtered.body.find("href=\"/grades.csv?lesson=press-batch\"") !=
           std::string::npos);
-    CHECK(filtered.body.find("Show all lessons") != std::string::npos);
+    CHECK(filtered.body.find("Show the whole log") != std::string::npos);
     // Ordinals are file positions: the second press attempt is still attempt 3.
     CHECK(filtered.body.find("href=\"/grades/3\"") != std::string::npos);
     CHECK(filtered.body.find("href=\"/grades/1\"") != std::string::npos);
@@ -1084,7 +1084,7 @@ TEST(grades_page_narrows_to_one_lesson) {
     const net::Response nothing = app::grades_page(log, "no-such-lesson");
     CHECK(nothing.status == 200);
     CHECK(nothing.body.find("No attempts recorded for") != std::string::npos);
-    CHECK(nothing.body.find("Show all lessons") != std::string::npos);
+    CHECK(nothing.body.find("Show the whole log") != std::string::npos);
 
     std::filesystem::remove(path);
 }
@@ -1158,14 +1158,17 @@ TEST(grades_page_summarises_each_student) {
     const net::Response page = app::grades_page(log);
     CHECK(page.status == 200);
     CHECK(page.body.find("<h2>By student</h2>") != std::string::npos);
-    CHECK(page.body.find("<td>Ada</td><td>2</td><td>1</td><td>50%</td>") != std::string::npos);
-    CHECK(page.body.find("<td>Bob</td><td>1</td><td>1</td><td>100%</td>") != std::string::npos);
+    // The name is a filter link, which is why the cell wraps the name.
+    CHECK(page.body.find("<td><a href=\"/grades?student=Ada\">Ada</a></td><td>2</td>"
+                         "<td>1</td><td>50%</td>") != std::string::npos);
+    CHECK(page.body.find("<td><a href=\"/grades?student=Bob\">Bob</a></td><td>1</td>"
+                         "<td>1</td><td>100%</td>") != std::string::npos);
     CHECK(page.body.find("<em>(unnamed)</em></td><td>1</td><td>0</td><td>0%</td>") !=
           std::string::npos);
 
     // Named students are alphabetical and the unnamed attempts come last.
-    const std::size_t ada = page.body.find("<td>Ada</td><td>2</td>");
-    const std::size_t bob = page.body.find("<td>Bob</td><td>1</td>");
+    const std::size_t ada = page.body.find("<a href=\"/grades?student=Ada\">Ada</a>");
+    const std::size_t bob = page.body.find("<a href=\"/grades?student=Bob\">Bob</a>");
     CHECK(ada < bob);
     CHECK(bob < page.body.find("<em>(unnamed)</em>"));
 
@@ -1229,6 +1232,95 @@ TEST(grades_carry_the_student_name_from_the_form) {
         CHECK(records[0].student == "Ada Lovelace");
         CHECK(records[0].lesson_id == "press-batch");
         CHECK(records[0].program.empty());
+    }
+
+    std::filesystem::remove(path);
+}
+
+TEST(grades_page_narrows_to_one_student) {
+    const std::filesystem::path path =
+        std::filesystem::temp_directory_path() / "scancycle-grades-student-filter.tsv";
+    std::filesystem::remove(path);
+    app::GradeLog log(path.string());
+    std::string error;
+
+    const auto append = [&log, &error](std::int64_t at, const std::string& student, bool passed) {
+        app::GradeRecord record;
+        record.at = at;
+        record.lesson_id = "press-batch";
+        record.student = student;
+        record.passed = passed;
+        record.passed_count = passed ? 1 : 0;
+        record.total = 1;
+        return log.append(record, error);
+    };
+
+    CHECK(append(1700000000, "Ada", true));
+    CHECK(append(1700000060, "Bob", true));
+    CHECK(append(1700000120, "Ada", false));
+
+    const net::Response filtered = app::grades_page(log, "", "Ada");
+    CHECK(filtered.status == 200);
+    CHECK(filtered.body.find("2 attempts by <code>Ada</code>") != std::string::npos);
+    CHECK(filtered.body.find("Bob") == std::string::npos);
+    CHECK(filtered.body.find("href=\"/grades.csv?student=Ada\"") != std::string::npos);
+    CHECK(filtered.body.find("Show the whole log") != std::string::npos);
+    // Ordinals survive: the second Ada attempt is still attempt 3.
+    CHECK(filtered.body.find("href=\"/grades/3\"") != std::string::npos);
+    CHECK(filtered.body.find("href=\"/grades/2\"") == std::string::npos);
+
+    // Both filters together narrow to one student's work at one lesson.
+    const net::Response both = app::grades_page(log, "press-batch", "Ada");
+    CHECK(both.body.find("2 attempts by <code>Ada</code> for lesson <code>press-batch</code>") !=
+          std::string::npos);
+
+    const net::Response nothing = app::grades_page(log, "", "Zoe");
+    CHECK(nothing.status == 200);
+    CHECK(nothing.body.find("No attempts recorded by <code>Zoe</code>") != std::string::npos);
+
+    std::filesystem::remove(path);
+}
+
+TEST(grades_csv_exports_one_student_and_keeps_ordinals) {
+    const std::filesystem::path path =
+        std::filesystem::temp_directory_path() / "scancycle-grades-csv-student-filter.tsv";
+    std::filesystem::remove(path);
+    app::GradeLog log(path.string());
+    std::string error;
+
+    const auto append = [&log, &error](std::int64_t at, const std::string& student, bool passed) {
+        app::GradeRecord record;
+        record.at = at;
+        record.lesson_id = "press-batch";
+        record.student = student;
+        record.passed = passed;
+        record.passed_count = passed ? 1 : 0;
+        record.total = 1;
+        return log.append(record, error);
+    };
+
+    CHECK(append(1700000000, "Ada", true));
+    CHECK(append(1700000060, "Bob", true));
+    CHECK(append(1700000120, "Ada", false));
+
+    const net::Response csv = app::grades_csv(log, "", "Ada");
+    std::vector<std::string> lines;
+    std::size_t pos = 0;
+    while (pos < csv.body.size()) {
+        const std::size_t end = csv.body.find('\n', pos);
+        if (end == std::string::npos) {
+            break;
+        }
+        lines.push_back(csv.body.substr(pos, end - pos));
+        pos = end + 1;
+    }
+    CHECK(lines.size() == 3);
+    if (lines.size() == 3) {
+        CHECK(lines[1].rfind("1,", 0) == 0);
+        CHECK(lines[1].find("Ada") != std::string::npos);
+        CHECK(lines[2].rfind("3,", 0) == 0);
+        CHECK(lines[2].find("Ada") != std::string::npos);
+        CHECK(csv.body.find("Bob") == std::string::npos);
     }
 
     std::filesystem::remove(path);
