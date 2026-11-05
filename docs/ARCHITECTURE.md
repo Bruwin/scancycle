@@ -61,7 +61,8 @@ Pipeline: `Lexer -> Parser -> AST -> Compiler -> bytecode -> Vm`.
 * Structured Text is case-insensitive; the lexer lowercases all identifiers.
 
 Deliberate omissions for now: user-defined `FUNCTION_BLOCK`s, arrays, UDTs,
-`CASE`, `REPEAT`, the FBD block library, SFC, and every graphical editor widget.
+`CASE`, `REPEAT`, the FBD block library, stored SFC actions, and every graphical
+editor widget beyond the drawings themselves.
 Online forcing is off this list: the driver applies forces and `Application`
 exposes them.
 
@@ -78,7 +79,7 @@ state machine and cannot be lowered to straight-line code at all.
 | Ladder Diagram (LD) | `plc/ladder_text` parses rung files into `plc/netlist` | working and tested, including negated contacts, coils, `TON`/`TOF` delays and `CTU`/`CTD` counters with a CV readout |
 | Function Block Diagram (FBD) | the same `plc/netlist` model | working and tested: the ladder page draws either view from one chart, with AND/OR blocks that swap on a click |
 | Instruction List (IL) | `plc/il`: `LD`/`LDN`, `AND`/`ANDN`, `OR`/`ORN`, `ST`/`STN` | working and tested; files carry a `VAR` block |
-| Sequential Function Chart (SFC) | none | not started |
+| Sequential Function Chart (SFC) | `plc/sfc` parses charts and lowers them to rungs | working and tested: one active step per scan, actions follow their step, and a transition guard is the same expression a rung condition is |
 
 LD and FBD share one model because they are one idea drawn two ways: a boolean
 network feeding sinks. A ladder rung and an FBD network compile to identical
@@ -90,9 +91,11 @@ inside the call, `batch_full = CTU(part_seen, reset_btn, 20)`, and a second tag
 on the left publishes the count itself: `batch_full, parts_made = CTU(...)`.
 
 SFC is different in kind. A chart's steps are *active state*, not a value computed
-once per scan, and its transitions are evaluated against that state. It needs a
-step and transition model plus a scheduler around the VM, not another lowering
-pass, which is why it waits instead of riding along with the netlist work.
+once per scan, and its transitions are evaluated against that state. It still
+lowers through the same emitter, but the lowering is a state machine: each step
+becomes a tag, and every step's next value is computed from the state at the start
+of the scan before any step is written. That ordering is what holds a chart to one
+step per scan without a scheduler.
 
 The claim that this is one IR and not four is tested, not asserted:
 `tests/test_netlist.cpp` and `tests/test_il.cpp` each draw the same expression in
@@ -315,8 +318,9 @@ drives the whole cell)*
 * **M7** graphical LD/FBD editors on the existing network model, SFC, content,
   asset variety. *(in progress: `scancycle_ide --program=file.ld` serves SVG rungs
   in either a ladder or a function block view, with click-to-invert contacts,
-  click-to-swap junctions and forms for branches, coils and rails; SFC and the
-  content pass remain)*
+  click-to-swap junctions and forms for branches, coils and rails; `plc/sfc` parses
+  charts and lowers them to rungs with one active step per scan; the chart drawing
+  and the content pass remain)*
 
 ## Deferred
 
