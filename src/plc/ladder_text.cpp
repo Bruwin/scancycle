@@ -37,6 +37,12 @@ NetPtr make_junction(NetKind kind, std::vector<NetPtr> operands) {
     return node;
 }
 
+NetPtr make_rail() {
+    auto node = std::make_unique<NetNode>();
+    node->kind = NetKind::Always;
+    return node;
+}
+
 // Recursive descent over one rung's condition. It reports at most one diagnostic,
 // on the first problem: cascading errors from one typo help nobody.
 class ConditionParser {
@@ -149,6 +155,10 @@ private:
                 fail("'!' needs a contact after it");
                 return nullptr;
             }
+            if (text_equals_ci(name, "true") || text_equals_ci(name, "false")) {
+                fail("'!' applies to a contact, not a constant");
+                return nullptr;
+            }
             return make_contact(name, true);
         }
         if (text_[pos_] == '(') {
@@ -167,6 +177,12 @@ private:
         if (name.empty()) {
             fail(std::string("unexpected '") + text_[pos_] + "'");
             return nullptr;
+        }
+        if (text_equals_ci(name, "true")) {
+            return make_rail();
+        }
+        if (text_equals_ci(name, "false")) {
+            return make_junction(NetKind::Parallel, {});
         }
         return make_contact(name, false);
     }
@@ -409,8 +425,8 @@ SinkParse parse_sink(std::string_view body, std::size_t body_offset, int line,
 
 // The tags left of '='. Two are allowed, because a counter has two outputs: Q
 // and CV. Splitting them here keeps the sink parser unaware of the left side.
-bool split_tags(std::string_view text, std::vector<std::string>& out, int line,
-                Diagnostics& diagnostics) {
+bool split_tags(std::string_view text, std::vector<std::string>& out,
+                std::vector<bool>& negated, int line, Diagnostics& diagnostics) {
     if (text.empty()) {
         diagnostics.push_back({line, 1, "a rung needs a coil before '='"});
         return false;
@@ -427,8 +443,18 @@ bool split_tags(std::string_view text, std::vector<std::string>& out, int line,
             diagnostics.push_back({line, column, "a rung needs a tag before each comma"});
             return false;
         }
-        bool identifier = is_ident_start(piece.front());
-        for (const char c : piece) {
+        std::string_view name = piece;
+        bool inverted = false;
+        if (!name.empty() && name.front() == '!') {
+            inverted = true;
+            name.remove_prefix(1);
+            if (name.empty()) {
+                diagnostics.push_back({line, column, "'!' needs a tag name"});
+                return false;
+            }
+        }
+        bool identifier = is_ident_start(name.front());
+        for (const char c : name) {
             if (!is_ident_char(c)) {
                 identifier = false;
             }
@@ -439,7 +465,8 @@ bool split_tags(std::string_view text, std::vector<std::string>& out, int line,
             return false;
         }
 
-        out.emplace_back(piece);
+        out.emplace_back(name);
+        negated.push_back(inverted);
         if (comma == std::string_view::npos) {
             break;
         }
@@ -458,6 +485,116 @@ bool split_tags(std::string_view text, std::vector<std::string>& out, int line,
 }
 
 }  // namespace
+
+namespace {
+
+// A junction nested in the same kind is flattened: the file has no way to say
+// "this AND is a child AND", and it would read as noise if it did. A parallel
+// branch under a series must keep its parentheses because & binds tighter.
+std::string format_condition(const NetNode& node, NetKind parent);
+
+std::string format_operands(const NetNode& node, NetKind kind, const char* separator) {
+    std::string text;
+    for (std::size_t i = 0; i < node.operands.size(); ++i) {
+        if (i != 0) {
+            text += separator;
+        }
+        text += format_condition(*node.operands[i], kind);
+    }
+    return text;
+}
+
+std::string format_condition(const NetNode& node, NetKind parent) {
+    switch (node.kind) {
+        case NetKind::Contact:
+            return (node.negated ? "!" : "") + node.var;
+        case NetKind::Always:
+            return "TRUE";
+        case NetKind::Series: {
+            if (node.operands.empty()) {
+                return "TRUE";
+            }
+            std::string text = format_operands(node, NetKind::Series, " & ");
+            if (parent == NetKind::Parallel) {
+                return "(" + text + ")";
+            }
+            return text;
+        }
+        case NetKind::Parallel: {
+            if (node.operands.empty()) {
+                return "FALSE";
+            }
+            std::string text = format_operands(node, NetKind::Parallel, " | ");
+            if (parent == NetKind::Series) {
+                return "(" + text + ")";
+            }
+            return text;
+        }
+    }
+    return "FALSE";
+}
+
+std::string format_root_condition(const NetPtr& condition) {
+    if (!condition) {
+        return "TRUE";
+    }
+    return format_condition(*condition, condition->kind);
+}
+
+std::string format_duration(i64 milliseconds) {
+    if (milliseconds > 0 && milliseconds % 60'000 == 0) {
+        return std::to_string(milliseconds / 60'000) + "m";
+    }
+    if (milliseconds > 0 && milliseconds % 1'000 == 0) {
+        return std::to_string(milliseconds / 1'000) + "s";
+    }
+    return std::to_string(milliseconds) + "ms";
+}
+
+std::string format_sink(const Rung& rung) {
+    const std::string condition = format_root_condition(rung.condition);
+    if (rung.timer) {
+        return rung.timer->var + " = " + (rung.timer->off_delay ? "TOF(" : "TON(") +
+               condition + ", " + format_duration(rung.timer->preset_ms) + ")\n";
+    }
+    if (rung.counter) {
+        std::string text = rung.counter->var;
+        if (!rung.counter->value_var.empty()) {
+            text += ", " + rung.counter->value_var;
+        }
+        text += rung.counter->down ? " = CTD(" : " = CTU(";
+        text += condition;
+        if (rung.counter->reset) {
+            text += ", " + format_root_condition(rung.counter->reset);
+        }
+        text += ", " + std::to_string(rung.counter->preset) + ")\n";
+        return text;
+    }
+
+    std::string text;
+    for (const Coil& coil : rung.coils) {
+        text += (coil.negated ? "!" : "");
+        text += coil.var + " = " + condition + "\n";
+    }
+    return text;
+}
+
+}  // namespace
+
+std::string format_ladder_source(const LadderSource& source) {
+    std::string text;
+    if (!source.vars.empty()) {
+        text += "VAR\n";
+        for (const TagDecl& var : source.vars) {
+            text += "    " + var.name + " : " + value_type_name(var.type) + ";\n";
+        }
+        text += "END_VAR\n\n";
+    }
+    for (const Rung& rung : source.rungs) {
+        text += format_sink(rung);
+    }
+    return text;
+}
 
 LadderParseResult parse_ladder_source(std::string_view source) {
     LadderParseResult result;
@@ -503,7 +640,8 @@ LadderParseResult parse_ladder_source(std::string_view source) {
         }
 
         std::vector<std::string> tags;
-        if (!split_tags(trim_text(line.substr(0, equals)), tags, line_number,
+        std::vector<bool> negated;
+        if (!split_tags(trim_text(line.substr(0, equals)), tags, negated, line_number,
                         result.diagnostics)) {
             continue;
         }
@@ -511,11 +649,17 @@ LadderParseResult parse_ladder_source(std::string_view source) {
         const std::string_view body = line.substr(equals + 1);
         Rung rung;
         ParsedSink sink;
-        const SinkParse parsed = parse_sink(body, equals + 1, line_number, result.diagnostics, sink);
+        const SinkParse parsed =
+            parse_sink(body, equals + 1, line_number, result.diagnostics, sink);
         if (parsed == SinkParse::Failed) {
             continue;
         }
         if (parsed == SinkParse::Parsed) {
+            if (negated[0] || (negated.size() > 1 && negated[1])) {
+                result.diagnostics.push_back(
+                    {line_number, 1, "a timer or counter output cannot be negated"});
+                continue;
+            }
             rung.condition = std::move(sink.condition);
             if (sink.counter) {
                 CounterSink counter;
@@ -551,7 +695,7 @@ LadderParseResult parse_ladder_source(std::string_view source) {
                 continue;
             }
             rung.condition = std::move(condition);
-            rung.coils.push_back(Coil{tags[0], false});
+            rung.coils.push_back(Coil{tags[0], negated[0]});
         }
         result.source.rungs.push_back(std::move(rung));
     }

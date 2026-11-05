@@ -23,6 +23,12 @@ NetPtr contact(std::string var, bool negated = false) {
     return node;
 }
 
+NetPtr rail() {
+    auto node = std::make_unique<NetNode>();
+    node->kind = NetKind::Always;
+    return node;
+}
+
 // A braced operand list would have to copy the unique_ptrs, so operands are
 // collected explicitly.
 std::vector<NetPtr> list(NetPtr first, NetPtr second) {
@@ -97,6 +103,22 @@ TEST(a_contact_energises_its_coil) {
 
     CHECK(vm.set("start", Value::boolean(true)));
     CHECK(vm.scan(10));
+    CHECK(vm.get("motor").as_bool());
+}
+
+TEST(an_always_node_conducts_without_a_tag) {
+    const std::vector<TagDecl> declared = bool_tags({"motor"});
+    std::vector<Rung> rungs;
+    rungs.push_back(rung_of(rail(), "motor"));
+
+    const NetlistResult built = compile_netlist("Rail", rungs, declared);
+    CHECK(built.ok);
+    if (!built.ok) {
+        return;
+    }
+
+    Vm vm(built.program);
+    CHECK(vm.scan(0));
     CHECK(vm.get("motor").as_bool());
 }
 
