@@ -203,7 +203,9 @@ attempt for a gradebook.
 `?lesson=<id>` and `?student=<name>` narrow the log and the export, alone or
 together. The attempt table shows 25 rows per page; `?page=<n>` slices only that
 table, while the summaries and the export keep describing the whole filtered
-set. The stylesheet carries print rules, so the log, an attempt and
+set. A coverage table crosses the named students with the lessons in that set,
+so a gap such as "this student never tried the conveyor" is visible without
+reading every row. The stylesheet carries print rules, so the log, an attempt and
 a grade report print without nav links or forms. A line written by an older
 portal still opens, with its counts and no rubric. Both
 grade responses carry the submitted program back in that form, so a rejection or

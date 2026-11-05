@@ -1,6 +1,7 @@
 #include "harness.hpp"
 
 #include "app/grade_log.hpp"
+#include "app/grades_coverage.hpp"
 #include "app/grades_csv.hpp"
 #include "app/grades_page.hpp"
 #include "app/grades_pager.hpp"
@@ -1264,6 +1265,7 @@ TEST(grades_page_narrows_to_one_student) {
     const net::Response filtered = app::grades_page(log, "", "Ada");
     CHECK(filtered.status == 200);
     CHECK(filtered.body.find("2 attempts by <code>Ada</code>") != std::string::npos);
+    CHECK(filtered.body.find("Coverage by student and lesson") != std::string::npos);
     CHECK(filtered.body.find("Bob") == std::string::npos);
     CHECK(filtered.body.find("href=\"/grades.csv?student=Ada\"") != std::string::npos);
     CHECK(filtered.body.find("Show the whole log") != std::string::npos);
@@ -1481,6 +1483,61 @@ TEST(grades_page_browses_a_long_log_a_page_at_a_time) {
         }
     }
     CHECK(lines == 31);
+
+    std::filesystem::remove(path);
+}
+
+TEST(student_coverage_crosses_students_with_lessons) {
+    const std::filesystem::path path =
+        std::filesystem::temp_directory_path() / "scancycle-coverage.tsv";
+    std::filesystem::remove(path);
+    app::GradeLog log(path.string());
+    std::string error;
+
+    const auto append = [&log, &error](const std::string& student, const std::string& lesson,
+                                       bool passed) {
+        app::GradeRecord record;
+        record.at = 1700000000;
+        record.lesson_id = lesson;
+        record.student = student;
+        record.passed = passed;
+        record.passed_count = passed ? 1 : 0;
+        record.total = 1;
+        return log.append(record, error);
+    };
+
+    CHECK(append("Ada", "press-batch", true));
+    CHECK(append("Ada", "press-batch", false));
+    CHECK(append("Ada", "conveyor-interlock", true));
+    CHECK(append("Bob", "press-batch", true));
+    CHECK(append("", "press-batch", true));
+
+    const std::vector<app::GradeRecord> records = log.entries(error);
+    std::vector<const app::GradeRecord*> shown;
+    for (const app::GradeRecord& record : records) {
+        shown.push_back(&record);
+    }
+
+    const std::string table = app::student_coverage(shown);
+    CHECK(table.find("<h2>Coverage by student and lesson</h2>") != std::string::npos);
+    CHECK(table.find("<th><a href=\"/grades?student=Ada\">Ada</a></th>") != std::string::npos);
+    CHECK(table.find("<a href=\"/grades?student=Ada&lesson=conveyor-interlock\">1/1</a>") !=
+          std::string::npos);
+    CHECK(table.find("<a href=\"/grades?student=Ada&lesson=press-batch\">1/2</a>") !=
+          std::string::npos);
+    CHECK(table.find("<a href=\"/grades?student=Bob&lesson=press-batch\">1/1</a>") !=
+          std::string::npos);
+    // Bob never tried the conveyor, and the unnamed attempt is not a person.
+    CHECK(table.find("<td>-</td>") != std::string::npos);
+    CHECK(table.find("unnamed") == std::string::npos);
+
+    app::GradeRecord anonymous;
+    anonymous.lesson_id = "press-batch";
+    anonymous.passed = true;
+    anonymous.passed_count = 1;
+    anonymous.total = 1;
+    const std::vector<const app::GradeRecord*> no_names{&anonymous};
+    CHECK(app::student_coverage(no_names).empty());
 
     std::filesystem::remove(path);
 }

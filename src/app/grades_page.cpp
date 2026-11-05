@@ -1,5 +1,6 @@
 #include "app/grades_page.hpp"
 
+#include "app/grades_coverage.hpp"
 #include "app/grades_pager.hpp"
 #include "app/grades_query.hpp"
 #include "app/grades_students.hpp"
@@ -204,6 +205,7 @@ net::Response grades_page(const GradeLog& log, std::string_view lesson, std::str
                 "\" download>Download as CSV</a></p>";
         page += lesson_summary(shown);
         page += student_summary(shown);
+        page += student_coverage(shown);
         page += missed_checks(shown);
         page += "<h2>Attempts</h2>";
         page += attempt_pager(current, pages, lesson, student);
