@@ -37,7 +37,7 @@ completes the curriculum should recognise TIA Portal or Studio 5000 on sight.
 | `src/world` | `VoxelChunk`, greedy mesher, `World`, world generation | 1 |
 | `src/sim` | plant devices, `Plant` tick, process image | 1 |
 | `src/plc` | IEC 61131-3 front ends (ST, LD/FBD, IL), bytecode, VM, standard FBs | 1 |
-| `src/io` | tag database, `PlcDriver`, Modbus codec, commissioning | 2 |
+| `src/io` | tag database, `PlcDriver`, in-house Modbus/TCP driver and slave, commissioning | 2 |
 | `src/assets` | procedural materials and machine kits | 2 |
 | `src/ui` | Structured Text editor model | 2 |
 | `src/lesson` | lesson schema, rubric, grader | 2 |
@@ -129,8 +129,18 @@ truth-table column.
 `Plant` owns devices (`Motor`, `Belt`, `PhotoEye`, `Valve`, `StackLight`) and
 advances them on a fixed 60 Hz tick. Devices expose named tags through a
 `TagDatabase`; the `PlcDriver` interface copies the input image before a scan and
-the output image after it. Drivers that touch hardware run on their own thread
-with timestamped, double-buffered images and a stale-data watchdog.
+the output image after it. The hardware path is designed around a background
+driver with timestamped, double-buffered images and a stale-data watchdog; the
+first Modbus slice is synchronous and is tested against a loopback slave before
+that wrapper is added.
+
+The first live-driver slice is `io::ModbusTcpDriver`: one boolean tag per holding
+register, inputs latched before the scan, only changed outputs written after it,
+and every write checked by `CommissioningPolicy`. `io::ModbusTcpSlave` is a
+single-client loopback register image for tests and classroom commissioning.
+The TCP primitives are in-house; the driver deliberately reuses the existing
+Modbus codec rather than owning a second frame parser. libplctag and DF1 remain
+the next M6 steps.
 
 `io::Df1Driver` is the first live driver that speaks to a controller: SLC 500 and
 PLC-5 serial DF1, in-house. It owns the full-duplex DLE framing (BCC or CRC-16),
@@ -192,7 +202,9 @@ our own code stays LGPL rather than becoming GPL.
 
 Reads are free. Writes require an explicit commissioning session: per-device
 opt-in, address allowlist, rate limit, and a visible state in the UI. The
-simulation never writes to hardware on its own.
+simulation never writes to hardware on its own. The live Modbus driver fails
+closed if no policy is supplied and writes only when an output value changes, so
+a steady register is not poked once per scan.
 
 ## Lessons and the teacher portal
 
@@ -281,10 +293,9 @@ drives the whole cell)*
   (three on the press cell), the loopback HTTP pages and the WebSocket live feed; the portal is
   still loopback-only with no TLS or authentication)*
 * **M6** live drivers: Modbus TCP against a software slave, then libplctag, then DF1.
-  *(in progress: the DF1 codec, serial link, software data table and driver are
-  implemented and tested headlessly, with the MicroLogix 1000 as the reference
-  target; hardware commissioning remains, because no live driver has run against
-  a real controller)*
+  *(in progress: the in-house Modbus/TCP driver, loopback software slave, write-gated
+  output path and socket tests are done; the DF1 slice has exchanged a valid read with
+  a real MicroLogix 1000, so only libplctag remains)*
 * **M7** graphical LD/FBD editors on the existing network model, SFC, content,
   asset variety.
 

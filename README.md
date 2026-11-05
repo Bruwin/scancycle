@@ -32,7 +32,7 @@ Portal or Studio 5000 and recognise everything.
 | Box flow: belt transfer, photo-eye sensing, jam detection | working, tested |
 | Machine: pull from infeed, cycle time, release to outfeed | working, tested |
 | Lesson runner: a lesson's reference program drives its own cell | working, tested |
-| Modbus/TCP codec, commissioning safety gate | working, tested |
+| Modbus/TCP codec, live loopback driver, software slave, commissioning gate | working, tested |
 | DF1 codec (DLE, BCC/CRC-16), PCCC typed read/write, loopback data table | working, tested (no hardware) |
 | DF1 serial link (termios, pty tests), MicroLogix 1000 profile, bring-up CLI | working, tested (no hardware) |
 | Procedural materials and parametric machine kits | working, tested |
@@ -202,7 +202,7 @@ src/render    RHI interface, mesh upload, voxel renderer (CPU side)
 src/world     voxel chunks, greedy mesher, world container, world generation
 src/sim       plant devices, factory simulation tick
 src/plc       IEC 61131-3 front ends (ST, ladder/FBD, IL) -> bytecode -> VM
-src/io        tag database, PLC driver interface, Modbus and DF1 codecs, serial link
+src/io        tag database, PLC driver interface, Modbus/TCP driver + slave, DF1 codec, serial link
 src/assets    procedural material library and machine kit generator
 src/ui        Structured Text editor model (buffer, diagnostics, undo)
 src/lesson    lesson data model, rubric, grader
