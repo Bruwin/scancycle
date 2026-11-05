@@ -114,7 +114,7 @@ with, so a broken exercise fails CI instead of failing a classroom.
 ./build/bin/scancycle_cli bench
 
 # Step one scan at a time against the vertical-slice cell and print a watch table
-./build/bin/scancycle_cli trace examples/press_cell.st --scans=5 --force=run_light=true
+./build/bin/scancycle_cli trace examples/press_cell.st --scans=110 --watch=press,run_light
 
 # Run every lesson's reference program against its cell and grade it
 ./build/bin/scancycle_cli lesson

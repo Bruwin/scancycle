@@ -352,9 +352,17 @@ int command_trace(const std::vector<std::string>& args) {
         }
     }
 
-    std::printf("cell    : %u devices\n", app.plant().count());
+    std::printf("cell    : %u devices, %lld ms per scan\n", app.plant().count(),
+                static_cast<long long>(config.plc_scan_ms));
     for (const std::string& name : app.unbound_devices()) {
         std::printf("unbound : %s (the program never mentions it)\n", name.c_str());
+    }
+    // The table below shows what the program computed. A forced tag is marked,
+    // but its value is the logic's, not the field's - so say plainly what the
+    // field is being told, or the mark is a puzzle rather than a warning.
+    for (const sc::io::Force& force : app.forces().entries()) {
+        std::printf("force   : %s = %s in the field (the program keeps computing its own)\n",
+                    force.name.c_str(), force.value ? "TRUE" : "FALSE");
     }
 
     std::printf("\nscan");
