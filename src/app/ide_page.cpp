@@ -98,19 +98,28 @@ net::Response ide_page(const IdeSession& session) {
                 page += "yes";
             }
             page += "</td><td class=\"no-print\">";
-            page += "<form method=\"post\" action=\"/force\" "
-                    "style=\"display:flex;gap:.3rem;margin:0\">";
-            page += "<input type=\"hidden\" name=\"name\" value=\"" +
-                    net::html_escape(tag.name) + "\">";
-            page += "<button name=\"action\" value=\"true\">TRUE</button>";
-            page += "<button name=\"action\" value=\"false\">FALSE</button>";
-            page += "<button name=\"action\" value=\"clear\">Clear</button>";
-            page += "</form></td></tr>";
+            if (!tag.forceable) {
+                page += "<span title=\"Forcing applies to plant I/O tags only\">"
+                        "not an I/O tag</span>";
+            } else {
+                page += "<form method=\"post\" action=\"/force\" "
+                        "style=\"display:flex;gap:.3rem;margin:0\">";
+                page += "<input type=\"hidden\" name=\"name\" value=\"" +
+                        net::html_escape(tag.name) + "\">";
+                page += "<button name=\"action\" value=\"true\">TRUE</button>";
+                page += "<button name=\"action\" value=\"false\">FALSE</button>";
+                if (tag.forced) {
+                    page += "<button name=\"action\" value=\"clear\">Clear</button>";
+                }
+                page += "</form>";
+            }
+            page += "</td></tr>";
         }
         page += "</tbody></table>";
     }
 
-    page += "<p class=\"no-print\">Forcing an input changes what the program sees. "
+    page += "<p class=\"no-print\">Only tags bound to plant I/O can be forced; internal "
+            "variables are monitor-only. Forcing an input changes what the program sees. "
             "Forcing an output changes what the field device gets. The watch value stays "
             "the program's own, so the logic and the force can disagree on purpose.</p>";
 

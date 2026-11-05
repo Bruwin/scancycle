@@ -183,6 +183,7 @@ std::vector<Application::Watch> Application::watch(
             entry.value = vm_->get(name);
             entry.present = entry.value.type != plc::ValueType::Void;
         }
+        entry.forceable = tags_.find(name) >= 0;
         entry.forced = forces_.forced(name);
         out.push_back(std::move(entry));
     }

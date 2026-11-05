@@ -86,6 +86,29 @@ TEST(ide_session_forces_and_clears_a_bound_output) {
     CHECK(!session.clear_force("run_light"));
 }
 
+TEST(ide_session_marks_only_bound_io_tags_forceable) {
+    app::IdeSession session(kIdeProgram);
+    const Application::WatchSnapshot snapshot = session.snapshot();
+    const Application::Watch* light = find_watch(snapshot, "run_light");
+    const Application::Watch* count = find_watch(snapshot, "count");
+    CHECK(light != nullptr);
+    CHECK(count != nullptr);
+    if (light != nullptr) {
+        CHECK(light->forceable);
+    }
+    if (count != nullptr) {
+        CHECK(!count->forceable);
+    }
+}
+
+TEST(ide_page_only_offers_forces_for_bound_io_tags) {
+    app::IdeSession session(kIdeProgram);
+    const net::Response response = app::ide_page(session);
+    CHECK(response.body.find("name=\"name\" value=\"run_light\"") != std::string::npos);
+    CHECK(response.body.find("name=\"name\" value=\"count\"") == std::string::npos);
+    CHECK(response.body.find("not an I/O tag") != std::string::npos);
+}
+
 TEST(ide_page_escapes_the_editor_buffer) {
     app::IdeSession session(std::string("(* <script>alert(1)</script> *)\n") + kIdeProgram);
     CHECK(session.compiled());

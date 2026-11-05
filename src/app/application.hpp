@@ -73,6 +73,7 @@ public:
         std::string name;
         plc::Value value;
         bool present = false;  // false when the program has no such variable
+        bool forceable = false;  // true when the name is bound to plant I/O
         bool forced = false;
     };
 
