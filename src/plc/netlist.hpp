@@ -37,6 +37,7 @@ enum class NetKind : u8 {
     Contact,   // reads one tag, optionally inverted
     Series,    // every operand must conduct
     Parallel,  // any operand must conduct
+    Always,    // a rail literal: conducts without naming a tag
 };
 
 struct NetNode;

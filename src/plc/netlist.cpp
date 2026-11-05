@@ -22,6 +22,9 @@ bool validate(const NetNode& node, const CompiledProgram& program, std::string& 
         }
         return true;
     }
+    if (node.kind == NetKind::Always) {
+        return true;
+    }
     for (const NetPtr& operand : node.operands) {
         if (!operand) {
             error = "a junction has an empty operand";
@@ -69,6 +72,11 @@ void emit(CompiledProgram& program, const NetNode& node) {
                 emit(program, *node.operands[i]);
                 program.code.push_back({Op::Binary, static_cast<i32>(BinOp::Or), 0});
             }
+            return;
+
+        case NetKind::Always:
+            program.code.push_back(
+                {Op::PushConst, add_const(program, Value::boolean(true)), 0});
             return;
     }
 }
