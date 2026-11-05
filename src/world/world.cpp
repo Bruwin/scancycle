@@ -1,6 +1,27 @@
 #include "world/world.hpp"
 
+#include <array>
+
 namespace sc {
+namespace {
+
+// Copies the 32x32 wall of `neighbour` that touches our chunk into a slab.
+// `layer` is that wall's index inside the neighbour: 31 when the neighbour sits
+// on the negative side of us, 0 when it sits on the positive one.
+void copy_wall(const VoxelChunk& neighbour, int axis, int layer,
+               std::array<MaterialId, kChunkSize * kChunkSize>& slab) {
+    for (int v = 0; v < kChunkSize; ++v) {
+        for (int u = 0; u < kChunkSize; ++u) {
+            int p[3] = {0, 0, 0};
+            p[axis] = layer;
+            p[(axis + 1) % 3] = u;
+            p[(axis + 2) % 3] = v;
+            slab[static_cast<std::size_t>(u + kChunkSize * v)] = neighbour.at(p[0], p[1], p[2]);
+        }
+    }
+}
+
+}  // namespace
 
 VoxelChunk& World::chunk_at(ChunkCoord coord) { return chunks_[coord]; }
 
@@ -41,7 +62,28 @@ MeshData World::mesh(ChunkCoord coord) const {
     if (chunk == nullptr) {
         return MeshData{};
     }
-    return greedy_mesh(*chunk);
+
+    ChunkNeighbours neighbours;
+    for (int axis = 0; axis < 3; ++axis) {
+        for (int side = 0; side < 2; ++side) {
+            ChunkCoord offset = coord;
+            const i32 delta = (side == 0) ? 1 : -1;
+            if (axis == 0) {
+                offset.x += delta;
+            } else if (axis == 1) {
+                offset.y += delta;
+            } else {
+                offset.z += delta;
+            }
+            const VoxelChunk* neighbour = find(offset);
+            if (neighbour == nullptr) {
+                continue;  // absent chunks are air, and the slab is already air
+            }
+            copy_wall(*neighbour, axis, side == 0 ? 0 : kChunkSize - 1,
+                      neighbours.slabs[static_cast<std::size_t>(axis * 2 + side)]);
+        }
+    }
+    return greedy_mesh(*chunk, neighbours);
 }
 
 }  // namespace sc

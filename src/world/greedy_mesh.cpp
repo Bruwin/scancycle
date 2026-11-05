@@ -18,9 +18,35 @@ void MeshData::clear() {
     indices.clear();
 }
 
-MeshData greedy_mesh(const VoxelChunk& chunk) {
+MeshData greedy_mesh(const VoxelChunk& chunk) { return greedy_mesh(chunk, ChunkNeighbours{}); }
+
+MeshData greedy_mesh(const VoxelChunk& chunk, const ChunkNeighbours& neighbours) {
     MeshData out;
     constexpr int N = kChunkSize;
+
+    // Outside the chunk, a voxel belongs to whichever neighbour wall it touches.
+    // Only one axis can leave the chunk at a time, so the direction of the first
+    // out-of-range component names the slab.
+    const auto sample = [&](int x, int y, int z) -> MaterialId {
+        if (VoxelChunk::in_bounds(x, y, z)) {
+            return chunk.at(x, y, z);
+        }
+        int p[3] = {x, y, z};
+        for (int axis = 0; axis < 3; ++axis) {
+            if (p[axis] >= 0 && p[axis] < N) {
+                continue;
+            }
+            const int u = p[(axis + 1) % 3];
+            const int v = p[(axis + 2) % 3];
+            if (u < 0 || u >= N || v < 0 || v >= N) {
+                return kMaterialAir;  // a diagonal corner touches no face
+            }
+            const int face = axis * 2 + (p[axis] >= N ? 0 : 1);
+            return neighbours.slabs[static_cast<std::size_t>(face)]
+                                  [static_cast<std::size_t>(u + N * v)];
+        }
+        return kMaterialAir;
+    };
 
     for (int axis = 0; axis < 3; ++axis) {
         const int plane_u = (axis + 1) % 3;
@@ -41,13 +67,13 @@ MeshData greedy_mesh(const VoxelChunk& chunk) {
                         p[plane_u] = i;
                         p[plane_v] = j;
 
-                        const MaterialId here = chunk.at(p[0], p[1], p[2]);
+                        const MaterialId here = sample(p[0], p[1], p[2]);
                         if (here == kMaterialAir) {
                             continue;
                         }
                         int q[3] = {p[0], p[1], p[2]};
                         q[axis] += sign;
-                        if (chunk.at(q[0], q[1], q[2]) != kMaterialAir) {
+                        if (sample(q[0], q[1], q[2]) != kMaterialAir) {
                             continue;
                         }
                         mask[static_cast<std::size_t>(i + N * j)].material = here;

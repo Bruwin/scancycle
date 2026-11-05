@@ -49,8 +49,9 @@ public:
     std::size_t chunk_count() const { return chunks_.size(); }
     std::vector<ChunkCoord> coords() const;
 
-    // Meshes one chunk in isolation. Faces at a chunk boundary are currently
-    // emitted anyway; neighbour-aware meshing lands with the M2 streaming work.
+    // Meshes one chunk with its neighbours' walls folded in, so a face shared
+    // with a solid neighbour is not emitted. A neighbour that was never loaded
+    // counts as air, which is also what the edge of the loaded world is.
     MeshData mesh(ChunkCoord coord) const;
 
 private:
