@@ -2,15 +2,39 @@
 
 #include "app/lesson_runner.hpp"
 #include "lesson/grader.hpp"
+#include "app/lesson_api.hpp"
 #include "lesson/lesson.hpp"
 #include "net/http.hpp"
 #include "net/http_server.hpp"
 #include "net/portal_server.hpp"
 #include "sim/plant.hpp"
 
+#include <cctype>
 #include <thread>
 
 using namespace sc;
+
+namespace {
+
+std::string form_encode(std::string_view text) {
+    std::string out;
+    for (const char character : text) {
+        const auto byte = static_cast<unsigned char>(character);
+        if (std::isalnum(byte) != 0 || character == '_' || character == '-' || character == '.') {
+            out += character;
+        } else if (character == ' ') {
+            out += '+';
+        } else {
+            const char* hex = "0123456789ABCDEF";
+            out += '%';
+            out += hex[(byte >> 4) & 0xF];
+            out += hex[byte & 0xF];
+        }
+    }
+    return out;
+}
+
+}  // namespace
 
 TEST(lesson_grants_only_its_instruction_set) {
     const lesson::Lesson built_in = lesson::make_conveyor_interlock_lesson();
@@ -71,7 +95,7 @@ TEST(grader_reports_a_missing_device_instead_of_crashing) {
 TEST(portal_router_serves_the_default_surface) {
     std::vector<lesson::Lesson> lessons{lesson::make_conveyor_interlock_lesson()};
     const net::PortalRouter router = net::make_default_router(lessons);
-    CHECK(router.route_count() == 2);
+    CHECK(router.route_count() == 3);
 
     net::Request request;
     request.method = net::HttpMethod::Get;
@@ -85,6 +109,13 @@ TEST(portal_router_serves_the_default_surface) {
     const net::Response catalog = router.dispatch(request);
     CHECK(catalog.status == 200);
     CHECK(catalog.body.find("conveyor-interlock") != std::string::npos);
+
+    request.path = "/";
+    const net::Response page = router.dispatch(request);
+    CHECK(page.status == 200);
+    CHECK(page.content_type.find("text/html") != std::string::npos);
+    CHECK(page.body.find("conveyor-interlock") != std::string::npos);
+    CHECK(page.body.find("action=\"/api/grade\"") != std::string::npos);
 
     request.path = "/api/missing";
     const net::Response missing = router.dispatch(request);
@@ -290,4 +321,104 @@ TEST(ladder_lesson_reference_solution_passes_its_own_rubric) {
     CHECK(!run.faulted);
     CHECK(run.boxes_processed >= 3);
     CHECK(run.report.passed());
+}
+
+TEST(portal_form_field_decodes_url_encoding) {
+    CHECK(net::form_field("lesson=press-batch&program=a+b%2Bc", "lesson") == "press-batch");
+    CHECK(net::form_field("lesson=press-batch&program=a+b%2Bc", "program") == "a b+c");
+    CHECK(net::form_field("other=1", "lesson").empty());
+    CHECK(net::form_field("lesson=", "lesson").empty());
+}
+
+TEST(portal_serves_a_catalog_page) {
+    const std::vector<lesson::Lesson> lessons = lesson::make_builtin_lessons();
+    const net::PortalRouter router = net::make_default_router(lessons);
+
+    net::Request request;
+    request.method = net::HttpMethod::Get;
+    request.path = "/";
+    const net::Response page = router.dispatch(request);
+
+    CHECK(page.status == 200);
+    CHECK(page.content_type.rfind("text/html", 0) == 0);
+    CHECK(page.body.find("<form") != std::string::npos);
+    CHECK(page.body.find("press-batch-ladder") != std::string::npos);
+}
+
+TEST(grade_route_runs_the_reference_solution) {
+    const std::vector<lesson::Lesson> lessons = lesson::make_builtin_lessons();
+
+    net::Request request;
+    request.method = net::HttpMethod::Post;
+    request.path = "/api/grade";
+    request.body = "lesson=press-batch";
+
+    const net::Response response = app::grade_lesson(lessons, request);
+
+    CHECK(response.status == 200);
+    CHECK(response.body.find("\"lesson\":\"press-batch\"") != std::string::npos);
+    CHECK(response.body.find("\"passed\":true") != std::string::npos);
+    CHECK(response.body.find("\"checks\":[") != std::string::npos);
+}
+
+TEST(grade_route_rejects_an_unknown_lesson) {
+    const std::vector<lesson::Lesson> lessons = lesson::make_builtin_lessons();
+
+    net::Request request;
+    request.method = net::HttpMethod::Post;
+    request.path = "/api/grade";
+    request.body = "lesson=no-such-lesson";
+
+    const net::Response response = app::grade_lesson(lessons, request);
+
+    CHECK(response.status == 404);
+    CHECK(response.body.find("unknown lesson") != std::string::npos);
+}
+
+TEST(grade_route_grades_a_submitted_program) {
+    const std::vector<lesson::Lesson> lessons = lesson::make_builtin_lessons();
+    const std::string idle =
+        "PROGRAM Idle\nVAR\n    unused : BOOL;\nEND_VAR\n    unused := FALSE;\nEND_PROGRAM\n";
+
+    net::Request request;
+    request.method = net::HttpMethod::Post;
+    request.path = "/api/grade";
+    request.body = "lesson=press-cycle&program=" + form_encode(idle);
+
+    const net::Response response = app::grade_lesson(lessons, request);
+
+    CHECK(response.status == 200);
+    CHECK(response.body.find("\"lesson\":\"press-cycle\"") != std::string::npos);
+    CHECK(response.body.find("\"passed\":false") != std::string::npos);
+}
+
+TEST(portal_transport_grades_over_a_socket) {
+    const std::vector<lesson::Lesson> lessons = lesson::make_builtin_lessons();
+    net::PortalRouter router = net::make_default_router(lessons);
+    router.route(net::HttpMethod::Post, "/api/grade",
+                 [&lessons](const net::Request& request) {
+                     return app::grade_lesson(lessons, request);
+                 });
+
+    net::HttpServer server(router);
+    CHECK(server.listen(0));
+    if (server.port() == 0) {
+        return;
+    }
+
+    const std::string body = "lesson=press-batch";
+    const std::string raw = "POST /api/grade HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Length: " +
+                            std::to_string(body.size()) + "\r\n\r\n" + body;
+
+    bool served = false;
+    std::thread worker([&server, &served] { served = server.serve_one(); });
+
+    std::string error;
+    const std::string answer = net::http_round_trip(server.port(), raw, error);
+    worker.join();
+
+    CHECK(error.empty());
+    CHECK(served);
+    CHECK(answer.find("HTTP/1.1 200 OK") != std::string::npos);
+    CHECK(answer.find("\"lesson\":\"press-batch\"") != std::string::npos);
 }

@@ -20,6 +20,37 @@ const char* status_text(int status) {
     }
 }
 
+int hex_value(char character) {
+    if (character >= '0' && character <= '9') {
+        return character - '0';
+    }
+    if (character >= 'a' && character <= 'f') {
+        return character - 'a' + 10;
+    }
+    if (character >= 'A' && character <= 'F') {
+        return character - 'A' + 10;
+    }
+    return -1;
+}
+
+std::string url_decode(std::string_view text) {
+    std::string out;
+    out.reserve(text.size());
+    for (std::size_t i = 0; i < text.size(); ++i) {
+        const char character = text[i];
+        if (character == '+') {
+            out += ' ';
+        } else if (character == '%' && i + 2 < text.size() && hex_value(text[i + 1]) >= 0 &&
+                   hex_value(text[i + 2]) >= 0) {
+            out += static_cast<char>(hex_value(text[i + 1]) * 16 + hex_value(text[i + 2]));
+            i += 2;
+        } else {
+            out += character;
+        }
+    }
+    return out;
+}
+
 }  // namespace
 
 ParsedRequest parse_http_request(std::string_view raw) {
@@ -85,6 +116,28 @@ std::string format_http_response(const Response& response) {
     text += "\r\nConnection: close\r\n\r\n";
     text += response.body;
     return text;
+}
+
+}  // namespace sc::net
+
+namespace sc::net {
+
+std::string form_field(std::string_view body, std::string_view name) {
+    std::size_t pos = 0;
+    while (pos <= body.size()) {
+        const std::size_t ampersand = body.find('&', pos);
+        const std::string_view pair = body.substr(
+            pos, ampersand == std::string_view::npos ? std::string_view::npos : ampersand - pos);
+        const std::size_t equals = pair.find('=');
+        if (equals != std::string_view::npos && pair.substr(0, equals) == name) {
+            return url_decode(pair.substr(equals + 1));
+        }
+        if (ampersand == std::string_view::npos) {
+            break;
+        }
+        pos = ampersand + 1;
+    }
+    return std::string();
 }
 
 }  // namespace sc::net

@@ -27,4 +27,9 @@ ParsedRequest parse_http_request(std::string_view raw);
 // one request per connection and a hanging client is worse than a reconnect.
 std::string format_http_response(const Response& response);
 
+// Reads one field out of an application/x-www-form-urlencoded body, decoding
+// `+` and percent escapes. An absent field is an empty string, which callers
+// treat as "not supplied".
+std::string form_field(std::string_view body, std::string_view name);
+
 }  // namespace sc::net

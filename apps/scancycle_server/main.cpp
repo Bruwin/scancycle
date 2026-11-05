@@ -1,3 +1,4 @@
+#include "app/lesson_api.hpp"
 #include "lesson/lesson.hpp"
 #include "net/http_server.hpp"
 #include "net/portal_server.hpp"
@@ -32,7 +33,11 @@ int main(int argc, char** argv) {
     }
 
     const std::vector<sc::lesson::Lesson> lessons = sc::lesson::make_builtin_lessons();
-    const sc::net::PortalRouter router = sc::net::make_default_router(lessons);
+    sc::net::PortalRouter router = sc::net::make_default_router(lessons);
+    router.route(sc::net::HttpMethod::Post, "/api/grade",
+                 [&lessons](const sc::net::Request& request) {
+                     return sc::app::grade_lesson(lessons, request);
+                 });
 
     sc::net::HttpServer server(router);
     if (!server.listen(static_cast<sc::u16>(port))) {
@@ -42,8 +47,10 @@ int main(int argc, char** argv) {
 
     const unsigned bound = static_cast<unsigned>(server.port());
     std::printf("Scan Cycle teacher portal\n");
+    std::printf("  http://127.0.0.1:%u/\n", bound);
     std::printf("  http://127.0.0.1:%u/api/health\n", bound);
-    std::printf("  http://127.0.0.1:%u/api/lessons\n\n", bound);
+    std::printf("  http://127.0.0.1:%u/api/lessons\n", bound);
+    std::printf("  POST http://127.0.0.1:%u/api/grade\n\n", bound);
     for (const sc::lesson::Lesson& lesson : lessons) {
         std::printf("  lesson %-20s %s\n", lesson.id.c_str(), lesson.title.c_str());
     }

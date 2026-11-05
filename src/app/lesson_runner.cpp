@@ -13,13 +13,15 @@ LessonRunResult run_lesson(const lesson::Lesson& lesson, LessonRunConfig config)
         result.error = "a lesson run needs a positive duration, tick and scan period";
         return result;
     }
-    if (lesson.reference_solution.empty()) {
-        result.error = "lesson '" + lesson.id + "' has no reference solution";
+    const std::string& source =
+        config.program.empty() ? lesson.reference_solution : config.program;
+    if (source.empty()) {
+        result.error = "lesson '" + lesson.id + "' has no program to run";
         return result;
     }
 
     AppConfig app_config;
-    app_config.program_source = lesson.reference_solution;
+    app_config.program_source = source;
     app_config.program_language =
         lesson.reference_language == lesson::ReferenceLanguage::Ladder
             ? ProgramLanguage::Ladder

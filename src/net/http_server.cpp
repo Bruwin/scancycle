@@ -2,6 +2,8 @@
 
 #include "net/http.hpp"
 
+#include <cctype>
+#include <cstdlib>
 #include <mutex>
 #include <string>
 
@@ -30,6 +32,57 @@ constexpr SocketHandle kInvalidSocket = -1;
 // A portal request is a request line and maybe a small JSON body. Anything
 // larger is not a browser talking to us.
 constexpr std::size_t kMaxRequestBytes = 64 * 1024;
+
+bool equals_ci(std::string_view left, std::string_view right) {
+    if (left.size() != right.size()) {
+        return false;
+    }
+    for (std::size_t i = 0; i < left.size(); ++i) {
+        const auto a = static_cast<unsigned char>(left[i]);
+        const auto b = static_cast<unsigned char>(right[i]);
+        if (std::tolower(a) != std::tolower(b)) {
+            return false;
+        }
+    }
+    return true;
+}
+
+std::string_view trimmed(std::string_view text) {
+    while (!text.empty() && (text.front() == ' ' || text.front() == '\t')) {
+        text.remove_prefix(1);
+    }
+    while (!text.empty() && (text.back() == ' ' || text.back() == '\t')) {
+        text.remove_suffix(1);
+    }
+    return text;
+}
+
+// A POST body can arrive after the headers, and one recv may hold only the
+// header. Reading Content-Length keeps a grade submission from being truncated.
+std::size_t content_length(std::string_view raw) {
+    const std::size_t header_end = raw.find("\r\n\r\n");
+    if (header_end == std::string_view::npos) {
+        return 0;
+    }
+    const std::string_view headers = raw.substr(0, header_end);
+    std::size_t pos = 0;
+    while (pos < headers.size()) {
+        const std::size_t end = headers.find("\r\n", pos);
+        const std::string_view line =
+            headers.substr(pos, end == std::string_view::npos ? std::string_view::npos : end - pos);
+        const std::size_t colon = line.find(':');
+        if (colon != std::string_view::npos &&
+            equals_ci(trimmed(line.substr(0, colon)), "content-length")) {
+            const std::string digits(trimmed(line.substr(colon + 1)));
+            return static_cast<std::size_t>(std::strtoul(digits.c_str(), nullptr, 10));
+        }
+        if (end == std::string_view::npos) {
+            break;
+        }
+        pos = end + 2;
+    }
+    return 0;
+}
 
 void close_socket(SocketHandle socket) {
 #if defined(_WIN32)
@@ -142,15 +195,22 @@ bool HttpServer::serve_one() {
 
     std::string raw;
     char buffer[2048];
+    std::size_t wanted = std::string::npos;
     while (raw.size() < kMaxRequestBytes) {
+        const std::size_t header_end = raw.find("\r\n\r\n");
+        if (header_end != std::string::npos) {
+            if (wanted == std::string::npos) {
+                wanted = header_end + 4 + content_length(raw);
+            }
+            if (raw.size() >= wanted) {
+                break;
+            }
+        }
         const int got = static_cast<int>(::recv(client, buffer, sizeof(buffer), 0));
         if (got <= 0) {
             break;
         }
         raw.append(buffer, static_cast<std::size_t>(got));
-        if (raw.find("\r\n\r\n") != std::string::npos) {
-            break;
-        }
     }
 
     const ParsedRequest parsed = parse_http_request(raw);

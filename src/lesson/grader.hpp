@@ -27,4 +27,8 @@ struct GradeReport {
 
 GradeReport evaluate(const Lesson& lesson, const sim::Plant& plant, bool program_healthy);
 
+// Serialises a report for the portal. Next to the report type so the shape of a
+// grade and the shape of its JSON cannot drift apart.
+std::string grade_report_json(const GradeReport& report);
+
 }  // namespace sc::lesson

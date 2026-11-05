@@ -15,6 +15,11 @@ struct LessonRunConfig {
     f64 seconds = 30.0;
     f64 tick_seconds = 1.0 / 60.0;
     i64 plc_scan_ms = 10;
+
+    // Grades this source instead of the lesson's reference solution. Empty means
+    // the reference, which is what the lesson gate runs; the source is compiled
+    // in the lesson's reference language.
+    std::string program;
 };
 
 struct LessonRunResult {
