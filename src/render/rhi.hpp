@@ -53,6 +53,10 @@ public:
     // loudly instead of rendering something subtly wrong.
     virtual u32 validation_errors() const { return 0; }
 
+    // Whether validation_errors() is live. A zero count means nothing if the
+    // layer never loaded, so the viewer prints this next to the summary.
+    virtual bool validation_active() const { return false; }
+
     // Copies the frame captured this run as tightly packed RGBA8. False when the
     // backend has nothing to hand over, so the null device stays honest.
     virtual bool read_back(std::vector<u8>& pixels, u32& width, u32& height) {

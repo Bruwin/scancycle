@@ -73,6 +73,7 @@ public:
 
     DrawStatistics statistics() const override { return stats_; }
     u32 validation_errors() const override { return validation_errors_; }
+    bool validation_active() const override { return validation_active_; }
     bool read_back(std::vector<u8>& pixels, u32& width, u32& height) override;
 
 private:
@@ -137,6 +138,7 @@ private:
 
     DrawStatistics stats_{};
     u32 validation_errors_ = 0;
+    bool validation_active_ = false;
 };
 
 bool VulkanRenderer::fail(const char* what, VkResult result) {
@@ -230,7 +232,10 @@ bool VulkanRenderer::create_instance() {
                                          VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT;
             messenger_info.pfnUserCallback = debug_callback;
             messenger_info.pUserData = &validation_errors_;
-            create_messenger(instance_, &messenger_info, nullptr, &debug_messenger_);
+            const VkResult messenger_result =
+                create_messenger(instance_, &messenger_info, nullptr, &debug_messenger_);
+            // The count is only trustworthy once the callback is installed.
+            validation_active_ = messenger_result == VK_SUCCESS;
         }
     }
     return true;

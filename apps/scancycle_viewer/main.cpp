@@ -136,9 +136,11 @@ int main(int argc, char** argv) {
 
     const sc::DrawStatistics final_stats = device->statistics();
     const sc::u32 errors = device->validation_errors();
-    std::printf("summary: frames %lld, meshes %u, faces %u, draws %u, validation errors %u\n",
+    // A zero count is meaningless if the layer never loaded, so name the case.
+    const char* validation = device->validation_active() ? "enabled" : "not available";
+    std::printf("summary: frames %lld, meshes %u, faces %u, draws %u, validation errors %u (%s)\n",
                 static_cast<long long>(frames), final_stats.live_meshes, final_stats.quad_count,
-                final_stats.draw_calls, errors);
+                final_stats.draw_calls, errors, validation);
 
     bool image_ok = true;
     if (!capture_path.empty()) {
