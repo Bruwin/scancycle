@@ -8,12 +8,11 @@
 #include "core/types.hpp"
 #include "io/commissioning.hpp"
 #include "io/df1.hpp"
-#include "io/df1_link.hpp"
+#include "io/df1_client.hpp"
 #include "io/df1_pccc.hpp"
 #include "io/driver.hpp"
 #include "plc/vm.hpp"
 
-#include <span>
 #include <string>
 #include <vector>
 
@@ -61,24 +60,20 @@ public:
     // The scan contract every live driver must share with SimDriver.
     bool run_scan(i64 now_ms);
     i64 scans() const { return scans_; }
-    i64 exchanges() const { return exchanges_; }
+    i64 exchanges() const { return client_.exchanges(); }
 
 private:
     bool read_word(const Df1Tag& tag, u16& value);
     bool write_word(const Df1Tag& tag, u16 value);
-    bool transact(u8 command, std::span<const u8> payload, Df1Header& request_header,
-                  std::vector<u8>& reply_body);
     bool write_outputs_at(i64 now_ms);
 
     Df1Config config_;
     plc::Vm& vm_;
-    Df1Link& link_;
+    Df1Client client_;
     std::vector<u8> written_;
     std::vector<u8> last_written_;
-    u16 transaction_ = 0;
     i64 scans_ = 0;
     i64 last_scan_ms_ = 0;
-    i64 exchanges_ = 0;
     bool connected_ = false;
     std::string error_;
 };

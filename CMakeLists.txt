@@ -97,6 +97,7 @@ add_library(sc_io
     src/io/df1.cpp
     src/io/df1_pccc.cpp
     src/io/df1_slave.cpp
+    src/io/df1_client.cpp
     src/io/df1_driver.cpp
     src/io/df1_profile.cpp
     src/io/serial_io.cpp

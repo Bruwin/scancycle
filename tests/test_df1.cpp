@@ -2,6 +2,7 @@
 
 #include "io/commissioning.hpp"
 #include "io/df1.hpp"
+#include "io/df1_client.hpp"
 #include "io/df1_driver.hpp"
 #include "io/df1_pccc.hpp"
 #include "io/df1_slave.hpp"
@@ -205,6 +206,49 @@ TEST(df1_slave_answers_a_typed_read_and_write) {
     CHECK(slave.word(7, 0) == 0x1234);
     CHECK(slave.writes() == 1);
     CHECK(slave.requests() == 2);
+}
+
+TEST(df1_client_reads_and_writes_a_word_and_a_bit) {
+    io::Df1Slave slave;
+    slave.add_word_file(7, io::kPcccFileTypeInteger, 4);
+    CHECK(slave.set_word(7, 2, 0x00F0));
+
+    io::Df1Client client(0, 1, io::Df1Checksum::Bcc, slave);
+    std::string error;
+    CHECK(client.open(error));
+    CHECK(client.is_open());
+
+    u16 word = 0;
+    CHECK(client.read_word(7, io::kPcccFileTypeInteger, 2, word, error));
+    CHECK(word == 0x00F0);
+
+    bool bit = false;
+    CHECK(client.read_bit(7, io::kPcccFileTypeInteger, 2, 4, bit, error));
+    CHECK(bit);
+
+    CHECK(client.write_bit(7, io::kPcccFileTypeInteger, 2, 0, true, error));
+    CHECK(slave.word(7, 2) == 0x00F1);
+
+    CHECK(client.write_word(7, io::kPcccFileTypeInteger, 2, 0x1234, error));
+    CHECK(slave.word(7, 2) == 0x1234);
+
+    // read, read, read-modify-write, write.
+    CHECK(client.exchanges() == 5);
+
+    client.close();
+    CHECK(!client.is_open());
+}
+
+TEST(df1_client_rejects_a_bit_outside_the_word) {
+    io::Df1Slave slave;
+    slave.add_word_file(7, io::kPcccFileTypeInteger, 4);
+    io::Df1Client client(0, 1, io::Df1Checksum::Bcc, slave);
+    std::string error;
+    CHECK(client.open(error));
+
+    bool bit = false;
+    CHECK(!client.read_bit(7, io::kPcccFileTypeInteger, 0, 16, bit, error));
+    CHECK(error.find("0..15") != std::string::npos);
 }
 
 TEST(df1_slave_rejects_an_element_out_of_range) {
