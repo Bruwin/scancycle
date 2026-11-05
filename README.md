@@ -56,6 +56,24 @@ cmake --build build -j
 ./build/bin/scancycle_viewer
 ```
 
+A capture is a golden-image check: the frame is copied out of the swapchain and
+compared against `tests/data/scene_reference.ppm`, a 64x36 thumbnail, with a
+tolerance of 6 out of 255. CI runs exactly this on lavapipe, so a driver that
+rounds a pixel differently passes while a shader regression does not.
+
+```sh
+# check the frame against the committed reference
+./build/bin/scancycle_viewer --frames 90 --capture render.ppm \
+    --compare-with tests/data/scene_reference.ppm --tolerance 6
+
+# record a new reference, deliberately, when the expected image changes
+./build/bin/scancycle_viewer --frames 90 --capture tests/data/scene_reference.ppm
+```
+
+A capture pins the clock to the frame number, so the reference does not drift with
+how fast the machine happened to run.
+
+
 That needs a Vulkan 1.3 driver and SDL3; CMake uses an installed SDL3 if it
 finds one and otherwise fetches the pinned release. The viewer opens a window
 and presents a cleared frame today — voxel draws are the next change.
