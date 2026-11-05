@@ -661,7 +661,7 @@ int command_trace(const std::vector<std::string>& args) {
         serial.timeout_ms = static_cast<int>(timeout_ms);
         serial.checksum = checksum;
 
-        config.driver_factory = [df1, serial, &policy](sc::plc::Vm& vm)
+        config.driver_factory = [df1, serial](sc::plc::Vm& vm)
             -> std::unique_ptr<sc::io::PlcDriver> {
             return std::make_unique<sc::io::Df1Driver>(
                 df1, vm, std::make_unique<sc::io::Df1SerialLink>(serial));
