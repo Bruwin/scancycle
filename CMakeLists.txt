@@ -145,6 +145,7 @@ if(SC_BUILD_TESTS)
         tests/main.cpp
         tests/test_core.cpp
         tests/test_world.cpp
+        tests/test_render.cpp
         tests/test_plc.cpp
         tests/test_sim.cpp
         tests/test_io.cpp
@@ -153,7 +154,8 @@ if(SC_BUILD_TESTS)
         tests/test_app.cpp
     )
     target_link_libraries(sc_tests PRIVATE
-        sc_plc sc_world sc_sim sc_io sc_assets sc_ui sc_lesson sc_net sc_app sc_warnings)
+        sc_plc sc_world sc_render sc_sim sc_io sc_assets sc_ui sc_lesson sc_net sc_app
+        sc_warnings)
     add_test(NAME sc_tests COMMAND sc_tests)
     # The lesson gate: every reference program must pass its own rubric.
     add_test(NAME sc_lessons COMMAND scancycle_cli lesson)
