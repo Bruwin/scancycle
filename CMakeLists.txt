@@ -69,6 +69,9 @@ add_library(sc_plc
     src/plc/compiler.cpp
     src/plc/function_blocks.cpp
     src/plc/vm.cpp
+    src/plc/declaration.cpp
+    src/plc/netlist.cpp
+    src/plc/il.cpp
 )
 target_link_libraries(sc_plc PUBLIC sc_core PRIVATE sc_warnings)
 
@@ -149,6 +152,8 @@ if(SC_BUILD_TESTS)
         tests/test_world.cpp
         tests/test_render.cpp
         tests/test_plc.cpp
+        tests/test_netlist.cpp
+        tests/test_il.cpp
         tests/test_sim.cpp
         tests/test_io.cpp
         tests/test_tools.cpp
