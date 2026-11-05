@@ -21,9 +21,11 @@ completes the curriculum should recognise TIA Portal or Studio 5000 on sight.
    execute the program in order, flush outputs. Students must be able to observe
    that an output written late in a scan does not affect logic earlier in the
    same scan.
-3. **One IR, many front ends.** Structured Text, Ladder and Function Block
-   Diagram compile to the same typed intermediate representation and bytecode
-   VM. Separate interpreters are how projects like this die.
+3. **One IR, many front ends.** All five IEC 61131-3 languages are meant to
+   reach the same typed intermediate representation and bytecode VM: Structured
+   Text and Instruction List as text, Ladder and Function Block Diagram as
+   networks, Sequential Function Chart as a chart of steps and transitions.
+   Separate interpreters are how projects like this die.
 
 ## Module map
 
@@ -34,7 +36,7 @@ completes the curriculum should recognise TIA Portal or Studio 5000 on sight.
 | `src/render` | `RhiDevice` interface, mesh upload, voxel renderer | 1 |
 | `src/world` | `VoxelChunk`, greedy mesher, `World`, world generation | 1 |
 | `src/sim` | plant devices, `Plant` tick, process image | 1 |
-| `src/plc` | ST lexer/parser/compiler/VM/standard FBs | 1 |
+| `src/plc` | IEC 61131-3 front ends (ST, LD/FBD, IL), bytecode, VM, standard FBs | 1 |
 | `src/io` | tag database, `PlcDriver`, Modbus codec, commissioning | 2 |
 | `src/assets` | procedural materials and machine kits | 2 |
 | `src/ui` | Structured Text editor model | 2 |
@@ -59,7 +61,38 @@ Pipeline: `Lexer -> Parser -> AST -> Compiler -> bytecode -> Vm`.
 * Structured Text is case-insensitive; the lexer lowercases all identifiers.
 
 Deliberate omissions for now: user-defined `FUNCTION_BLOCK`s, arrays, UDTs,
-`CASE`, `REPEAT`, Ladder and FBD front ends, online forcing.
+`CASE`, `REPEAT`, the FBD block library, SFC, and every graphical editor widget.
+Online forcing is off this list: the driver applies forces and `Application`
+exposes them.
+
+## PLC programming languages
+
+IEC 61131-3 defines five languages, and the project treats them as five ways to
+write one program rather than five runtimes. Two are text and use the lexer and
+parser; two are networks and lower through `plc::compile_netlist`; the fifth is a
+state machine and cannot be lowered to straight-line code at all.
+
+| Language | Front end | State |
+|---|---|---|
+| Structured Text (ST) | `plc/lexer`, `plc/parser`, `plc/compiler` | working and tested |
+| Ladder Diagram (LD) | `plc/netlist`: contacts, coils, series and parallel junctions | working and tested, including negated contacts and coils |
+| Function Block Diagram (FBD) | the same `plc/netlist` model | model working and tested; block library and editor are not |
+| Instruction List (IL) | `plc/il`: `LD`/`LDN`, `AND`/`ANDN`, `OR`/`ORN`, `ST`/`STN` | working and tested |
+| Sequential Function Chart (SFC) | none | not started |
+
+LD and FBD share one model because they are one idea drawn two ways: a boolean
+network feeding sinks. A ladder rung and an FBD network compile to identical
+instructions.
+
+SFC is different in kind. A chart's steps are *active state*, not a value computed
+once per scan, and its transitions are evaluated against that state. It needs a
+step and transition model plus a scheduler around the VM, not another lowering
+pass, which is why it waits instead of riding along with the netlist work.
+
+The claim that this is one IR and not four is tested, not asserted:
+`tests/test_netlist.cpp` and `tests/test_il.cpp` each draw the same expression in
+their own language and in Structured Text, run both VMs, and compare the full
+truth-table column.
 
 ## World and rendering
 
@@ -181,7 +214,8 @@ drives the whole cell)*
   schema, grader and the lesson runner that self-tests a reference program are done; portal
 transport and web UI are not)*
 * **M6** live drivers: Modbus TCP against a software slave, then libplctag, then DF1.
-* **M7** Ladder/FBD front ends on the existing IR, content, asset variety.
+* **M7** graphical LD/FBD editors on the existing network model, SFC, content,
+  asset variety.
 
 ## What kills a project like this
 

@@ -5,9 +5,10 @@ industry actually works: a PLC you program, a plant that reacts, and the control
 theory underneath both.
 
 Scan Cycle is not a puzzle game with a PLC skin. It ships a real IEC 61131-3
-Structured Text toolchain, a deterministic factory simulation, a SCADA layer and
-drivers that talk to physical controllers, so a student who finishes the
-curriculum can open TIA Portal or Studio 5000 and recognise everything.
+toolchain — Structured Text, ladder and function block networks, instruction
+list — a deterministic factory simulation, a SCADA layer and drivers that talk to
+physical controllers, so a student who finishes the curriculum can open TIA
+Portal or Studio 5000 and recognise everything.
 
 * Licence: LGPL-3.0-or-later. Free for anyone, forever, and usable inside a
   project under other terms — including a commercial one — as long as changes to
@@ -23,6 +24,8 @@ curriculum can open TIA Portal or Studio 5000 and recognise everything.
 | Deterministic core (PCG32, fixed timestep) | working, tested |
 | Voxel chunk storage + greedy mesher | working, tested |
 | Structured Text front end (lexer, parser) | working, tested |
+| Ladder and FBD network front end (contacts, coils, junctions) | working, tested |
+| Instruction List front end (LD/AND/OR/ST and negated forms) | working, tested |
 | Bytecode compiler + VM + scan semantics | working, tested |
 | Standard function blocks (TON/TOF/CTU/CTD) | working, tested |
 | Plant simulation, tag database, simulated PLC driver | working, tested |
@@ -128,7 +131,7 @@ src/platform  window/input/clock abstraction (null backend today)
 src/render    RHI interface, mesh upload, voxel renderer (CPU side)
 src/world     voxel chunks, greedy mesher, world container, world generation
 src/sim       plant devices, factory simulation tick
-src/plc       IEC 61131-3 Structured Text: lexer -> parser -> bytecode -> VM
+src/plc       IEC 61131-3 front ends (ST, ladder/FBD, IL) -> bytecode -> VM
 src/io        tag database, PLC driver interface, Modbus codec, commissioning
 src/assets    procedural material library and machine kit generator
 src/ui        Structured Text editor model (buffer, diagnostics, undo)
