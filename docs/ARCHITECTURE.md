@@ -255,6 +255,13 @@ drives the whole cell)*
 * **M7** graphical LD/FBD editors on the existing network model, SFC, content,
   asset variety.
 
+## Deferred
+
+* The CSV download is always `grades.csv`, whichever term is being read. Naming
+  it after the term (`grades-2025-autumn.csv`) would keep a directory of exports
+  self-describing; the rows themselves are already correct, so this waits until
+  someone is actually collecting several terms side by side.
+
 ## What kills a project like this
 
 Building the renderer first (impressive, validates nothing) or the IDE first
