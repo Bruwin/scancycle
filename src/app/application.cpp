@@ -62,6 +62,7 @@ bool Application::initialize() {
 
     vm_ = std::make_unique<plc::Vm>(program_);
     driver_ = std::make_unique<io::SimDriver>(plant_, tags_, *vm_);
+    driver_->set_forces(&forces_);
     if (!driver_->connect()) {
         error_ = driver_->last_error();
         return false;
@@ -96,6 +97,65 @@ bool Application::run_headless(i32 ticks) {
         }
     }
     return true;
+}
+
+bool Application::step_scan() {
+    if (!driver_) {
+        error_ = "application is not initialised";
+        return false;
+    }
+    if (faulted_) {
+        error_ = "the program has faulted";
+        return false;
+    }
+
+    now_ms_ += config_.plc_scan_ms;
+    if (!driver_->run_scan(now_ms_)) {
+        faulted_ = true;
+        error_ = driver_->last_error();
+        return false;
+    }
+    return true;
+}
+
+bool Application::set_force(std::string name, bool value) {
+    if (!driver_) {
+        error_ = "application is not initialised";
+        return false;
+    }
+    if (tags_.find(name) < 0) {
+        error_ = "no tag named '" + name + "' is bound to this program";
+        return false;
+    }
+    forces_.set(std::move(name), value);
+    return true;
+}
+
+bool Application::clear_force(std::string_view name) {
+    if (!forces_.clear(name)) {
+        error_ = "nothing is forced under '" + std::string(name) + "'";
+        return false;
+    }
+    return true;
+}
+
+void Application::clear_forces() { forces_.clear_all(); }
+
+std::vector<Application::Watch> Application::watch(
+    const std::vector<std::string>& names) const {
+    std::vector<Watch> out;
+    out.reserve(names.size());
+    for (const std::string& name : names) {
+        Watch entry;
+        entry.name = name;
+        if (vm_) {
+            entry.value = vm_->get(name);
+            entry.present = entry.value.type != plc::ValueType::Void;
+        }
+        entry.forced = forces_.forced(name);
+        out.push_back(std::move(entry));
+    }
+    return out;
 }
 
 i64 Application::scans() const { return driver_ ? driver_->scans() : 0; }

@@ -90,3 +90,98 @@ TEST(application_refuses_to_run_before_initialising) {
     CHECK(!app.run_headless(1));
     CHECK(!app.error().empty());
 }
+
+TEST(a_forced_output_reaches_the_device_but_not_the_program) {
+    Application app(make_config());
+    CHECK(app.initialize());
+    if (!app.plc()) {
+        return;
+    }
+
+    // start_btn is off, so the program computes motor := FALSE. The force must
+    // reach the field anyway, and must not rewrite what the logic computed.
+    CHECK(app.set_force("motor", true));
+    CHECK(app.step_scan());
+
+    CHECK(!app.plc()->get("motor").as_bool());
+    CHECK(app.plant().device(0).output);
+}
+
+TEST(a_forced_input_reaches_the_program_but_not_the_device) {
+    Application app(make_config());
+    CHECK(app.initialize());
+    if (!app.plc()) {
+        return;
+    }
+
+    CHECK(!app.plant().device(0).input);
+    CHECK(app.set_force("motor_fb", true));
+    CHECK(app.step_scan());
+
+    CHECK(app.plc()->get("motor_fb").as_bool());
+    CHECK(!app.plant().device(0).input);
+}
+
+TEST(forcing_an_unbound_name_is_refused) {
+    Application app(make_config());
+    CHECK(app.initialize());
+    if (!app.plc()) {
+        return;
+    }
+
+    CHECK(!app.set_force("no_such_tag", true));
+    CHECK(!app.error().empty());
+    CHECK(app.forces().empty());
+}
+
+TEST(clearing_a_force_that_is_not_there_is_reported) {
+    Application app(make_config());
+    CHECK(app.initialize());
+    if (!app.plc()) {
+        return;
+    }
+
+    // "motor" is a valid tag, so the force exists; "motor_fb" is never forced.
+    CHECK(app.set_force("motor", true));
+    CHECK(app.clear_force("motor"));
+    CHECK(!app.clear_force("motor"));
+    CHECK(app.forces().empty());
+}
+
+TEST(watch_reports_values_and_flags_what_is_forced) {
+    Application app(make_config());
+    CHECK(app.initialize());
+    if (!app.plc()) {
+        return;
+    }
+
+    CHECK(app.plc()->set("start_btn", plc::Value::boolean(true)));
+    CHECK(app.set_force("motor_fb", true));
+    CHECK(app.step_scan());
+
+    const std::vector<Application::Watch> watched =
+        app.watch({"motor", "motor_fb", "no_such_var"});
+    CHECK(watched.size() == 3);
+
+    CHECK(watched[0].present);
+    CHECK(watched[0].value.as_bool());
+    CHECK(!watched[0].forced);
+
+    CHECK(watched[1].present);
+    CHECK(watched[1].forced);
+
+    CHECK(!watched[2].present);
+}
+
+TEST(stepping_runs_one_scan_and_leaves_the_plant_still) {
+    Application app(make_config());
+    CHECK(app.initialize());
+    if (!app.plc()) {
+        return;
+    }
+
+    const f64 distance_before = app.plant().device(0).distance;
+    CHECK(app.step_scan());
+    CHECK(app.scans() == 1);
+    CHECK(app.plant().device(0).distance == distance_before);
+}

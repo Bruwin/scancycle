@@ -1,3 +1,4 @@
+#include "app/application.hpp"
 #include "app/lesson_runner.hpp"
 #include "core/deterministic_rng.hpp"
 #include "lesson/lesson.hpp"
@@ -29,6 +30,7 @@ void print_usage() {
         "  scancycle_cli run <program.st> [--scans=N] [--dt-ms=N] [--set name=value]\n"
         "  scancycle_cli disasm <program.st>\n"
         "  scancycle_cli bench [--iterations=N]\n"
+        "  scancycle_cli trace <program.st> [--scans=N] [--force name=value] [--watch=a,b]\n"
         "  scancycle_cli lesson [--id=ID] [--seconds=N]\n");
 }
 
@@ -261,6 +263,134 @@ int command_bench(const std::vector<std::string>& args) {
     return 0;
 }
 
+bool parse_bool_text(const std::string& text, bool& out) {
+    if (text == "1" || text == "true" || text == "TRUE" || text == "on") {
+        out = true;
+        return true;
+    }
+    if (text == "0" || text == "false" || text == "FALSE" || text == "off") {
+        out = false;
+        return true;
+    }
+    return false;
+}
+
+// Steps a program against the vertical-slice cell and prints a watch table, which
+// is the headless half of the IDE's monitor view.
+int command_trace(const std::vector<std::string>& args) {
+    if (args.empty()) {
+        print_usage();
+        return 2;
+    }
+
+    const std::string& path = args[0];
+    int scans = 5;
+    std::vector<std::string> force_args;
+    std::vector<std::string> watch_names;
+
+    for (std::size_t i = 1; i < args.size(); ++i) {
+        const std::string& arg = args[i];
+        if (arg.rfind("--scans=", 0) == 0) {
+            scans = std::atoi(arg.c_str() + 8);
+        } else if (arg.rfind("--force=", 0) == 0) {
+            force_args.push_back(arg.substr(8));
+        } else if (arg.rfind("--watch=", 0) == 0) {
+            const std::string names = arg.substr(8);
+            std::size_t start = 0;
+            while (start <= names.size()) {
+                const std::size_t comma = names.find(',', start);
+                const std::size_t length =
+                    comma == std::string::npos ? std::string::npos : comma - start;
+                const std::string name = names.substr(start, length);
+                if (!name.empty()) {
+                    watch_names.push_back(name);
+                }
+                if (comma == std::string::npos) {
+                    break;
+                }
+                start = comma + 1;
+            }
+        } else {
+            std::fprintf(stderr, "unknown option '%s'\n", arg.c_str());
+            return 2;
+        }
+    }
+
+    std::string source;
+    if (!read_file(path, source)) {
+        std::fprintf(stderr, "cannot read '%s'\n", path.c_str());
+        return 1;
+    }
+
+    sc::AppConfig config;
+    config.program_source = source;
+    sc::Application app(config, sc::sim::make_vertical_slice_plant());
+    if (!app.initialize()) {
+        std::fprintf(stderr, "cannot start the cell: %s\n", app.error().c_str());
+        return 1;
+    }
+
+    for (const std::string& entry : force_args) {
+        std::string name;
+        std::string value;
+        bool forced = false;
+        if (!split_assignment(entry, name, value) || !parse_bool_text(value, forced)) {
+            std::fprintf(stderr, "bad --force '%s' (expected name=true|false)\n", entry.c_str());
+            return 2;
+        }
+        if (!app.set_force(name, forced)) {
+            std::fprintf(stderr, "%s\n", app.error().c_str());
+            return 2;
+        }
+    }
+
+    if (watch_names.empty()) {
+        for (const sc::plc::VarInfo& var : app.plc()->program().vars) {
+            if (var.fb_index < 0) {
+                watch_names.push_back(var.name);
+            }
+        }
+    }
+
+    std::printf("cell    : %u devices\n", app.plant().count());
+    for (const std::string& name : app.unbound_devices()) {
+        std::printf("unbound : %s (the program never mentions it)\n", name.c_str());
+    }
+
+    std::printf("\nscan");
+    for (const std::string& name : watch_names) {
+        std::printf(" %-12s", name.c_str());
+    }
+    std::printf("\n");
+
+    const auto print_row = [&](int scan) {
+        const std::vector<sc::Application::Watch> row = app.watch(watch_names);
+        std::printf("%4d", scan);
+        for (const sc::Application::Watch& entry : row) {
+            std::string text = entry.present ? entry.value.to_string() : "?";
+            if (entry.forced) {
+                text += "*";
+            }
+            std::printf(" %-12s", text.c_str());
+        }
+        std::printf("\n");
+    };
+
+    print_row(0);
+    for (int i = 1; i <= scans; ++i) {
+        if (!app.step_scan()) {
+            std::fprintf(stderr, "fault at scan %d: %s\n", i, app.error().c_str());
+            return 1;
+        }
+        print_row(i);
+    }
+
+    if (!app.forces().empty()) {
+        std::printf("\n(*) forced\n");
+    }
+    return 0;
+}
+
 int command_lesson(const std::vector<std::string>& args) {
     std::string wanted;
     double seconds = 30.0;
@@ -344,6 +474,9 @@ int main(int argc, char** argv) {
     }
     if (command == "bench") {
         return command_bench(rest);
+    }
+    if (command == "trace") {
+        return command_trace(rest);
     }
     if (command == "lesson") {
         return command_lesson(rest);

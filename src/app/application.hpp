@@ -4,6 +4,7 @@
 // the scan on its own period. Nothing else in the codebase is allowed to know
 // how these pieces fit together.
 #include "core/types.hpp"
+#include "io/force_table.hpp"
 #include "io/sim_driver.hpp"
 #include "lesson/grader.hpp"
 #include "plc/vm.hpp"
@@ -11,6 +12,7 @@
 
 #include <memory>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace sc {
@@ -44,6 +46,32 @@ public:
     // the program faulted; the diagnostic is then in error().
     bool run_headless(i32 ticks);
 
+    // Executes exactly one scan at the next scan instant. Time advances by one
+    // scan period so timers progress, but the plant does not move: a step is for
+    // watching the logic, and moving the machine would make each step depend on
+    // how many steps came before it.
+    bool step_scan();
+
+    // Pins a bound tag, the way an engineer forces I/O at the rack. Refused when
+    // the name is not a tag this program is bound to, so a typo cannot create a
+    // force that silently does nothing.
+    bool set_force(std::string name, bool value);
+    bool clear_force(std::string_view name);
+    void clear_forces();
+    const io::ForceTable& forces() const { return forces_; }
+
+    struct Watch {
+        std::string name;
+        plc::Value value;
+        bool present = false;  // false when the program has no such variable
+        bool forced = false;
+    };
+
+    // Reads the named variables out of the program image without changing it.
+    // Unknown names come back absent rather than blank, so an editor can show a
+    // typo instead of quietly dropping it.
+    std::vector<Watch> watch(const std::vector<std::string>& names) const;
+
     const sim::Plant& plant() const { return plant_; }
     plc::Vm* plc() { return vm_.get(); }
     const std::string& error() const { return error_; }
@@ -60,6 +88,7 @@ private:
     AppConfig config_;
     sim::Plant plant_;
     io::TagDatabase tags_;
+    io::ForceTable forces_;  // declared before the driver, which points at it
     plc::CompiledProgram program_;
     std::unique_ptr<plc::Vm> vm_;
     std::unique_ptr<io::SimDriver> driver_;
