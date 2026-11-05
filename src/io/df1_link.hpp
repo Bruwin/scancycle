@@ -22,7 +22,9 @@ public:
 
     // On success `response` holds the reply frame. An empty response with a
     // true return means the peer stayed silent, which the driver reports as a
-    // timeout rather than a framing error.
+    // timeout rather than a framing error. A link that can see DF1's link-layer
+    // control bytes reports a DLE NAK as a failure with a diagnostic, so a frame
+    // the controller rejected never reaches the caller looking like silence.
     virtual bool exchange(std::span<const u8> request, std::vector<u8>& response,
                           std::string& error) = 0;
 };

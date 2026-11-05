@@ -93,6 +93,83 @@ struct PtyPair {
     }
 };
 
+// Now that the host acknowledges every reply, a peer that plays the controller
+// has to consume link-layer control bytes before it looks for a frame.
+void strip_control_bytes(std::vector<u8>& buffer) {
+    while (buffer.size() >= 2 && buffer[0] == io::kDf1Dle) {
+        if (buffer[1] != 0x06 && buffer[1] != 0x15) {
+            break;
+        }
+        buffer.erase(buffer.begin(), buffer.begin() + 2);
+    }
+}
+
+bool write_all(int fd, const std::vector<u8>& bytes) {
+    std::size_t sent = 0;
+    while (sent < bytes.size()) {
+        const ssize_t count = ::write(fd, bytes.data() + sent, bytes.size() - sent);
+        if (count <= 0) {
+            return false;
+        }
+        sent += static_cast<std::size_t>(count);
+    }
+    return true;
+}
+
+// Collects what the host wrote, stopping once the line goes quiet.
+std::vector<u8> drain_host_bytes(int fd) {
+    std::vector<u8> bytes;
+    for (int attempt = 0; attempt < 50; ++attempt) {
+        pollfd entry{};
+        entry.fd = fd;
+        entry.events = POLLIN;
+        const int ready = ::poll(&entry, 1, 10);
+        if (ready <= 0) {
+            if (!bytes.empty()) {
+                break;
+            }
+            continue;
+        }
+        u8 chunk[128];
+        const ssize_t count = ::read(fd, chunk, sizeof(chunk));
+        if (count <= 0) {
+            break;
+        }
+        bytes.insert(bytes.end(), chunk, chunk + count);
+    }
+    return bytes;
+}
+
+std::vector<u8> read_request_frame(io::Df1Checksum checksum) {
+    io::Df1Header header;
+    header.command = io::kDf1CmdProtectedRead;
+    std::vector<u8> body = io::df1_body(header);
+    const std::vector<u8> payload =
+        io::build_pccc_read_request(io::PcccAddress{7, io::kPcccFileTypeInteger, 0, 0}, 2);
+    body.insert(body.end(), payload.begin(), payload.end());
+    std::vector<u8> frame;
+    std::string error;
+    if (!io::df1_encode(body, checksum, frame, error)) {
+        return {};
+    }
+    return frame;
+}
+
+std::vector<u8> reply_frame(u8 transaction, io::Df1Checksum checksum) {
+    io::Df1Header header;
+    header.destination = 0;
+    header.source = 1;
+    header.command = io::kDf1CmdReadReply;
+    header.transaction = transaction;
+    const std::vector<u8> body = io::df1_body(header);
+    std::vector<u8> frame;
+    std::string error;
+    if (!io::df1_encode(body, checksum, frame, error)) {
+        return {};
+    }
+    return frame;
+}
+
 #endif
 
 }  // namespace
@@ -163,6 +240,11 @@ TEST(df1_serial_link_carries_a_micro_logix_scan_over_a_pseudo_terminal) {
                 break;
             }
             buffer.insert(buffer.end(), chunk, chunk + count);
+
+            strip_control_bytes(buffer);
+            if (buffer.empty()) {
+                continue;
+            }
 
             std::vector<u8> body;
             std::size_t consumed = 0;
@@ -242,6 +324,114 @@ TEST(df1_serial_link_reports_a_silent_port) {
     std::vector<u8> reply;
     CHECK(!link.exchange(request, reply, error));
     CHECK(error.find("no DF1 reply") != std::string::npos);
+}
+
+TEST(df1_serial_link_reports_a_nak_as_a_rejection) {
+    PtyPair pty;
+    std::string error;
+    CHECK(pty.open(error));
+    if (pty.master < 0) {
+        return;
+    }
+
+    io::Df1SerialConfig config;
+    config.device = pty.slave;
+    config.timeout_ms = 300;
+    io::Df1SerialLink link(config);
+    CHECK(link.open(error));
+
+    // Written after open: opening the port flushes whatever was already queued.
+    CHECK(write_all(pty.master, {io::kDf1Dle, 0x15}));
+
+    std::vector<u8> reply;
+    CHECK(!link.exchange(read_request_frame(io::Df1Checksum::Bcc), reply, error));
+    CHECK(error.find("NAK") != std::string::npos);
+    CHECK(error.find("no DF1 reply") == std::string::npos);
+}
+
+TEST(df1_serial_link_accepts_a_reply_that_follows_an_ack) {
+    PtyPair pty;
+    std::string error;
+    CHECK(pty.open(error));
+    if (pty.master < 0) {
+        return;
+    }
+
+    io::Df1SerialConfig config;
+    config.device = pty.slave;
+    config.timeout_ms = 300;
+    io::Df1SerialLink link(config);
+    CHECK(link.open(error));
+
+    const std::vector<u8> frame = reply_frame(1, io::Df1Checksum::Bcc);
+    CHECK(!frame.empty());
+    std::vector<u8> peer = {io::kDf1Dle, 0x06};
+    peer.insert(peer.end(), frame.begin(), frame.end());
+    CHECK(write_all(pty.master, peer));
+
+    std::vector<u8> reply;
+    CHECK(link.exchange(read_request_frame(io::Df1Checksum::Bcc), reply, error));
+    CHECK(reply == frame);
+}
+
+TEST(df1_serial_link_acknowledges_a_valid_reply) {
+    PtyPair pty;
+    std::string error;
+    CHECK(pty.open(error));
+    if (pty.master < 0) {
+        return;
+    }
+
+    io::Df1SerialConfig config;
+    config.device = pty.slave;
+    config.timeout_ms = 300;
+    io::Df1SerialLink link(config);
+    CHECK(link.open(error));
+
+    CHECK(write_all(pty.master, reply_frame(1, io::Df1Checksum::Bcc)));
+
+    std::vector<u8> reply;
+    CHECK(link.exchange(read_request_frame(io::Df1Checksum::Bcc), reply, error));
+
+    const std::vector<u8> sent = drain_host_bytes(pty.master);
+    CHECK(sent.size() >= 2);
+    if (sent.size() >= 2) {
+        CHECK(sent[sent.size() - 2] == io::kDf1Dle);
+        CHECK(sent[sent.size() - 1] == 0x06);
+    }
+}
+
+TEST(df1_serial_link_naks_a_corrupt_reply) {
+    PtyPair pty;
+    std::string error;
+    CHECK(pty.open(error));
+    if (pty.master < 0) {
+        return;
+    }
+
+    io::Df1SerialConfig config;
+    config.device = pty.slave;
+    config.timeout_ms = 300;
+    io::Df1SerialLink link(config);
+    CHECK(link.open(error));
+
+    std::vector<u8> frame = reply_frame(1, io::Df1Checksum::Bcc);
+    CHECK(!frame.empty());
+    if (!frame.empty()) {
+        frame.back() = static_cast<u8>(frame.back() ^ 0xFFu);
+    }
+    CHECK(write_all(pty.master, frame));
+
+    std::vector<u8> reply;
+    CHECK(!link.exchange(read_request_frame(io::Df1Checksum::Bcc), reply, error));
+    CHECK(error.find("checksum") != std::string::npos);
+
+    const std::vector<u8> sent = drain_host_bytes(pty.master);
+    CHECK(sent.size() >= 2);
+    if (sent.size() >= 2) {
+        CHECK(sent[sent.size() - 2] == io::kDf1Dle);
+        CHECK(sent[sent.size() - 1] == 0x15);
+    }
 }
 
 #endif
