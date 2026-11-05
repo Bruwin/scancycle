@@ -14,10 +14,15 @@
 
 namespace sc::app {
 
+class GradeLog;
+
+// `log` is optional. When given, every graded attempt is appended, including a
+// toolbox refusal, because a refusal is still an attempt a teacher may want to
+// see in the class log.
 net::Response grade_lesson(const std::vector<lesson::Lesson>& lessons,
-                           const net::Request& request);
+                           const net::Request& request, GradeLog* log = nullptr);
 
 net::Response grade_lesson_page(const std::vector<lesson::Lesson>& lessons,
-                                const net::Request& request);
+                                const net::Request& request, GradeLog* log = nullptr);
 
 }  // namespace sc::app

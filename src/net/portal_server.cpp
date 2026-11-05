@@ -86,6 +86,9 @@ std::string page_head(std::string_view title) {
            "code{background:#f2f2f2;padding:.08rem .3rem;border-radius:3px}"
            "textarea{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;"
            "width:100%;box-sizing:border-box}"
+           "@media print{body{margin:0;max-width:none}form,.no-print{display:none}"
+           "a{color:#000;text-decoration:none}th{background:none}"
+           "tr{page-break-inside:avoid}thead{display:table-header-group}}"
            ".pass{color:#1a7f37}.fail{color:#b42318}"
            "</style></head><body><main>";
 }
@@ -129,9 +132,10 @@ std::string catalog_page(const std::vector<lesson::Lesson>& lessons) {
                 "</code></td></tr>";
     }
 
-    page += "</tbody></table><h2>Grade a program</h2>";
+    page += "</tbody></table><h2 class=\"no-print\">Grade a program</h2>";
     page += lesson_form(lessons, "", "");
-    page += "<p><a href=\"/api/lessons\">JSON catalog</a></p></main></body></html>";
+    page += "<p class=\"no-print\"><a href=\"/api/lessons\">JSON catalog</a></p>"
+            "</main></body></html>";
     return page;
 }
 
@@ -210,7 +214,7 @@ std::string rule_text(const lesson::RubricCheck& check, const sim::Plant& plant)
 // against, and the form, so a student reads the rules instead of guessing them.
 std::string lesson_page(const lesson::Lesson& lesson, const std::vector<lesson::Lesson>& lessons) {
     std::string page = page_head(lesson.title);
-    page += "<p><a href=\"/\">Scan Cycle teacher portal</a></p>";
+    page += "<p class=\"no-print\"><a href=\"/\">Scan Cycle teacher portal</a></p>";
     page += "<h1>" + html_escape(lesson.title) + "</h1>";
     page += "<p>" + html_escape(lesson.objective) + "</p><h2>Toolbox</h2>";
 

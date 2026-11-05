@@ -1,3 +1,5 @@
+#include "app/grade_log.hpp"
+#include "app/grades_page.hpp"
 #include "app/lesson_api.hpp"
 #include "lesson/lesson.hpp"
 #include "net/http_server.hpp"
@@ -14,6 +16,7 @@
 int main(int argc, char** argv) {
     unsigned port = 8080;
     long requests = 0;  // 0 serves until the process is stopped
+    std::string records_path = "scancycle-grades.tsv";
 
     for (int i = 1; i < argc; ++i) {
         const std::string arg = argv[i];
@@ -26,6 +29,12 @@ int main(int argc, char** argv) {
             port = static_cast<unsigned>(value);
         } else if (arg.rfind("--requests=", 0) == 0) {
             requests = std::strtol(arg.c_str() + 11, nullptr, 10);
+        } else if (arg.rfind("--records=", 0) == 0) {
+            records_path = arg.substr(10);
+            if (records_path.empty()) {
+                std::fprintf(stderr, "portal: --records= needs a file path\n");
+                return 2;
+            }
         } else {
             std::fprintf(stderr, "unknown option '%s'\n", arg.c_str());
             return 2;
@@ -33,15 +42,22 @@ int main(int argc, char** argv) {
     }
 
     const std::vector<sc::lesson::Lesson> lessons = sc::lesson::make_builtin_lessons();
+    sc::app::GradeLog grade_log(records_path);
+
     sc::net::PortalRouter router = sc::net::make_default_router(lessons);
     router.route(sc::net::HttpMethod::Post, "/api/grade",
-                 [&lessons](const sc::net::Request& request) {
-                     return sc::app::grade_lesson(lessons, request);
+                 [&lessons, &grade_log](const sc::net::Request& request) {
+                     return sc::app::grade_lesson(lessons, request, &grade_log);
                  });
 
     router.route(sc::net::HttpMethod::Post, "/grade",
-                 [&lessons](const sc::net::Request& request) {
-                     return sc::app::grade_lesson_page(lessons, request);
+                 [&lessons, &grade_log](const sc::net::Request& request) {
+                     return sc::app::grade_lesson_page(lessons, request, &grade_log);
+                 });
+
+    router.route(sc::net::HttpMethod::Get, "/grades",
+                 [&grade_log](const sc::net::Request&) {
+                     return sc::app::grades_page(grade_log);
                  });
 
     sc::net::HttpServer server(router);
@@ -56,7 +72,9 @@ int main(int argc, char** argv) {
     std::printf("  http://127.0.0.1:%u/api/health\n", bound);
     std::printf("  http://127.0.0.1:%u/api/lessons\n", bound);
     std::printf("  POST http://127.0.0.1:%u/api/grade  (JSON)\n", bound);
-    std::printf("  POST http://127.0.0.1:%u/grade      (page)\n\n", bound);
+    std::printf("  POST http://127.0.0.1:%u/grade      (page)\n", bound);
+    std::printf("  http://127.0.0.1:%u/grades   (printable log)\n", bound);
+    std::printf("  records %s\n\n", records_path.c_str());
     for (const sc::lesson::Lesson& lesson : lessons) {
         std::printf("  lesson %-20s %s\n", lesson.id.c_str(), lesson.title.c_str());
     }

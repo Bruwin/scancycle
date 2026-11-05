@@ -1,9 +1,12 @@
 #include "app/lesson_api.hpp"
 
+#include "app/grade_log.hpp"
 #include "app/lesson_runner.hpp"
 #include "lesson/grader.hpp"
 #include "net/http.hpp"
 
+#include <cstdint>
+#include <ctime>
 #include <string>
 
 namespace sc::app {
@@ -58,6 +61,24 @@ GradeOutcome grade_submission(const std::vector<lesson::Lesson>& lessons,
     return outcome;
 }
 
+// A full disk must not cost a student their grade, so a failed append is
+// dropped here; the server's startup line names the file a teacher can check.
+void record_if_asked(const GradeOutcome& outcome, GradeLog* log) {
+    if (log == nullptr || outcome.status != 200) {
+        return;
+    }
+    GradeRecord record;
+    record.at = static_cast<std::int64_t>(std::time(nullptr));
+    record.lesson_id = outcome.report.lesson_id;
+    record.passed = outcome.report.passed();
+    record.passed_count = outcome.report.passed_count;
+    record.total = outcome.report.checks.size();
+    record.program = outcome.program;
+
+    std::string error;
+    (void)log->append(record, error);
+}
+
 net::Response json_error(int status, const std::string& message) {
     net::Response response;
     response.status = status;
@@ -90,9 +111,10 @@ std::string report_page(const GradeOutcome& outcome, const std::vector<lesson::L
         page += "</td><td>" + net::html_escape(check.detail) + "</td></tr>";
     }
 
-    page += "</tbody></table><h2>Edit and grade again</h2>";
+    page += "</tbody></table><h2 class=\"no-print\">Edit and grade again</h2>";
     page += net::lesson_form(lessons, report.lesson_id, outcome.program);
-    page += "<p><a href=\"/\">Grade another lesson</a></p></main></body></html>";
+    page += "<p class=\"no-print\"><a href=\"/\">Grade another lesson</a></p>"
+            "</main></body></html>";
     return page;
 }
 
@@ -103,18 +125,20 @@ std::string error_page(const GradeOutcome& outcome, const std::vector<lesson::Le
     page += "<h1>Could not grade</h1><p>" + net::html_escape(outcome.error) + "</p>";
     page += "<h2>Your program is still here</h2>";
     page += net::lesson_form(lessons, outcome.wanted_lesson, outcome.program);
-    page += "<p><a href=\"/\">Back to the catalog</a></p></main></body></html>";
+    page += "<p class=\"no-print\"><a href=\"/\">Back to the catalog</a></p>"
+            "</main></body></html>";
     return page;
 }
 
 }  // namespace
 
 net::Response grade_lesson(const std::vector<lesson::Lesson>& lessons,
-                           const net::Request& request) {
+                           const net::Request& request, GradeLog* log) {
     const GradeOutcome outcome = grade_submission(lessons, request);
     if (outcome.status != 200) {
         return json_error(outcome.status, outcome.error);
     }
+    record_if_asked(outcome, log);
 
     net::Response response;
     response.body = lesson::grade_report_json(outcome.report);
@@ -122,8 +146,9 @@ net::Response grade_lesson(const std::vector<lesson::Lesson>& lessons,
 }
 
 net::Response grade_lesson_page(const std::vector<lesson::Lesson>& lessons,
-                                const net::Request& request) {
+                                const net::Request& request, GradeLog* log) {
     const GradeOutcome outcome = grade_submission(lessons, request);
+    record_if_asked(outcome, log);
 
     net::Response response;
     response.status = outcome.status;

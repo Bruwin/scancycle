@@ -1,5 +1,7 @@
 #include "harness.hpp"
 
+#include "app/grade_log.hpp"
+#include "app/grades_page.hpp"
 #include "app/lesson_runner.hpp"
 #include "lesson/grader.hpp"
 #include "app/lesson_api.hpp"
@@ -10,7 +12,10 @@
 #include "sim/plant.hpp"
 
 #include <cctype>
+#include <filesystem>
+#include <string>
 #include <thread>
+#include <vector>
 
 using namespace sc;
 
@@ -620,4 +625,80 @@ TEST(refused_report_explains_the_withheld_instruction) {
     CHECK(report.checks.front().detail.find("TOF") != std::string::npos);
     CHECK(report.checks.front().detail.find("grant") != std::string::npos);
     CHECK(report.checks.back().detail == "not run: the program was refused");
+}
+
+TEST(a_graded_attempt_is_written_to_the_log) {
+    const std::vector<lesson::Lesson> lessons = lesson::make_builtin_lessons();
+    const std::filesystem::path path =
+        std::filesystem::temp_directory_path() / "scancycle-portal-log-test.tsv";
+    std::filesystem::remove(path);
+    app::GradeLog log(path.string());
+
+    net::Request request;
+    request.method = net::HttpMethod::Post;
+    request.path = "/grade";
+    request.body = "lesson=press-batch";
+
+    const net::Response response = app::grade_lesson_page(lessons, request, &log);
+    CHECK(response.status == 200);
+
+    std::string error;
+    const std::vector<app::GradeRecord> entries = log.entries(error);
+    CHECK(error.empty());
+    CHECK(entries.size() == 1);
+    CHECK(entries[0].lesson_id == "press-batch");
+    CHECK(entries[0].passed);
+    CHECK(entries[0].passed_count == entries[0].total);
+    CHECK(entries[0].program.empty());
+
+    std::filesystem::remove(path);
+}
+
+TEST(grades_page_lists_the_newest_attempt_first) {
+    const std::filesystem::path path =
+        std::filesystem::temp_directory_path() / "scancycle-grades-page-test.tsv";
+    std::filesystem::remove(path);
+    app::GradeLog log(path.string());
+
+    std::string error;
+    app::GradeRecord older;
+    older.at = 1700000000;
+    older.lesson_id = "press-batch";
+    older.passed = true;
+    older.passed_count = 4;
+    older.total = 4;
+    CHECK(log.append(older, error));
+
+    app::GradeRecord newer;
+    newer.at = 1700000001;
+    newer.lesson_id = "conveyor-interlock";
+    newer.passed = false;
+    newer.passed_count = 1;
+    newer.total = 3;
+    newer.program = "PROGRAM X\nEND_PROGRAM\n";
+    CHECK(log.append(newer, error));
+
+    const net::Response page = app::grades_page(log);
+    CHECK(page.status == 200);
+    CHECK(page.content_type.rfind("text/html", 0) == 0);
+    CHECK(page.body.find("Graded attempts") != std::string::npos);
+    CHECK(page.body.find("2 attempts recorded") != std::string::npos);
+    CHECK(page.body.find("conveyor-interlock") < page.body.find("press-batch"));
+    CHECK(page.body.find("class=\"fail\">fail") != std::string::npos);
+    CHECK(page.body.find("class=\"pass\">pass") != std::string::npos);
+    CHECK(page.body.find("bytes") != std::string::npos);
+
+    std::filesystem::remove(path);
+}
+
+TEST(grades_page_says_so_when_nothing_was_recorded) {
+    const std::filesystem::path path =
+        std::filesystem::temp_directory_path() / "scancycle-grades-empty-test.tsv";
+    std::filesystem::remove(path);
+    const app::GradeLog log(path.string());
+
+    const net::Response page = app::grades_page(log);
+    CHECK(page.status == 200);
+    CHECK(page.body.find("No graded attempts yet.") != std::string::npos);
+    CHECK(page.body.find("0 attempts recorded") != std::string::npos);
 }

@@ -1,10 +1,15 @@
 #include "harness.hpp"
 
 #include "app/application.hpp"
+#include "app/grade_log.hpp"
 #include "app/watch_text.hpp"
 #include "lesson/lesson.hpp"
 
+#include <filesystem>
+#include <fstream>
+#include <string>
 #include <utility>
+#include <vector>
 
 using namespace sc;
 
@@ -294,4 +299,69 @@ TEST(application_checks_the_toolbox_before_the_plant) {
 
     Application open(std::move(config));
     CHECK(open.initialize());
+}
+
+TEST(grade_log_round_trips_a_record_with_awkward_text) {
+    const std::filesystem::path path =
+        std::filesystem::temp_directory_path() / "scancycle-grade-log-round-trip.tsv";
+    std::filesystem::remove(path);
+
+    app::GradeLog log(path.string());
+    std::string error;
+    CHECK(log.entries(error).empty());
+    CHECK(error.empty());
+
+    app::GradeRecord first;
+    first.at = 1700000000;
+    first.lesson_id = "press-batch";
+    first.passed = true;
+    first.passed_count = 4;
+    first.total = 4;
+    first.program = "PROGRAM X\nVAR\n    a : BOOL;\nEND_VAR\n\ta := TRUE;\nEND_PROGRAM\n";
+
+    CHECK(log.append(first, error));
+    CHECK(error.empty());
+
+    app::GradeRecord second;
+    second.at = 1700000060;
+    second.lesson_id = "conveyor-interlock";
+    second.passed = false;
+    second.passed_count = 1;
+    second.total = 3;
+
+    CHECK(log.append(second, error));
+
+    const std::vector<app::GradeRecord> entries = log.entries(error);
+    CHECK(error.empty());
+    CHECK(entries.size() == 2);
+    CHECK(entries[0].at == 1700000000);
+    CHECK(entries[0].lesson_id == "press-batch");
+    CHECK(entries[0].passed);
+    CHECK(entries[0].passed_count == 4);
+    CHECK(entries[0].total == 4);
+    CHECK(entries[0].program == first.program);
+    CHECK(entries[1].lesson_id == "conveyor-interlock");
+    CHECK(!entries[1].passed);
+    CHECK(entries[1].program.empty());
+
+    std::filesystem::remove(path);
+}
+
+TEST(grade_log_skips_a_line_it_cannot_read) {
+    const std::filesystem::path path =
+        std::filesystem::temp_directory_path() / "scancycle-grade-log-malformed.tsv";
+    {
+        std::ofstream file(path, std::ios::trunc);
+        file << "1700000000\tpress-batch\t1\t4\t4\t\n";
+        file << "not a record\n";
+        file << "1700000001\tpress-cycle\tx\t4\t4\t\n";  // passed is not 0 or 1
+    }
+
+    app::GradeLog log(path.string());
+    std::string error;
+    const std::vector<app::GradeRecord> entries = log.entries(error);
+    CHECK(entries.size() == 1);
+    CHECK(entries[0].lesson_id == "press-batch");
+
+    std::filesystem::remove(path);
 }

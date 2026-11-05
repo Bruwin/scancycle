@@ -193,7 +193,10 @@ and `POST /grade` renders the same run as a page for the catalog's form.
 submits. The toolbox is enforced against the compiled program: a submission
 using an instruction the lesson withholds comes back as a report whose first row
 names the withheld instruction and whose remaining rows say "not run", rather
-than as a transport error. Both
+than as a transport error. Graded attempts are appended to a tab-separated log
+the server names at startup, and `GET /grades` lists them newest first; the
+stylesheet carries print rules, so that page and a grade report print without
+nav links or forms. Both
 grade responses carry the submitted program back in that form, so a rejection or
 a failed compile never costs a student their work. There is no TLS or authentication yet, and the WebSocket half of
 the portal is still open.
