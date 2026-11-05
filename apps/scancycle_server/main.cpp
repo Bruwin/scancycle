@@ -1,28 +1,62 @@
 #include "lesson/lesson.hpp"
+#include "net/http_server.hpp"
 #include "net/portal_server.hpp"
 
 #include <cstdio>
+#include <cstdlib>
+#include <string>
 #include <vector>
 
-// The teacher portal transport is M5 work. This binary exercises the routing
-// layer that the transport will serve, so the classroom surface can be reviewed
-// and tested before any port is opened.
-int main() {
-    std::vector<sc::lesson::Lesson> lessons = sc::lesson::make_builtin_lessons();
+// The teacher portal. The router is pure request-to-response mapping and lives
+// in sc_net; this binary binds it to loopback and prints the addresses a teacher
+// can open. Ctrl+C stops it.
+int main(int argc, char** argv) {
+    unsigned port = 8080;
+    long requests = 0;  // 0 serves until the process is stopped
 
-    sc::net::PortalRouter router = sc::net::make_default_router(lessons);
+    for (int i = 1; i < argc; ++i) {
+        const std::string arg = argv[i];
+        if (arg.rfind("--port=", 0) == 0) {
+            const long value = std::strtol(arg.c_str() + 7, nullptr, 10);
+            if (value <= 0 || value > 65535) {
+                std::fprintf(stderr, "portal: '%s' is not a port\n", arg.c_str());
+                return 2;
+            }
+            port = static_cast<unsigned>(value);
+        } else if (arg.rfind("--requests=", 0) == 0) {
+            requests = std::strtol(arg.c_str() + 11, nullptr, 10);
+        } else {
+            std::fprintf(stderr, "unknown option '%s'\n", arg.c_str());
+            return 2;
+        }
+    }
 
-    std::printf("Scan Cycle teacher portal (routing layer, transport pending)\n");
-    std::printf("routes: %zu\n\n", router.route_count());
+    const std::vector<sc::lesson::Lesson> lessons = sc::lesson::make_builtin_lessons();
+    const sc::net::PortalRouter router = sc::net::make_default_router(lessons);
 
-    const char* paths[] = {"/api/health", "/api/lessons", "/api/unknown"};
-    for (const char* path : paths) {
-        sc::net::Request request;
-        request.method = sc::net::HttpMethod::Get;
-        request.path = path;
+    sc::net::HttpServer server(router);
+    if (!server.listen(static_cast<sc::u16>(port))) {
+        std::fprintf(stderr, "portal: %s\n", server.error().c_str());
+        return 1;
+    }
 
-        const sc::net::Response response = router.dispatch(request);
-        std::printf("GET %-14s -> %d %s\n", path, response.status, response.body.c_str());
+    const unsigned bound = static_cast<unsigned>(server.port());
+    std::printf("Scan Cycle teacher portal\n");
+    std::printf("  http://127.0.0.1:%u/api/health\n", bound);
+    std::printf("  http://127.0.0.1:%u/api/lessons\n\n", bound);
+    for (const sc::lesson::Lesson& lesson : lessons) {
+        std::printf("  lesson %-20s %s\n", lesson.id.c_str(), lesson.title.c_str());
+    }
+    std::printf("\n");
+    std::fflush(stdout);
+
+    long served = 0;
+    while (requests == 0 || served < requests) {
+        if (!server.serve_one()) {
+            std::fprintf(stderr, "portal: %s\n", server.error().c_str());
+            return 1;
+        }
+        ++served;
     }
     return 0;
 }

@@ -3,8 +3,12 @@
 #include "app/lesson_runner.hpp"
 #include "lesson/grader.hpp"
 #include "lesson/lesson.hpp"
+#include "net/http.hpp"
+#include "net/http_server.hpp"
 #include "net/portal_server.hpp"
 #include "sim/plant.hpp"
+
+#include <thread>
 
 using namespace sc;
 
@@ -215,4 +219,57 @@ TEST(builtin_lessons_all_reach_the_portal_catalog) {
     CHECK(catalog.body.find("conveyor-interlock") != std::string::npos);
     CHECK(catalog.body.find("press-cycle") != std::string::npos);
     CHECK(catalog.body.find("press-batch") != std::string::npos);
+}
+
+TEST(portal_http_parser_reads_a_get) {
+    const net::ParsedRequest parsed = net::parse_http_request(
+        "GET /api/lessons?cache=1 HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n");
+
+    CHECK(parsed.ok);
+    CHECK(parsed.request.method == net::HttpMethod::Get);
+    CHECK(parsed.request.path == "/api/lessons");
+}
+
+TEST(portal_http_parser_rejects_junk) {
+    CHECK(!net::parse_http_request("nonsense\r\n\r\n").ok);
+    CHECK(!net::parse_http_request("GET relative HTTP/1.1\r\n\r\n").ok);
+    CHECK(!net::parse_http_request("BREW /pot HTTP/1.1\r\n\r\n").ok);
+}
+
+TEST(portal_http_formats_a_response) {
+    net::Response response;
+    response.body = "{\"ok\":true}";
+
+    const std::string text = net::format_http_response(response);
+
+    CHECK(text.rfind("HTTP/1.1 200 OK\r\n", 0) == 0);
+    CHECK(text.find("Content-Type: application/json") != std::string::npos);
+    CHECK(text.find("Content-Length: 11") != std::string::npos);
+    CHECK(text.find("Connection: close") != std::string::npos);
+    CHECK(text.find("{\"ok\":true}") != std::string::npos);
+}
+
+TEST(portal_transport_answers_the_catalog_over_a_socket) {
+    const std::vector<lesson::Lesson> lessons = lesson::make_builtin_lessons();
+    const net::PortalRouter router = net::make_default_router(lessons);
+
+    net::HttpServer server(router);
+    CHECK(server.listen(0));
+    if (server.port() == 0) {
+        return;
+    }
+
+    bool served = false;
+    std::thread worker([&server, &served] { served = server.serve_one(); });
+
+    std::string error;
+    const std::string raw = net::http_round_trip(
+        server.port(), "GET /api/lessons HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n", error);
+    worker.join();
+
+    CHECK(error.empty());
+    CHECK(served);
+    CHECK(raw.find("HTTP/1.1 200 OK") != std::string::npos);
+    CHECK(raw.find("Content-Type: application/json") != std::string::npos);
+    CHECK(raw.find("\"id\":\"conveyor-interlock\"") != std::string::npos);
 }

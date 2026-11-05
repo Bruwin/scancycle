@@ -101,8 +101,16 @@ add_library(sc_lesson
 )
 target_link_libraries(sc_lesson PUBLIC sc_core sc_sim PRIVATE sc_warnings)
 
-add_library(sc_net src/net/portal_server.cpp)
-target_link_libraries(sc_net PUBLIC sc_core sc_lesson PRIVATE sc_warnings)
+add_library(sc_net
+    src/net/portal_server.cpp
+    src/net/http.cpp
+    src/net/http_server.cpp
+)
+find_package(Threads REQUIRED)
+target_link_libraries(sc_net PUBLIC sc_core sc_lesson PRIVATE sc_warnings Threads::Threads)
+if(WIN32)
+    target_link_libraries(sc_net PRIVATE ws2_32)
+endif()
 
 add_library(sc_app
     src/app/application.cpp
@@ -165,7 +173,7 @@ if(SC_BUILD_TESTS)
     )
     target_link_libraries(sc_tests PRIVATE
         sc_plc sc_world sc_render sc_sim sc_io sc_assets sc_ui sc_lesson sc_net sc_app
-        sc_warnings)
+        sc_warnings Threads::Threads)
     add_test(NAME sc_tests COMMAND sc_tests)
     # The lesson gate: every reference program must pass its own rubric.
     add_test(NAME sc_lessons COMMAND scancycle_cli lesson)

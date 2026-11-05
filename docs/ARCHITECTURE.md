@@ -182,8 +182,11 @@ blocking, zero escaped boxes"). Each lesson carries a reference program that CI
 runs against that lesson's own cell as a regression test of the lesson itself, so
 a rubric no solution can satisfy fails the build.
 
-The portal is a local HTTP/WebSocket service (`scancycle_server`) so a classroom
-does not depend on the internet.
+The portal is a local service (`scancycle_server`) so a classroom does not depend
+on the internet. `net/http` parses and formats messages as pure text,
+`net/http_server` serves the router over TCP bound to loopback, and the server
+answers the catalog as JSON. There is no TLS or authentication yet, and the
+WebSocket half of the portal is still open.
 
 ## Procedural assets
 
