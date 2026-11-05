@@ -160,10 +160,18 @@ the other fifteen bits of the word survive, and an unchanged output is not
 written again. The transport is an injected `Df1Link`; `io::Df1Slave` is a
 synchronous software data table that answers on the caller's thread, so the
 whole driver runs in `ctest` with no serial port and no scheduling in the loop.
-A termios or pseudo-terminal link is the next step. Like the other live drivers
-this has not met a real controller: the frame family follows the Rockwell
-documentation, but the software peer is the only peer it has been tested
-against.
+
+`io::Df1SerialLink` is the real transport: raw 8N1 termios, a framed write, and
+a bounded read that returns as soon as one reply frame decodes, so partial reads
+never reach the driver. It is tested over a pseudo-terminal pair, which
+exercises termios and the stream framing without a controller. `io::df1_profile`
+records each controller family's defaults; the MicroLogix 1000 profile is the
+reference target (DF1 full-duplex, 19 200 baud, 8N1, CRC, controller node 1,
+host node 0), and its N7 and B3 files are what this slice binds. Windows has no
+serial implementation yet and reports that as a value. Like the other live
+drivers this has not met a real controller: the frame family follows the
+Rockwell documentation, and the software peer is the only peer it has been
+tested against.
 
 ## Drivers and licensing
 
@@ -296,9 +304,9 @@ drives the whole cell)*
   still loopback-only with no TLS or authentication)*
 * **M6** live drivers: Modbus TCP against a software slave, then libplctag, then DF1.
   *(in progress: the in-house Modbus/TCP driver, loopback software slave, the optional
-  libplctag driver, and the DF1 codec with its software data table and driver are implemented
-  and tested headlessly; a real serial transport and hardware commissioning remain, because
-  no live driver has been run against a real controller)*
+  libplctag driver, and the DF1 codec, serial link, software data table and driver are
+  implemented and tested headlessly, with the MicroLogix 1000 as the reference target;
+  hardware commissioning remains, because no live driver has run against a real controller)*
 * **M7** graphical LD/FBD editors on the existing network model, SFC, content,
   asset variety.
 

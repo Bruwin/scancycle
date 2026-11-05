@@ -98,6 +98,9 @@ add_library(sc_io
     src/io/df1_pccc.cpp
     src/io/df1_slave.cpp
     src/io/df1_driver.cpp
+    src/io/df1_profile.cpp
+    src/io/serial_io.cpp
+    src/io/df1_serial_link.cpp
 )
 target_link_libraries(sc_io PUBLIC sc_core sc_sim sc_plc PRIVATE sc_warnings)
 if(WIN32)
@@ -220,6 +223,7 @@ if(SC_BUILD_TESTS)
         tests/test_modbus_tcp.cpp
         tests/test_libplctag.cpp
         tests/test_df1.cpp
+        tests/test_df1_serial.cpp
         tests/test_app.cpp
     )
     target_link_libraries(sc_tests PRIVATE
