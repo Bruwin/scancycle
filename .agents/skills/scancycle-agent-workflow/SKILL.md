@@ -33,7 +33,8 @@ ctest --test-dir build --output-on-failure
 Then run the mechanical checks for the non-negotiables. Any hit is a failure to fix, not to explain away:
 
 ```sh
-# Determinism and layering. Prints every hit and exits non-zero; CI runs it too.
+# Determinism and layering. Prints every hit and exits non-zero. `ctest` runs it
+# as sc_rules and CI as its own job; call it directly for a quick answer.
 ./tools/check_rules.sh
 ```
 

@@ -62,13 +62,10 @@ cmake --build build -j
 ctest --test-dir build --output-on-failure
 ```
 
-Plus, all of which must pass:
-
-```sh
-# No clock or randomness in the simulation (the PLC's own Value::time constructor
-# is not a clock read), and no include that reaches up the layer stack.
-./tools/check_rules.sh
-```
+`ctest` also runs `sc_rules`, which is `tools/check_rules.sh`: no clock or
+randomness in the simulation (the PLC's own `Value::time` constructor is not a
+clock read), and no include that reaches up the layer stack. Run the script
+directly when you want that answer without a build.
 
 If the renderer changed, also build with `-DSC_ENABLE_VULKAN=ON` and say whether
 the golden-frame comparison ran.

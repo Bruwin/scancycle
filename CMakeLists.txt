@@ -196,4 +196,13 @@ if(SC_BUILD_TESTS)
     add_test(NAME sc_tests COMMAND sc_tests)
     # The lesson gate: every reference program must pass its own rubric.
     add_test(NAME sc_lessons COMMAND scancycle_cli lesson)
+
+    # The rules from AGENTS.md, through the same script the CI rules job runs, so
+    # a local ctest and the pipeline cannot disagree. It needs a POSIX shell, so
+    # Windows gets it from CI rather than from a Git Bash that may not be there.
+    if(UNIX)
+        add_test(NAME sc_rules
+            COMMAND ${PROJECT_SOURCE_DIR}/tools/check_rules.sh
+            WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
+    endif()
 endif()
