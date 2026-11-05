@@ -41,6 +41,15 @@ const Device& Plant::device(u32 index) const { return devices_[index]; }
 
 Device& Plant::device(u32 index) { return devices_[index]; }
 
+u32 Plant::find(std::string_view name) const {
+    for (u32 index = 0; index < devices_.size(); ++index) {
+        if (devices_[index].name == name) {
+            return index;
+        }
+    }
+    return kNoDevice;
+}
+
 void Plant::set_output(u32 index, bool value) { devices_[index].output = value; }
 
 bool Plant::input(u32 index) const { return devices_[index].input; }

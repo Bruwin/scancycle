@@ -1,4 +1,6 @@
+#include "app/lesson_runner.hpp"
 #include "core/deterministic_rng.hpp"
+#include "lesson/lesson.hpp"
 #include "plc/compiler.hpp"
 #include "plc/parser.hpp"
 #include "plc/program.hpp"
@@ -26,7 +28,8 @@ void print_usage() {
         "usage:\n"
         "  scancycle_cli run <program.st> [--scans=N] [--dt-ms=N] [--set name=value]\n"
         "  scancycle_cli disasm <program.st>\n"
-        "  scancycle_cli bench [--iterations=N]\n");
+        "  scancycle_cli bench [--iterations=N]\n"
+        "  scancycle_cli lesson [--id=ID] [--seconds=N]\n");
 }
 
 bool read_file(const std::string& path, std::string& out) {
@@ -258,6 +261,69 @@ int command_bench(const std::vector<std::string>& args) {
     return 0;
 }
 
+int command_lesson(const std::vector<std::string>& args) {
+    std::string wanted;
+    double seconds = 30.0;
+
+    for (const std::string& arg : args) {
+        if (arg.rfind("--id=", 0) == 0) {
+            wanted = arg.substr(5);
+        } else if (arg.rfind("--seconds=", 0) == 0) {
+            seconds = std::atof(arg.c_str() + 10);
+        } else {
+            std::fprintf(stderr, "unknown option '%s'\n", arg.c_str());
+            return 2;
+        }
+    }
+
+    std::vector<sc::lesson::Lesson> lessons;
+    lessons.push_back(sc::lesson::make_conveyor_interlock_lesson());
+    lessons.push_back(sc::lesson::make_press_cycle_lesson());
+
+    int failures = 0;
+    int ran = 0;
+
+    for (const sc::lesson::Lesson& lesson : lessons) {
+        if (!wanted.empty() && lesson.id != wanted) {
+            continue;
+        }
+        if (lesson.starting_plant.count() == 0) {
+            std::printf("%-18s skipped (no cell attached)\n", lesson.id.c_str());
+            continue;
+        }
+
+        sc::LessonRunConfig config;
+        config.seconds = seconds;
+        const sc::LessonRunResult run = sc::run_lesson(lesson, config);
+        ++ran;
+
+        std::printf("%s - %s\n", lesson.id.c_str(), lesson.title.c_str());
+        if (!run.ok) {
+            std::printf("  RUN FAILED: %s\n\n", run.error.c_str());
+            ++failures;
+            continue;
+        }
+
+        std::printf("  %.1f s simulated, %lld scans, %u part(s) through the press\n", seconds,
+                    static_cast<long long>(run.scans), run.boxes_processed);
+        for (const sc::lesson::CheckResult& check : run.report.checks) {
+            std::printf("  [%s] %-18s %s\n", check.passed ? "PASS" : "FAIL", check.id.c_str(),
+                        check.detail.c_str());
+        }
+        std::printf("  => %s\n\n",
+                    run.report.passed() ? "lesson reference passes" : "LESSON BROKEN");
+        if (!run.report.passed()) {
+            ++failures;
+        }
+    }
+
+    if (ran == 0) {
+        std::fprintf(stderr, "no runnable lesson matched\n");
+        return 2;
+    }
+    return failures == 0 ? 0 : 1;
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -278,6 +344,9 @@ int main(int argc, char** argv) {
     }
     if (command == "bench") {
         return command_bench(rest);
+    }
+    if (command == "lesson") {
+        return command_lesson(rest);
     }
 
     print_usage();

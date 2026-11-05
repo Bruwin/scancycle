@@ -26,6 +26,7 @@ curriculum can open TIA Portal or Studio 5000 and recognise everything.
 | Plant simulation, tag database, simulated PLC driver | working, tested |
 | Box flow: belt transfer, photo-eye sensing, jam detection | working, tested |
 | Machine: pull from infeed, cycle time, release to outfeed | working, tested |
+| Lesson runner: a lesson's reference program drives its own cell | working, tested |
 | Modbus/TCP codec, commissioning safety gate | working, tested |
 | Procedural materials and parametric machine kits | working, tested |
 | Editor model, lesson schema, grader, portal routing | working, tested |
@@ -50,6 +51,22 @@ CMake is convenient but not required. Every module is a plain set of translation
 units, so the whole tree also builds with a bare C++20 compiler; that path is
 what CI for the headless half uses when no generator is available.
 
+## Verify it yourself
+
+Every claim in the table above is checked by the suite. From a clean clone:
+
+```sh
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
+cmake --build build -j
+ctest --test-dir build --output-on-failure
+./build/bin/scancycle_cli lesson
+```
+
+`ctest` runs the unit suite and the lesson gate. The lesson gate compiles a
+lesson's reference program, runs it against that lesson's own cell for 30
+simulated seconds, and grades it with the same rubric a student is graded
+with, so a broken exercise fails CI instead of failing a classroom.
+
 ## Run
 
 ```sh
@@ -61,6 +78,9 @@ what CI for the headless half uses when no generator is available.
 
 # Measure greedy meshing on a synthetic chunk
 ./build/bin/scancycle_cli bench
+
+# Run every lesson's reference program against its cell and grade it
+./build/bin/scancycle_cli lesson
 ```
 
 ## Layout

@@ -9,6 +9,9 @@ namespace sc {
 
 Application::Application(AppConfig config) : config_(std::move(config)) {}
 
+Application::Application(AppConfig config, sim::Plant plant)
+    : config_(std::move(config)), plant_(std::move(plant)) {}
+
 Application::~Application() = default;
 
 bool Application::initialize() {
@@ -18,9 +21,7 @@ bool Application::initialize() {
     }
 
     for (const DeviceSpec& spec : config_.devices) {
-        const u32 index = plant_.add(spec.kind, spec.name);
-        tags_.bind(spec.name, io::TagDirection::Output, index);
-        tags_.bind(spec.name + "_fb", io::TagDirection::Input, index);
+        plant_.add(spec.kind, spec.name);
     }
 
     plc::ParseResult parsed = plc::parse_program(config_.program_source);
@@ -38,6 +39,27 @@ bool Application::initialize() {
     }
 
     program_ = std::move(compiled.program);
+
+    // Bind by what the program declares, not by what the plant contains. A
+    // lesson cell can hold devices a given exercise never touches, and the
+    // driver refuses to latch an input whose variable is absent.
+    unbound_devices_.clear();
+    for (u32 index = 0; index < plant_.count(); ++index) {
+        const std::string& name = plant_.device(index).name;
+        const bool drives = program_.find_var(name) >= 0;
+        const bool senses = program_.find_var(name + "_fb") >= 0;
+
+        if (drives) {
+            tags_.bind(name, io::TagDirection::Output, index);
+        }
+        if (senses) {
+            tags_.bind(name + "_fb", io::TagDirection::Input, index);
+        }
+        if (!drives && !senses) {
+            unbound_devices_.push_back(name);
+        }
+    }
+
     vm_ = std::make_unique<plc::Vm>(program_);
     driver_ = std::make_unique<io::SimDriver>(plant_, tags_, *vm_);
     if (!driver_->connect()) {
@@ -75,6 +97,8 @@ bool Application::run_headless(i32 ticks) {
     }
     return true;
 }
+
+i64 Application::scans() const { return driver_ ? driver_->scans() : 0; }
 
 lesson::GradeReport Application::grade(const lesson::Lesson& lesson) const {
     return lesson::evaluate(lesson, plant_, !faulted_);

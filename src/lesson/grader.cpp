@@ -38,6 +38,10 @@ bool evaluate_check(const RubricCheck& check, const sim::Plant& plant, bool prog
             detail = "speed=" + format_number(device.speed) + ", required>=" +
                      format_number(check.threshold);
             return device.speed >= check.threshold;
+        case CheckKind::ProcessedCountAtLeast:
+            detail = "processed=" + std::to_string(device.done_count) + ", required>=" +
+                     format_number(check.threshold);
+            return static_cast<f64>(device.done_count) >= check.threshold;
         case CheckKind::ProgramHealthy:
             break;
     }

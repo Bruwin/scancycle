@@ -1,5 +1,6 @@
 #include "harness.hpp"
 
+#include "app/lesson_runner.hpp"
 #include "lesson/grader.hpp"
 #include "lesson/lesson.hpp"
 #include "net/portal_server.hpp"
@@ -94,4 +95,60 @@ TEST(portal_router_serves_the_default_surface) {
 TEST(portal_router_escapes_json) {
     CHECK(net::json_escape("a\"b") == "a\\\"b");
     CHECK(net::json_escape("a\\b") == "a\\\\b");
+}
+
+TEST(plant_finds_devices_by_name) {
+    const sim::Plant slice = sim::make_vertical_slice_plant();
+    CHECK(slice.find("press") == 2);
+    CHECK(slice.find("run_light") == 4);
+    CHECK(slice.find("does-not-exist") == sim::kNoDevice);
+}
+
+TEST(press_lesson_owns_its_cell) {
+    const lesson::Lesson press = lesson::make_press_cycle_lesson();
+
+    CHECK(press.starting_plant.count() == 5);
+    const u32 machine = press.starting_plant.find("press");
+    CHECK(machine != sim::kNoDevice);
+    CHECK(press.starting_plant.device(machine).kind == sim::DeviceKind::Machine);
+    CHECK(press.rubric.size() == 4);
+    CHECK(!press.reference_solution.empty());
+
+    // The rubric must address this lesson's own devices, not a stale index.
+    CHECK(press.rubric.front().device == machine);
+}
+
+TEST(press_lesson_reference_solution_passes_its_own_rubric) {
+    const lesson::Lesson press = lesson::make_press_cycle_lesson();
+    const LessonRunResult run = run_lesson(press);
+
+    CHECK(run.ok);
+    CHECK(run.error.empty());
+    CHECK(!run.faulted);
+    CHECK(run.scans > 0);
+    CHECK(run.boxes_processed >= 3);
+    CHECK(run.report.passed());
+}
+
+TEST(press_lesson_fails_a_program_that_does_nothing) {
+    lesson::Lesson idle = lesson::make_press_cycle_lesson();
+    idle.reference_solution =
+        "PROGRAM Idle\nVAR\n    unused : BOOL;\nEND_VAR\n    unused := FALSE;\nEND_PROGRAM\n";
+
+    const LessonRunResult run = run_lesson(idle);
+
+    CHECK(run.ok);  // the run completed; the student simply did not pass
+    CHECK(run.boxes_processed == 0);
+    CHECK(!run.report.passed());
+}
+
+TEST(lesson_runner_rejects_a_lesson_without_a_program) {
+    lesson::Lesson empty;
+    empty.id = "empty";
+    empty.starting_plant = sim::make_vertical_slice_plant();
+
+    const LessonRunResult run = run_lesson(empty);
+
+    CHECK(!run.ok);
+    CHECK(!run.error.empty());
 }

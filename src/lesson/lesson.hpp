@@ -3,6 +3,7 @@
 // the allowed instruction set and the rubric, so a teacher can author a lesson
 // in a text editor and version it alongside the course.
 #include "core/types.hpp"
+#include "sim/plant.hpp"
 
 #include <string>
 #include <string_view>
@@ -16,6 +17,9 @@ enum class CheckKind : u8 {
     BoxCountAtLeast,
     SpeedAtLeast,
     ProgramHealthy,
+    // Parts a machine has finished. Throughput, not activity: a press that is
+    // merely enabled has processed nothing.
+    ProcessedCountAtLeast,
 };
 
 struct RubricCheck {
@@ -32,6 +36,10 @@ struct Lesson {
     std::string objective;
     u64 world_seed = 1;
 
+    // The cell the lesson is taught on, wiring included. A lesson that leaves
+    // this empty is graded against whatever plant the caller supplies.
+    sim::Plant starting_plant;
+
     // Empty means "every instruction is available". Otherwise this is the
     // week's toolbox: students may only use what the lesson grants.
     std::vector<std::string> allowed_instructions;
@@ -43,6 +51,9 @@ struct Lesson {
 };
 
 Lesson make_conveyor_interlock_lesson();
+
+// The M3 cell: bring the belt, press and outfeed up and get parts through.
+Lesson make_press_cycle_lesson();
 
 bool instruction_allowed(const Lesson& lesson, std::string_view instruction);
 

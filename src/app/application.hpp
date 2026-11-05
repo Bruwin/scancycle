@@ -31,6 +31,11 @@ struct AppConfig {
 class Application {
 public:
     explicit Application(AppConfig config);
+
+    // A prepared cell. Lessons ship the plant they are taught on, wiring
+    // included, so the root must accept one instead of building it from specs.
+    Application(AppConfig config, sim::Plant plant);
+
     ~Application();
 
     bool initialize();
@@ -43,6 +48,11 @@ public:
     plc::Vm* plc() { return vm_.get(); }
     const std::string& error() const { return error_; }
     bool faulted() const { return faulted_; }
+    i64 scans() const;
+
+    // Devices the program never mentions. A misspelt tag shows up here instead
+    // of silently doing nothing, which is the classic PLC mistake.
+    const std::vector<std::string>& unbound_devices() const { return unbound_devices_; }
 
     lesson::GradeReport grade(const lesson::Lesson& lesson) const;
 
@@ -53,6 +63,7 @@ private:
     plc::CompiledProgram program_;
     std::unique_ptr<plc::Vm> vm_;
     std::unique_ptr<io::SimDriver> driver_;
+    std::vector<std::string> unbound_devices_;
     i64 now_ms_ = 0;
     i64 scan_accumulator_ms_ = 0;
     bool faulted_ = false;

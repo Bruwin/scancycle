@@ -8,6 +8,7 @@
 #include "core/types.hpp"
 
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace sc::sim {
@@ -67,6 +68,11 @@ public:
     u32 count() const { return static_cast<u32>(devices_.size()); }
     const Device& device(u32 index) const;
     Device& device(u32 index);
+
+    // Looks a device up by name; kNoDevice when the plant has no such device.
+    // Lessons and rubrics address devices by name so a rewiring cannot silently
+    // retarget a check at a different machine.
+    u32 find(std::string_view name) const;
 
     void set_output(u32 index, bool value);
     bool input(u32 index) const;
