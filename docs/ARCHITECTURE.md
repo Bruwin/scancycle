@@ -161,19 +161,6 @@ Rendering dependencies, pulled in only when `SC_ENABLE_VULKAN=ON`:
 The headless half keeps building with no GPU, no display and no SDL, which is
 what lets CI stay honest on machines that have none of them.
 
-Teaching tooling is separate again: it is not linked into the product, `ctest`
-does not need it, and nothing in `src/` imports it.
-
-| Target | Library | Licence | Note |
-|---|---|---|---|
-| `tools/grade_feedback.py` | OpenAI Python SDK (`openai==3.46.0`) | Apache-2.0 | HTTP client only; requests go to the Respan gateway at `api.respan.ai`, nothing ships |
-
-The feedback tool sends a graded attempt to a hosted model and prints a draft for
-the teacher to edit. It reads `RESPAN_API_KEY` from the environment or an
-untracked `.env`, and prints its prompt instead of calling out when the key is
-absent, so a classroom with no account still gets a readable explanation of an
-attempt.
-
 What LGPL-3.0 actually obliges: a component linked from LGPL code may be linked
 dynamically, or statically as long as the objects needed to relink the binary
 accompany it, and modifications to that component stay LGPL. Permissive
