@@ -29,9 +29,9 @@ public:
 
     // Latch inputs, execute one scan, flush outputs. Returns false and records a
     // diagnostic if the program faulted.
-    bool run_scan(i64 now_ms);
+    bool run_scan(i64 now_ms) override;
 
-    i64 scans() const { return scans_; }
+    i64 scans() const override { return scans_; }
 
     // Optional. Forces are applied where a real PLC applies them: after an input
     // is latched, and before an output is flushed.

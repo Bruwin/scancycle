@@ -3,10 +3,12 @@
 #include "app/application.hpp"
 #include "app/grade_log.hpp"
 #include "app/watch_text.hpp"
+#include "io/driver.hpp"
 #include "lesson/lesson.hpp"
 
 #include <filesystem>
 #include <fstream>
+#include <memory>
 #include <string>
 #include <utility>
 #include <vector>
@@ -33,6 +35,56 @@ AppConfig make_config() {
     config.plc_scan_ms = 10;
     return config;
 }
+
+// Stands in for a live transport: it latches one input, runs the program and
+// records that the application really drove it. A hardware driver would swap
+// those hand-written values for a conversation with a controller.
+class FakeDriver final : public io::PlcDriver {
+public:
+    explicit FakeDriver(plc::Vm& vm) noexcept : vm_(vm) {}
+
+    bool connect() override {
+        connected_ = true;
+        return true;
+    }
+    void disconnect() override { connected_ = false; }
+    bool connected() const override { return connected_; }
+
+    bool read_inputs() override { return true; }
+    bool write_outputs() override { return true; }
+
+    bool run_scan(i64 now_ms) override {
+        ++scans_;
+        if (fail_) {
+            error_ = "the injected driver failed";
+            return false;
+        }
+        if (!vm_.set("start_btn", plc::Value::boolean(true))) {
+            error_ = "the program has no variable named 'start_btn'";
+            return false;
+        }
+        if (!vm_.scan(now_ms)) {
+            error_ = vm_.fault_message();
+            return false;
+        }
+        return true;
+    }
+
+    i64 scans() const override { return scans_; }
+    const char* name() const override { return "fake"; }
+    std::string last_error() const override { return error_; }
+
+    // Set by a test that wants the next scan to fail, the way a dropped link
+    // fails on a real controller.
+    void fail_next_scan() { fail_ = true; }
+
+private:
+    plc::Vm& vm_;
+    bool connected_ = false;
+    i64 scans_ = 0;
+    bool fail_ = false;
+    std::string error_;
+};
 
 }  // namespace
 
@@ -95,6 +147,54 @@ TEST(application_refuses_to_run_before_initialising) {
     Application app(make_config());
     CHECK(!app.run_headless(1));
     CHECK(!app.error().empty());
+}
+
+TEST(application_runs_its_scan_loop_through_an_injected_driver) {
+    FakeDriver* injected = nullptr;
+    AppConfig config = make_config();
+    config.driver_factory = [&injected](plc::Vm& vm) {
+        auto driver = std::make_unique<FakeDriver>(vm);
+        injected = driver.get();
+        return std::unique_ptr<io::PlcDriver>(std::move(driver));
+    };
+
+    Application app(std::move(config));
+    CHECK(app.initialize());
+    if (injected == nullptr) {
+        return;
+    }
+
+    CHECK(app.step_scan());
+
+    // The application drove the injected driver, not the simulator, and the
+    // driver's latched input reached the program image.
+    CHECK(injected->scans() == 1);
+    CHECK(app.scans() == 1);
+    CHECK(app.plc()->get("motor").as_bool());
+
+    // A live controller has no force table; refusing is better than pretending.
+    CHECK(!app.set_force("motor", true));
+    CHECK(app.error().find("simulated") != std::string::npos);
+}
+
+TEST(an_injected_driver_failure_stops_the_scan) {
+    FakeDriver* injected = nullptr;
+    AppConfig config = make_config();
+    config.driver_factory = [&injected](plc::Vm& vm) {
+        auto driver = std::make_unique<FakeDriver>(vm);
+        injected = driver.get();
+        return std::unique_ptr<io::PlcDriver>(std::move(driver));
+    };
+
+    Application app(std::move(config));
+    CHECK(app.initialize());
+    if (injected == nullptr) {
+        return;
+    }
+
+    injected->fail_next_scan();
+    CHECK(!app.step_scan());
+    CHECK(app.error() == "the injected driver failed");
 }
 
 TEST(a_forced_output_reaches_the_device_but_not_the_program) {
