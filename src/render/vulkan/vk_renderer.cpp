@@ -128,6 +128,7 @@ private:
     std::unique_ptr<ChunkRenderer> chunks_;
     FrameConstants constants_{};
     // Capture is a diagnostic path: one synchronous frame, only when asked for.
+    bool capture_supported_ = false;
     Buffer capture_buffer_;
     std::vector<u8> captured_;
     u32 captured_width_ = 0;
@@ -428,7 +429,15 @@ bool VulkanRenderer::create_swapchain() {
     info.imageColorSpace = format.colorSpace;
     info.imageExtent = extent;
     info.imageArrayLayers = 1;
-    info.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+    // A capture copies out of this image, which needs the transfer usage;
+    // a surface that cannot provide it simply reports no capture instead.
+    VkImageUsageFlags usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+    capture_supported_ = !config_.capture_path.empty() &&
+                        (caps.supportedUsageFlags & VK_IMAGE_USAGE_TRANSFER_SRC_BIT) != 0;
+    if (capture_supported_) {
+        usage |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+    }
+    info.imageUsage = usage;
     info.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
     info.preTransform = caps.currentTransform;
     info.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
@@ -600,7 +609,7 @@ bool VulkanRenderer::create_sync_objects() {
 
 bool VulkanRenderer::create_capture_buffer() {
     destroy_buffer(device_, capture_buffer_);
-    if (config_.capture_path.empty()) {
+    if (!capture_supported_) {
         return true;
     }
     const VkDeviceSize size = static_cast<VkDeviceSize>(extent_.width) * extent_.height * 4;
