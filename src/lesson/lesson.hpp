@@ -61,6 +61,10 @@ Lesson make_conveyor_interlock_lesson();
 // The M3 cell: bring the belt, press and outfeed up and get parts through.
 Lesson make_press_cycle_lesson();
 
+// The same cell, but the line counts its parts and stops feeding when the
+// batch is full: a delayed start plus a counter with a visible CV.
+Lesson make_batch_cycle_lesson();
+
 bool instruction_allowed(const Lesson& lesson, std::string_view instruction);
 
 }  // namespace sc::lesson

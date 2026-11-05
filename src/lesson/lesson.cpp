@@ -111,6 +111,61 @@ END_PROGRAM
     return lesson;
 }
 
+Lesson make_batch_cycle_lesson() {
+    Lesson lesson;
+    lesson.id = "press-batch";
+    lesson.title = "Press cell: count a batch";
+    lesson.objective =
+        "Delay the line start by a second, count the parts the press finishes, and "
+        "stop feeding once three parts are in.";
+    lesson.world_seed = 13;
+
+    lesson.starting_plant = sim::make_vertical_slice_plant();
+    lesson.allowed_instructions = {"BOOL", "INT", ":=", "AND", "OR", "NOT", "TON", "CTU"};
+
+    lesson.rubric.push_back(check_on(lesson.starting_plant, "press", "batch-processed",
+                                     "Press completes three parts",
+                                     CheckKind::ProcessedCountAtLeast, 3.0));
+    lesson.rubric.push_back(check_on(lesson.starting_plant, "infeed_belt", "batch-stops-infeed",
+                                     "The batch stops the infeed", CheckKind::DeviceOutputFalse));
+    lesson.rubric.push_back(check_on(lesson.starting_plant, "run_light", "batch-light",
+                                     "Run light is on", CheckKind::DeviceOutputTrue));
+    lesson.rubric.push_back(RubricCheck{"program-healthy", "Program runs without a fault",
+                                        CheckKind::ProgramHealthy, 0, 0.0});
+
+    // The press's ready feedback is high while it is idle, so its inverse pulses
+    // once per part started. CV is published so the count is visible, not just
+    // the preset flag.
+    lesson.reference_solution = R"st(PROGRAM PressBatch
+VAR
+    cell_run     : BOOL;
+    infeed_belt  : BOOL;
+    press        : BOOL;
+    outfeed_belt : BOOL;
+    run_light    : BOOL;
+    press_fb     : BOOL;
+    press_busy   : BOOL;
+    start_delay  : TON;
+    batch        : CTU;
+    parts_made   : INT;
+END_VAR
+    cell_run := TRUE;
+    start_delay(IN := cell_run, PT := T#1s);
+
+    (* ready is high while idle, so its inverse is one pulse per part *)
+    press_busy := NOT press_fb;
+    batch(CU := press_busy, PV := 3);
+    parts_made := batch.CV;
+
+    infeed_belt := start_delay.Q AND NOT batch.Q;
+    press := start_delay.Q;
+    outfeed_belt := start_delay.Q;
+    run_light := start_delay.Q;
+END_PROGRAM
+)st";
+    return lesson;
+}
+
 bool instruction_allowed(const Lesson& lesson, std::string_view instruction) {
     if (lesson.allowed_instructions.empty()) {
         return true;

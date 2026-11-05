@@ -171,3 +171,20 @@ TEST(lesson_runner_rejects_a_preset_the_program_does_not_declare) {
     CHECK(!run.ok);
     CHECK(run.error.find("no_such_button") != std::string::npos);
 }
+
+TEST(batch_lesson_reference_solution_passes_its_own_rubric) {
+    const lesson::Lesson batch = lesson::make_batch_cycle_lesson();
+
+    CHECK(batch.starting_plant.count() == 5);
+    CHECK(lesson::instruction_allowed(batch, "CTU"));
+    CHECK(lesson::instruction_allowed(batch, "TON"));
+    CHECK(batch.reference_solution.find("CTU") != std::string::npos);
+
+    const LessonRunResult run = run_lesson(batch);
+
+    CHECK(run.ok);
+    CHECK(run.error.empty());
+    CHECK(!run.faulted);
+    CHECK(run.boxes_processed >= 3);
+    CHECK(run.report.passed());
+}

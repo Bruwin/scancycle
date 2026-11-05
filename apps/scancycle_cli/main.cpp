@@ -541,6 +541,7 @@ int command_lesson(const std::vector<std::string>& args) {
     std::vector<sc::lesson::Lesson> lessons;
     lessons.push_back(sc::lesson::make_conveyor_interlock_lesson());
     lessons.push_back(sc::lesson::make_press_cycle_lesson());
+    lessons.push_back(sc::lesson::make_batch_cycle_lesson());
 
     int failures = 0;
     int ran = 0;
