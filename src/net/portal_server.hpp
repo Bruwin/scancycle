@@ -51,6 +51,10 @@ std::string json_escape(std::string_view text);
 // cannot disagree about what is safe to interpolate.
 std::string html_escape(std::string_view text);
 
+// The shell every page shares: title, viewport and the one stylesheet, so the
+// catalog, a lesson and a grade look like one product.
+std::string page_head(std::string_view title);
+
 // The one lesson form. The catalog renders it empty; the grade page renders
 // it with the submission, so a program is never lost between attempts.
 std::string lesson_form(const std::vector<lesson::Lesson>& lessons,

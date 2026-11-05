@@ -342,6 +342,7 @@ TEST(portal_serves_a_catalog_page) {
     CHECK(page.status == 200);
     CHECK(page.content_type.rfind("text/html", 0) == 0);
     CHECK(page.body.find("<form") != std::string::npos);
+    CHECK(page.body.find("<th>Lesson</th>") != std::string::npos);
     CHECK(page.body.find("press-batch-ladder") != std::string::npos);
 }
 
@@ -426,7 +427,7 @@ TEST(lesson_page_lists_the_lesson_toolbox) {
     lesson::Lesson restricted;
     restricted.id = "restricted";
     restricted.title = "Restricted";
-    restricted.allowed_instructions = {"TON", "CTU"};
+    restricted.allowed_instructions = {"TON", "CTU", "AND", ":=", "INT"};
 
     lesson::Lesson open;
     open.id = "open";
@@ -441,8 +442,11 @@ TEST(lesson_page_lists_the_lesson_toolbox) {
     const net::Response tool = router.dispatch(request);
 
     CHECK(tool.status == 200);
-    CHECK(tool.body.find("<code>TON</code>") != std::string::npos);
-    CHECK(tool.body.find("<code>CTU</code>") != std::string::npos);
+    CHECK(tool.body.find("<td>Instruction</td><td><code>TON</code>, <code>CTU</code></td>") !=
+          std::string::npos);
+    CHECK(tool.body.find("<td>Operator</td><td><code>AND</code>, <code>:=</code></td>") !=
+          std::string::npos);
+    CHECK(tool.body.find("<td>Data type</td><td><code>INT</code></td>") != std::string::npos);
     CHECK(tool.body.find("Every instruction is available") == std::string::npos);
 
     request.path = "/lessons/open";

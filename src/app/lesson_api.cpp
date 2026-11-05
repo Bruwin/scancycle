@@ -5,7 +5,6 @@
 #include "net/http.hpp"
 
 #include <string>
-#include <string_view>
 
 namespace sc::app {
 namespace {
@@ -66,17 +65,6 @@ net::Response json_error(int status, const std::string& message) {
     return response;
 }
 
-std::string page_head(std::string_view title) {
-    return "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\">"
-           "<title>" +
-           std::string(title) +
-           "</title><style>body{font-family:system-ui,sans-serif;max-width:48rem;"
-           "margin:2rem auto;padding:0 1rem}table{border-collapse:collapse}"
-           "td,th{padding:.25rem .6rem;text-align:left;vertical-align:top}"
-           "tr+tr td{border-top:1px solid #ddd}.pass{color:#1a7f37}"
-           ".fail{color:#b42318}</style></head><body>";
-}
-
 // The report as a teacher reads it: the verdict first, then one row per check so
 // a student can see which assertion failed and what the simulation actually did.
 // The submission rides along in the form below it, so fixing a near miss is an
@@ -84,7 +72,7 @@ std::string page_head(std::string_view title) {
 std::string report_page(const GradeOutcome& outcome, const std::vector<lesson::Lesson>& lessons) {
     const lesson::GradeReport& report = outcome.report;
 
-    std::string page = page_head("Scan Cycle grade");
+    std::string page = net::page_head("Scan Cycle grade");
     page += "<h1>" + net::html_escape(outcome.lesson->title) + "</h1>";
     page += "<p>Lesson <code>" + net::html_escape(report.lesson_id) + "</code>: ";
     if (report.passed()) {
@@ -104,18 +92,18 @@ std::string report_page(const GradeOutcome& outcome, const std::vector<lesson::L
 
     page += "</tbody></table><h2>Edit and grade again</h2>";
     page += net::lesson_form(lessons, report.lesson_id, outcome.program);
-    page += "<p><a href=\"/\">Grade another lesson</a></p></body></html>";
+    page += "<p><a href=\"/\">Grade another lesson</a></p></main></body></html>";
     return page;
 }
 
 // A rejection is still an answer about a submission someone wrote: the message
 // explains what was wrong, and the form comes back filled in.
 std::string error_page(const GradeOutcome& outcome, const std::vector<lesson::Lesson>& lessons) {
-    std::string page = page_head("Scan Cycle grade");
+    std::string page = net::page_head("Scan Cycle grade");
     page += "<h1>Could not grade</h1><p>" + net::html_escape(outcome.error) + "</p>";
     page += "<h2>Your program is still here</h2>";
     page += net::lesson_form(lessons, outcome.wanted_lesson, outcome.program);
-    page += "<p><a href=\"/\">Back to the catalog</a></p></body></html>";
+    page += "<p><a href=\"/\">Back to the catalog</a></p></main></body></html>";
     return page;
 }
 

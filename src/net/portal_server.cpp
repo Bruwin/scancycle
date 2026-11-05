@@ -69,6 +69,27 @@ std::string html_escape(std::string_view text) {
     return out;
 }
 
+// One shell for every page. The catalog, a lesson and a grade are read side by
+// side, so they share type, spacing, table rules and code styling rather than
+// each inventing its own.
+std::string page_head(std::string_view title) {
+    return "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\">"
+           "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">"
+           "<title>" +
+           std::string(title) +
+           "</title><style>"
+           "body{font-family:system-ui,sans-serif;line-height:1.55;max-width:52rem;"
+           "margin:2rem auto;padding:0 1rem;color:#1b1b1b}"
+           "table{border-collapse:collapse;margin:1rem 0;width:100%}"
+           "th,td{padding:.35rem .7rem;text-align:left;vertical-align:top;"
+           "border-bottom:1px solid #e2e2e2}th{background:#f6f6f6;font-weight:600}"
+           "code{background:#f2f2f2;padding:.08rem .3rem;border-radius:3px}"
+           "textarea{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;"
+           "width:100%;box-sizing:border-box}"
+           ".pass{color:#1a7f37}.fail{color:#b42318}"
+           "</style></head><body><main>";
+}
+
 std::string lesson_form(const std::vector<lesson::Lesson>& lessons, std::string_view selected,
                         std::string_view program) {
     std::string form =
@@ -97,22 +118,59 @@ namespace {
 // server holds, plus a form that posts a program to the grade route. Leaving the
 // textarea empty grades the lesson's own reference solution.
 std::string catalog_page(const std::vector<lesson::Lesson>& lessons) {
-    std::string page =
-        "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\">"
-        "<title>Scan Cycle portal</title></head><body>"
-        "<h1>Scan Cycle teacher portal</h1>"
-        "<p>Every lesson's reference program must pass its own rubric.</p><ul>";
+    std::string page = page_head("Scan Cycle portal");
+    page += "<h1>Scan Cycle teacher portal</h1>"
+            "<p>Every lesson's reference program must pass its own rubric.</p>"
+            "<table><thead><tr><th>Lesson</th><th>Id</th></tr></thead><tbody>";
 
     for (const lesson::Lesson& lesson : lessons) {
-        page += "<li><a href=\"/lessons/" + html_escape(lesson.id) + "\">" +
-                html_escape(lesson.title) + "</a> <code>" + html_escape(lesson.id) +
-                "</code></li>";
+        page += "<tr><td><a href=\"/lessons/" + html_escape(lesson.id) + "\">" +
+                html_escape(lesson.title) + "</a></td><td><code>" + html_escape(lesson.id) +
+                "</code></td></tr>";
     }
 
-    page += "</ul>";
+    page += "</tbody></table><h2>Grade a program</h2>";
     page += lesson_form(lessons, "", "");
-    page += "<p><a href=\"/api/lessons\">JSON catalog</a></p></body></html>";
+    page += "<p><a href=\"/api/lessons\">JSON catalog</a></p></main></body></html>";
     return page;
+}
+
+// A lesson grants a mix of mnemonics, operators and type names. Grouping them
+// by what they are keeps the list readable; the classification is presentation,
+// so it lives here rather than becoming a second thing a lesson has to declare.
+enum class TokenKind : u8 { Instruction = 0, Operator, DataType };
+
+TokenKind token_kind(std::string_view token) {
+    static constexpr std::string_view kTypes[] = {"BOOL", "INT",   "DINT", "REAL",
+                                                  "TIME", "WORD",  "DWORD", "STRING"};
+    static constexpr std::string_view kOperators[] = {":=", "AND", "OR",  "NOT", "XOR", "=",
+                                                      "<>", "<",   ">",   "<=",  ">=",  "+",
+                                                      "-",  "*",   "/"};
+    for (const std::string_view& one : kTypes) {
+        if (token == one) {
+            return TokenKind::DataType;
+        }
+    }
+    for (const std::string_view& one : kOperators) {
+        if (token == one) {
+            return TokenKind::Operator;
+        }
+    }
+    return TokenKind::Instruction;
+}
+
+std::string toolbox_row(std::string_view label, const std::vector<std::string>& tokens) {
+    if (tokens.empty()) {
+        return std::string();
+    }
+    std::string row = "<tr><td>" + std::string(label) + "</td><td>";
+    for (std::size_t i = 0; i < tokens.size(); ++i) {
+        if (i != 0) {
+            row += ", ";
+        }
+        row += "<code>" + html_escape(tokens[i]) + "</code>";
+    }
+    return row + "</td></tr>";
 }
 
 std::string number_text(f64 value) {
@@ -151,25 +209,35 @@ std::string rule_text(const lesson::RubricCheck& check, const sim::Plant& plant)
 // A lesson before anyone submits: the goal, the rubric it will be measured
 // against, and the form, so a student reads the rules instead of guessing them.
 std::string lesson_page(const lesson::Lesson& lesson, const std::vector<lesson::Lesson>& lessons) {
-    std::string page = "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\">"
-                       "<title>" +
-                       html_escape(lesson.title) +
-                       "</title></head><body>"
-                       "<p><a href=\"/\">Scan Cycle teacher portal</a></p><h1>" +
-                       html_escape(lesson.title) + "</h1><p>" +
-                       html_escape(lesson.objective) + "</p><h2>Toolbox</h2>";
+    std::string page = page_head(lesson.title);
+    page += "<p><a href=\"/\">Scan Cycle teacher portal</a></p>";
+    page += "<h1>" + html_escape(lesson.title) + "</h1>";
+    page += "<p>" + html_escape(lesson.objective) + "</p><h2>Toolbox</h2>";
 
     if (lesson.allowed_instructions.empty()) {
         page += "<p>Every instruction is available.</p>";
     } else {
-        page += "<p>This lesson grants: ";
-        for (std::size_t i = 0; i < lesson.allowed_instructions.size(); ++i) {
-            if (i != 0) {
-                page += ", ";
+        std::vector<std::string> instructions;
+        std::vector<std::string> operators;
+        std::vector<std::string> types;
+        for (const std::string& token : lesson.allowed_instructions) {
+            switch (token_kind(token)) {
+                case TokenKind::Operator:
+                    operators.push_back(token);
+                    break;
+                case TokenKind::DataType:
+                    types.push_back(token);
+                    break;
+                case TokenKind::Instruction:
+                    instructions.push_back(token);
+                    break;
             }
-            page += "<code>" + html_escape(lesson.allowed_instructions[i]) + "</code>";
         }
-        page += "</p>";
+        page += "<table><thead><tr><th>Kind</th><th>Granted</th></tr></thead><tbody>";
+        page += toolbox_row("Instruction", instructions);
+        page += toolbox_row("Operator", operators);
+        page += toolbox_row("Data type", types);
+        page += "</tbody></table>";
     }
 
     page += "<h2>How this is graded</h2><table><thead><tr><th>Check</th>"
@@ -180,7 +248,7 @@ std::string lesson_page(const lesson::Lesson& lesson, const std::vector<lesson::
     }
     page += "</tbody></table><h2>Submit a program</h2>";
     page += lesson_form(lessons, lesson.id, "");
-    page += "</body></html>";
+    page += "</main></body></html>";
     return page;
 }
 
