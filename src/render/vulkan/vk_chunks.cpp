@@ -387,6 +387,16 @@ bool ChunkRenderer::upload_arena() {
         return false;
     }
 
+    // These buffers are named by the descriptor set, and destroying a buffer a
+    // descriptor set still names is invalid even when nothing is drawing. Detach
+    // them, rebind the descriptors, and only then free them.
+    Buffer retired_vertex = vertex_buffer_;
+    Buffer retired_index = index_buffer_;
+    Buffer retired_draw = draw_buffer_;
+    vertex_buffer_ = Buffer{};
+    index_buffer_ = Buffer{};
+    draw_buffer_ = Buffer{};
+
     // A first cut: realiasing the whole arena when it changes is correct and
     // simple. Incremental suballocation is a later optimisation with a measurement
     // to justify it.
@@ -441,7 +451,6 @@ bool ChunkRenderer::upload_arena() {
         return false;
     }
 
-    destroy_buffer(device_, draw_buffer_);
     if (!create_buffer(physical_, device_, draw_bytes,
                        VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT,
                        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, draw_buffer_)) {
@@ -474,7 +483,14 @@ bool ChunkRenderer::upload_arena() {
             i == 0 ? VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER : VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
         writes[i].pBufferInfo = &infos[i];
     }
+    // Rebuilding the arena is not a per-frame path, so draining the queue here
+    // costs a stall only on the frames where the world actually changed.
+    vkQueueWaitIdle(queue_);
     vkUpdateDescriptorSets(device_, 6, writes, 0, nullptr);
+
+    destroy_buffer(device_, retired_vertex);
+    destroy_buffer(device_, retired_index);
+    destroy_buffer(device_, retired_draw);
 
     stats_.live_meshes = capacity_;
     stats_.quad_count = static_cast<u32>(arena_.vertices().size() / 4);
