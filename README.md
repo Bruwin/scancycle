@@ -31,8 +31,8 @@ curriculum can open TIA Portal or Studio 5000 and recognise everything.
 | Procedural materials and parametric machine kits | working, tested |
 | Editor model, lesson schema, grader, portal routing | working, tested |
 | Composition root (plant + PLC + I/O in one headless session) | working, tested |
-| Vulkan 1.3 device, swapchain and frame loop (opt-in, `SC_ENABLE_VULKAN`) | builds, not yet run on a GPU |
-| Voxel draws, editor widgets, portal transport | interfaces only |
+| Vulkan 1.3 renderer: GPU cull, chunk streaming, golden frame (opt-in) | working, verified on lavapipe in CI |
+| Editor widgets, portal transport | interfaces only |
 
 ## Build
 
@@ -75,8 +75,9 @@ how fast the machine happened to run.
 
 
 That needs a Vulkan 1.3 driver and SDL3; CMake uses an installed SDL3 if it
-finds one and otherwise fetches the pinned release. The viewer opens a window
-and presents a cleared frame today — voxel draws are the next change.
+finds one and otherwise fetches the pinned release. The viewer generates a plant,
+streams its chunks onto the GPU as the camera moves, and orbits it; `--frames`
+makes it exit on its own, which is how CI runs it on a machine with no display.
 
 CMake is convenient but not required. Every module is a plain set of translation
 units, so the whole tree also builds with a bare C++20 compiler; that path is

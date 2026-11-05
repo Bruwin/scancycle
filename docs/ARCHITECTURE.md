@@ -159,6 +159,8 @@ Readability beats variety — a photo-eye must be identifiable at 20 metres.
 * **M0** foundation: build, presets, CI, deterministic core, tests. *(done)*
 * **M1** PLC runtime v0.1: ST front end, VM, standard FBs, determinism tests. *(done)*
 * **M2** world + renderer: chunk storage, greedy mesher, Vulkan GPU-driven path.
+  *(done: neighbour-aware meshing, streaming residency, one indirect draw for the
+  generated plant, and a golden frame recorded and checked in CI)*
 * **M3** vertical slice: belts, photo-eyes, one machine, one program. *(done: box flow, belt
   transfer, sensing, jam detection, the machine model, and a lesson whose reference program
 drives the whole cell)*
