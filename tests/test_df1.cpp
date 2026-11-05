@@ -490,3 +490,13 @@ TEST(df1_message_crc_matches_the_specification_frame) {
     CHECK(frame[frame.size() - 2] == 0x6B);
     CHECK(frame[frame.size() - 1] == 0x4C);
 }
+
+TEST(df1_read_request_uses_the_protected_typed_logical_payload) {
+    // Documented payload for CMD 0x0F: function, byte count, file, type,
+    // element, sub-element. The function byte is 0xA2, not the 0x0F command
+    // byte; a controller ignores the command when this slot is wrong.
+    const io::PcccAddress address{7, io::kPcccFileTypeInteger, 0, 0};
+    const std::vector<u8> payload = io::build_pccc_read_request(address, 2);
+    const std::vector<u8> expected = {0xA2, 0x02, 0x07, 0x89, 0x00, 0x00, 0x00};
+    CHECK(payload == expected);
+}

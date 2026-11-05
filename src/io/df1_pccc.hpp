@@ -13,10 +13,14 @@
 
 namespace sc::io {
 
-inline constexpr u8 kPcccFuncRead = 0x0F;
-inline constexpr u8 kPcccFuncWrite = 0x10;
-inline constexpr u8 kPcccFuncReadReply = 0x4F;
-inline constexpr u8 kPcccFuncWriteReply = 0x50;
+// 0x0F/0x10 are command bytes in the DF1 header. The function byte inside the
+// payload is different: 0xA2 for a protected typed logical read and 0xAA for a
+// write, and a reply echoes that same function byte. Sending the command byte in
+// this slot is a malformed command that controllers silently ignore.
+inline constexpr u8 kPcccFuncRead = 0xA2;
+inline constexpr u8 kPcccFuncWrite = 0xAA;
+inline constexpr u8 kPcccFuncReadReply = kPcccFuncRead;
+inline constexpr u8 kPcccFuncWriteReply = kPcccFuncWrite;
 
 // File type identifiers, not file numbers: N7 is file 7 with type 0x89.
 inline constexpr u8 kPcccFileTypeBinary = 0x85;
