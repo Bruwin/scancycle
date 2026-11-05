@@ -3,6 +3,8 @@
 #include <cctype>
 #include <string>
 #include <string_view>
+#include <utility>
+#include <vector>
 
 namespace sc::plc {
 namespace {
@@ -33,35 +35,171 @@ bool equals_ci(std::string_view a, std::string_view b) {
     return true;
 }
 
+// Blanks comments in place without changing the length or the newlines, so every
+// diagnostic later still quotes the line the author actually wrote.
+bool strip_comments(std::string_view source, std::string& out) {
+    out.assign(source);
+    bool in_block = false;
+    for (std::size_t i = 0; i < out.size(); ++i) {
+        const char c = out[i];
+        if (in_block) {
+            if (c == '*' && i + 1 < out.size() && out[i + 1] == ')') {
+                out[i] = ' ';
+                out[i + 1] = ' ';
+                ++i;
+                in_block = false;
+            } else if (c != '\n') {
+                out[i] = ' ';
+            }
+            continue;
+        }
+        if (c == '(' && i + 1 < out.size() && out[i + 1] == '*') {
+            out[i] = ' ';
+            out[i + 1] = ' ';
+            ++i;
+            in_block = true;
+            continue;
+        }
+        if (c == '/' && i + 1 < out.size() && out[i + 1] == '/') {
+            while (i < out.size() && out[i] != '\n') {
+                out[i] = ' ';
+                ++i;
+            }
+        }
+    }
+    return !in_block;
+}
+
+struct Header {
+    bool present = false;
+    std::size_t begin = 0;  // first byte after END_VAR
+    int next_line = 1;      // line number of the first instruction
+    std::vector<TagDecl> vars;
+};
+
+bool split_declaration(std::string_view line, std::string& name, std::string& type) {
+    const std::size_t colon = line.find(':');
+    if (colon == std::string_view::npos) {
+        return false;
+    }
+    name = std::string(trim(line.substr(0, colon)));
+    std::string_view tail = trim(line.substr(colon + 1));
+    if (!tail.empty() && tail.back() == ';') {
+        tail.remove_suffix(1);
+    }
+    type = std::string(trim(tail));
+    return !name.empty() && !type.empty();
+}
+
+// Reads an optional VAR block. A file without one is legal: the caller may own
+// the tag list instead, which is what an editor with a tag database does.
+bool parse_header(const std::string& text, Header& header, Diagnostics& diagnostics) {
+    std::size_t pos = 0;
+    int line_number = 0;
+    bool inside = false;
+
+    while (pos < text.size()) {
+        std::size_t end = text.find('\n', pos);
+        if (end == std::string::npos) {
+            end = text.size();
+        }
+        ++line_number;
+        const std::string_view line = trim(std::string_view(text).substr(pos, end - pos));
+        pos = end + 1;
+
+        if (line.empty()) {
+            continue;
+        }
+        if (!inside) {
+            if (!equals_ci(line, "var")) {
+                return true;
+            }
+            inside = true;
+            header.present = true;
+            continue;
+        }
+        if (equals_ci(line, "end_var")) {
+            header.begin = pos;
+            header.next_line = line_number + 1;
+            return true;
+        }
+
+        std::string name;
+        std::string type;
+        if (!split_declaration(line, name, type)) {
+            diagnostics.push_back({line_number, 1, "expected 'name : TYPE;' in the VAR block"});
+            continue;
+        }
+        // IEC keywords are case-insensitive, and parse_value_type speaks lower
+        // case, so a file that writes BOOL must not be told BOOL is unknown.
+        std::string lowered = type;
+        for (char& c : lowered) {
+            c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+        }
+        ValueType value_type = ValueType::Bool;
+        if (!parse_value_type(lowered, value_type)) {
+            diagnostics.push_back({line_number, 1, "unknown type '" + type + "'"});
+            continue;
+        }
+        TagDecl declaration;
+        declaration.name = std::move(name);
+        declaration.type = value_type;
+        header.vars.push_back(std::move(declaration));
+    }
+
+    if (inside) {
+        diagnostics.push_back({line_number, 1, "the VAR block has no END_VAR"});
+        return false;
+    }
+    return true;
+}
+
 }  // namespace
 
 IlResult compile_il(std::string_view name, std::string_view source,
                     std::span<const TagDecl> vars) {
     IlResult result;
     result.program.name = std::string(name);
-    if (!declare_tags(vars, result.program, result.diagnostics)) {
+
+    std::string text;
+    if (!strip_comments(source, text)) {
+        result.diagnostics.push_back({0, 0, "unterminated (* comment"});
         return result;
     }
 
-    int line_number = 0;
-    int depth = 0;  // values sitting on the accumulator
-    std::size_t pos = 0;
+    Header header;
+    if (!parse_header(text, header, result.diagnostics) || !result.diagnostics.empty()) {
+        return result;
+    }
 
-    while (pos < source.size()) {
-        std::size_t end = source.find('\n', pos);
-        if (end == std::string_view::npos) {
-            end = source.size();
+    // One file, one source of truth. A file that declares its own tags cannot also
+    // be handed a list, because the two would drift and the trace would quietly
+    // show whichever one happened to win.
+    if (header.present && !vars.empty()) {
+        result.diagnostics.push_back(
+            {0, 0, "the VAR block and the tag list both declare this program's tags"});
+        return result;
+    }
+
+    const std::span<const TagDecl> declared =
+        header.present ? std::span<const TagDecl>(header.vars) : vars;
+    if (!declare_tags(declared, result.program, result.diagnostics)) {
+        return result;
+    }
+
+    const std::string_view text_view = text;
+    int line_number = header.next_line - 1;
+    int depth = 0;  // values sitting on the accumulator
+    std::size_t pos = header.begin;
+
+    while (pos < text.size()) {
+        std::size_t end = text.find('\n', pos);
+        if (end == std::string::npos) {
+            end = text.size();
         }
         ++line_number;
-
-        std::string_view line = source.substr(pos, end - pos);
+        const std::string_view line = trim(text_view.substr(pos, end - pos));
         pos = end + 1;
-
-        const std::size_t comment = line.find("//");
-        if (comment != std::string_view::npos) {
-            line = line.substr(0, comment);
-        }
-        line = trim(line);
         if (line.empty()) {
             continue;
         }

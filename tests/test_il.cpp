@@ -144,3 +144,70 @@ TEST(il_rejects_an_unknown_instruction) {
     CHECK(built.diagnostics.size() == 1);
     CHECK(built.diagnostics[0].message.find("MOV") != std::string::npos);
 }
+
+TEST(il_reads_declarations_from_a_var_block) {
+    const char* source = R"il((* a file carries its own tags *)
+VAR
+    start : BOOL;
+    motor : BOOL;
+END_VAR
+
+LD start
+ST motor
+)il";
+    const IlResult built = compile_il("File", source, {});
+    CHECK(built.ok);
+    if (!built.ok) {
+        return;
+    }
+    CHECK(built.program.vars.size() == 2);
+
+    Vm vm(built.program);
+    CHECK(vm.set("start", Value::boolean(true)));
+    CHECK(vm.scan(0));
+    CHECK(vm.get("motor").as_bool());
+}
+
+TEST(il_refuses_a_var_block_and_a_tag_list_together) {
+    const char* source = "VAR\n    a : BOOL;\nEND_VAR\nST a\n";
+    const IlResult built = compile_il("Twice", source, bool_tags({"a"}));
+    CHECK(!built.ok);
+    CHECK(built.diagnostics.size() == 1);
+    CHECK(built.diagnostics[0].message.find("both") != std::string::npos);
+}
+
+TEST(il_reports_a_var_block_without_end_var) {
+    const IlResult built = compile_il("Open", "VAR\n    a : BOOL;\nST a\n", {});
+    CHECK(!built.ok);
+    // The unterminated block also makes the next line look like a declaration,
+    // so the missing END_VAR has to be found among the diagnostics, not first.
+    bool told = false;
+    for (const Diagnostic& diagnostic : built.diagnostics) {
+        told = told || diagnostic.message.find("END_VAR") != std::string::npos;
+    }
+    CHECK(told);
+}
+
+TEST(il_reports_an_unknown_type_in_the_var_block) {
+    const IlResult built = compile_il("Bad", "VAR\n    a : WIDGET;\nEND_VAR\nST a\n", {});
+    CHECK(!built.ok);
+    CHECK(built.diagnostics.size() == 1);
+    CHECK(built.diagnostics[0].line == 2);
+    CHECK(built.diagnostics[0].message.find("WIDGET") != std::string::npos);
+}
+
+TEST(il_comments_do_not_shift_line_numbers) {
+    const char* source =
+        "(* header *)\nVAR\n    a : BOOL;\nEND_VAR\n\nLD a\n(* between *)\nST nope\n";
+    const IlResult built = compile_il("Comments", source, {});
+    CHECK(!built.ok);
+    CHECK(built.diagnostics.size() == 1);
+    CHECK(built.diagnostics[0].line == 8);
+}
+
+TEST(il_rejects_an_unterminated_block_comment) {
+    const IlResult built = compile_il("Open", "(* still going\nLD a\n", bool_tags({"a"}));
+    CHECK(!built.ok);
+    CHECK(!built.diagnostics.empty());
+    CHECK(built.diagnostics[0].message.find("unterminated") != std::string::npos);
+}

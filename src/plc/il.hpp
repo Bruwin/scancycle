@@ -4,7 +4,9 @@
 // ST writes the accumulator to a tag - which is exactly the stack the bytecode VM
 // already has. So this is a translator, not a second interpreter.
 //
-// Supported: LD, LDN, AND, ANDN, OR, ORN, ST, STN. `//` starts a comment.
+// Supported: LD, LDN, AND, ANDN, OR, ORN, ST, STN. `//` and `(* *)` are comments.
+// A file declares its own tags in a VAR block; a caller that owns a tag list can
+// pass one instead, and supplying both is an error rather than a tie-break.
 // Combining without a value on the accumulator is a diagnostic rather than a
 // guess, because guessing turns a missed line into logic that looks right.
 #include "plc/declaration.hpp"
