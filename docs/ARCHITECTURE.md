@@ -39,7 +39,7 @@ completes the curriculum should recognise TIA Portal or Studio 5000 on sight.
 | `src/plc` | IEC 61131-3 front ends (ST, LD/FBD, IL), bytecode, VM, standard FBs | 1 |
 | `src/io` | tag database, `PlcDriver`, in-house Modbus/TCP driver and slave, commissioning | 2 |
 | `src/assets` | procedural materials and machine kits | 2 |
-| `src/ui` | Structured Text editor model | 2 |
+| `src/ui` | Structured Text editor model, ladder SVG | 2 |
 | `src/lesson` | lesson schema, rubric, grader | 2 |
 | `src/net` | teacher portal routing | 3 |
 | `src/app` | composition root, headless session, IDE routes | 3 |
@@ -313,7 +313,9 @@ drives the whole cell)*
   scan loop can run over the DF1 link; hardware commissioning remains, because no live driver
   has run against a real controller)*
 * **M7** graphical LD/FBD editors on the existing network model, SFC, content,
-  asset variety.
+  asset variety. *(in progress: `scancycle_ide --program=file.ld` serves SVG rungs
+  with click-to-invert contacts and forms for branches, coils and rails; FBD, SFC
+  and the content pass remain)*
 
 ## Deferred
 
