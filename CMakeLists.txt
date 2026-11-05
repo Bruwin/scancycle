@@ -161,6 +161,7 @@ add_library(sc_app
     src/app/ide_session.cpp
     src/app/ide_page.cpp
     src/app/watch_text.cpp
+    src/app/df1_tool.cpp
     src/app/lesson_runner.cpp
     src/app/lesson_api.cpp
 )
@@ -225,6 +226,7 @@ if(SC_BUILD_TESTS)
         tests/test_libplctag.cpp
         tests/test_df1.cpp
         tests/test_df1_serial.cpp
+        tests/test_df1_tool.cpp
         tests/test_app.cpp
     )
     target_link_libraries(sc_tests PRIVATE

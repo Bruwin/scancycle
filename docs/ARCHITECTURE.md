@@ -168,8 +168,10 @@ exercises termios and the stream framing without a controller. `io::df1_profile`
 records each controller family's defaults; the MicroLogix 1000 profile is the
 reference target (DF1 full-duplex, 19 200 baud, 8N1, CRC, controller node 1,
 host node 0), and its N7 and B3 files are what this slice binds. Windows has no
-serial implementation yet and reports that as a value. Like the other live
-drivers this has not met a real controller: the frame family follows the
+serial implementation yet and reports that as a value. `scancycle_cli df1` is
+the bring-up surface: one address, one read or write, and a write still passes
+through `CommissioningPolicy`. Like the other live drivers this has not met a
+real controller: the frame family follows the
 Rockwell documentation, and the software peer is the only peer it has been
 tested against.
 
