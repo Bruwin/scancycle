@@ -205,9 +205,11 @@ tests/        headless test suite (ctest)
 docs/         architecture and project conventions
 ```
 
-Layering is enforced by review: `core` is a leaf, then `platform`/`render`/
-`world`/`sim`/`plc`, then `io`/`ui`/`lesson`/`assets`, then `net`/`app`.
-Nothing may include a header from a layer above it.
+Layering and determinism are enforced by `tools/check_rules.sh`, which CI runs on
+every push and pull request: `core` is a leaf, then `platform`/`render`/`world`/
+`sim`/`plc`, then `io`/`ui`/`lesson`/`assets`, then `net`/`app`. Nothing may
+include a header from a layer above it, and nothing in `sim`, `plc` or `world` may
+read the wall clock or a random source.
 
 ## Contributing
 

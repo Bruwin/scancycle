@@ -6,6 +6,18 @@ on:
   pull_request:
 
 jobs:
+  # The rules in AGENTS.md that a reviewer cannot be expected to catch by eye.
+  # Cheap, so it runs first: a violation fails in seconds, not after three
+  # platform builds.
+  rules:
+    name: repository rules
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Determinism and layering
+        run: ./tools/check_rules.sh
+
   build-and-test:
     name: ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
