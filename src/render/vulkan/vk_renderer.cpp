@@ -654,10 +654,31 @@ void VulkanRenderer::draw_frame() {
     to_color.subresourceRange.levelCount = 1;
     to_color.subresourceRange.layerCount = 1;
 
+    // The depth target is created in UNDEFINED and must be transitioned before a
+    // dynamic-rendering pass can use it; skipping this is undefined behaviour that
+    // most drivers happen to survive and some do not.
+    VkImageMemoryBarrier2 to_depth{};
+    to_depth.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+    to_depth.srcStageMask = VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT;
+    to_depth.srcAccessMask = 0;
+    to_depth.dstStageMask = VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT |
+                            VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT;
+    to_depth.dstAccessMask = VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+    to_depth.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    to_depth.newLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
+    to_depth.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    to_depth.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    to_depth.image = depth_image_;
+    to_depth.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+    to_depth.subresourceRange.levelCount = 1;
+    to_depth.subresourceRange.layerCount = 1;
+
+    VkImageMemoryBarrier2 to_targets[2] = {to_color, to_depth};
+
     VkDependencyInfo dependency{};
     dependency.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
-    dependency.imageMemoryBarrierCount = 1;
-    dependency.pImageMemoryBarriers = &to_color;
+    dependency.imageMemoryBarrierCount = 2;
+    dependency.pImageMemoryBarriers = to_targets;
     vkCmdPipelineBarrier2(cmd, &dependency);
 
     if (chunks_) {
@@ -702,6 +723,7 @@ void VulkanRenderer::draw_frame() {
     to_present.oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
     to_present.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
 
+    dependency.imageMemoryBarrierCount = 1;
     dependency.pImageMemoryBarriers = &to_present;
     vkCmdPipelineBarrier2(cmd, &dependency);
 
