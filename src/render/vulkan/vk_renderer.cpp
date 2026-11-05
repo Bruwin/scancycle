@@ -1,5 +1,7 @@
 #include "render/vulkan/vk_renderer.hpp"
 
+#include "render/vulkan/vk_chunks.hpp"
+
 #include <vulkan/vulkan.h>
 
 #include <algorithm>
@@ -104,9 +106,9 @@ private:
     bool frame_open_ = false;
     bool swapchain_dirty_ = false;
 
+    std::unique_ptr<ChunkRenderer> chunks_;
     FrameConstants constants_{};
     DrawStatistics stats_{};
-    u32 next_mesh_id_ = 0;
 };
 
 bool VulkanRenderer::fail(const char* what, VkResult result) {
@@ -556,6 +558,13 @@ bool VulkanRenderer::initialize() {
     if (!create_sync_objects()) {
         return false;
     }
+
+    chunks_ = std::make_unique<ChunkRenderer>();
+    std::string chunk_error;
+    if (!chunks_->initialize(physical_, device_, command_pool_, queue_, swapchain_format_,
+                             VK_FORMAT_D32_SFLOAT, config_.shader_directory, chunk_error)) {
+        return fail(chunk_error);
+    }
     return true;
 }
 
@@ -576,16 +585,20 @@ bool VulkanRenderer::recreate_swapchain() {
 
 GpuMeshHandle VulkanRenderer::upload_chunk_mesh(u32 chunk_x, u32 chunk_y, u32 chunk_z,
                                                 const MeshData& mesh) {
-    // The world is uploaded as one arena in a later change; until then the
-    // backend still tracks what it was given so statistics stay honest.
-    (void)chunk_x;
-    (void)chunk_y;
-    (void)chunk_z;
-    (void)mesh;
-    return GpuMeshHandle{++next_mesh_id_};
+    if (!chunks_) {
+        return GpuMeshHandle{};
+    }
+    constexpr f32 kChunkExtent = 32.0f;
+    return chunks_->add(mesh, static_cast<f32>(chunk_x) * kChunkExtent,
+                        static_cast<f32>(chunk_y) * kChunkExtent,
+                        static_cast<f32>(chunk_z) * kChunkExtent);
 }
 
-void VulkanRenderer::release_mesh(GpuMeshHandle handle) { (void)handle; }
+void VulkanRenderer::release_mesh(GpuMeshHandle handle) {
+    if (chunks_) {
+        chunks_->remove(handle);
+    }
+}
 
 void VulkanRenderer::begin_frame(const FrameConstants& constants) {
     constants_ = constants;
@@ -647,6 +660,10 @@ void VulkanRenderer::draw_frame() {
     dependency.pImageMemoryBarriers = &to_color;
     vkCmdPipelineBarrier2(cmd, &dependency);
 
+    if (chunks_) {
+        chunks_->prepare(cmd, constants_, extent_);
+    }
+
     VkRenderingAttachmentInfo color{};
     color.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
     color.imageView = image_views_[image_index_];
@@ -672,6 +689,9 @@ void VulkanRenderer::draw_frame() {
     render.pDepthAttachment = &depth;
 
     vkCmdBeginRendering(cmd, &render);
+    if (chunks_) {
+        chunks_->draw(cmd, extent_);
+    }
     vkCmdEndRendering(cmd);
 
     VkImageMemoryBarrier2 to_present = to_color;
@@ -719,9 +739,7 @@ void VulkanRenderer::draw_frame() {
         return;
     }
 
-    stats_.live_meshes = 0;
-    stats_.quad_count = 0;
-    stats_.draw_calls = 0;
+    stats_ = chunks_ ? chunks_->statistics() : DrawStatistics{};
 }
 
 void VulkanRenderer::end_frame() {
@@ -754,6 +772,10 @@ void VulkanRenderer::end_frame() {
 void VulkanRenderer::destroy() {
     if (device_ != VK_NULL_HANDLE) {
         vkDeviceWaitIdle(device_);
+    }
+    if (chunks_) {
+        chunks_->destroy();
+        chunks_.reset();
     }
 
     for (VkSemaphore semaphore : image_ready_) {

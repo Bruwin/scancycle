@@ -28,7 +28,9 @@ layout(set = 0, binding = 3) writeonly buffer DrawBuffer { uint draw_commands[];
 
 layout(set = 0, binding = 4) buffer CountBuffer { uint draw_count; };
 
-// Per chunk: first index, index count, first vertex, unused.
+// Per chunk: first index, index count, first vertex, unused. The arena already
+// stores chunk-relative indices made absolute, so vertexOffset stays zero and a
+// draw's gl_VertexIndex is the arena index directly.
 layout(set = 0, binding = 5) readonly buffer RangeBuffer { uvec4 ranges[]; };
 
 bool sphere_visible(vec3 center, float radius) {
@@ -70,6 +72,6 @@ void main() {
     draw_commands[base + 0u] = range.y;          // indexCount
     draw_commands[base + 1u] = 1u;               // instanceCount
     draw_commands[base + 2u] = range.x;          // firstIndex
-    draw_commands[base + 3u] = int(range.z);     // vertexOffset
+    draw_commands[base + 3u] = 0u;               // vertexOffset: indices are absolute
     draw_commands[base + 4u] = index;            // firstInstance = chunk index
 }

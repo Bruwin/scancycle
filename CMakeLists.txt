@@ -127,7 +127,10 @@ if(SC_ENABLE_VULKAN)
     add_library(sc_platform_sdl src/platform/sdl_platform.cpp)
     target_link_libraries(sc_platform_sdl PUBLIC sc_platform SDL3::SDL3 PRIVATE sc_warnings)
 
-    add_library(sc_render_vk src/render/vulkan/vk_renderer.cpp)
+    add_library(sc_render_vk
+        src/render/vulkan/vk_renderer.cpp
+        src/render/vulkan/vk_chunks.cpp
+    )
     target_link_libraries(sc_render_vk PUBLIC sc_render sc_platform_sdl Vulkan::Vulkan
                                           PRIVATE sc_warnings)
 
