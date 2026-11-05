@@ -203,7 +203,9 @@ attempt for a gradebook. With `--logs=<dir>` the portal serves one `<term>.tsv`
 per class or term: `--term=` names the log new attempts are written to and
 `?term=` reads any of the others. A term is validated against a filename-safe
 alphabet before it is joined into a path, so a URL cannot reach outside the
-directory.
+directory. The active term can be switched from the log page, so a new class
+becomes a new file without a restart; the switch lives in memory and resets to
+`--term=` when the portal restarts.
 `?lesson=<id>`, `?student=<name>` and `?result=pass|fail` narrow the log and the
 export, alone or together. The attempt table shows 25 rows per page; `?page=<n>` slices only that
 table, while the summaries and the export keep describing the whole filtered

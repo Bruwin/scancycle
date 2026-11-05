@@ -10,3 +10,7 @@ compile_commands.json
 .vs/
 .idea/
 .DS_Store
+.env
+.venv/
+__pycache__/
+*.pyc

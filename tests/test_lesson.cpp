@@ -1711,6 +1711,39 @@ TEST(term_logs_lists_logs_and_rejects_unsafe_names) {
     std::filesystem::remove_all(dir);
 }
 
+TEST(term_logs_switches_the_active_term_without_a_restart) {
+    const std::filesystem::path dir = std::filesystem::temp_directory_path() / "scancycle-terms";
+    std::filesystem::remove_all(dir);
+    std::filesystem::create_directories(dir);
+    std::ofstream(dir / "2025-autumn.tsv") << "";
+
+    app::TermLogs logs(dir, "2026-spring");
+    CHECK(logs.active() == "2026-spring");
+    // The active term is listed before its file exists.
+    CHECK(logs.terms().size() == 2);
+    if (logs.terms().size() == 2) {
+        CHECK(logs.terms()[0] == "2025-autumn");
+        CHECK(logs.terms()[1] == "2026-spring");
+    }
+
+    CHECK(logs.set_active("2026-autumn"));
+    CHECK(logs.active() == "2026-autumn");
+    CHECK(logs.terms().size() == 3);
+    if (logs.terms().size() == 3) {
+        CHECK(logs.terms()[0] == "2025-autumn");
+        CHECK(logs.terms()[1] == "2026-autumn");
+        CHECK(logs.terms()[2] == "2026-spring");
+    }
+
+    CHECK(!logs.set_active("../escape"));
+    CHECK(logs.active() == "2026-autumn");
+    CHECK(logs.resolve("../../secret") == "2026-autumn");
+    CHECK(logs.resolve("2025-autumn") == "2025-autumn");
+    CHECK(logs.log("2025-autumn").path() == (dir / "2025-autumn.tsv").string());
+
+    std::filesystem::remove_all(dir);
+}
+
 TEST(grades_page_switches_terms_and_keeps_filters) {
     const std::filesystem::path path =
         std::filesystem::temp_directory_path() / "scancycle-term-switcher.tsv";
@@ -1728,14 +1761,21 @@ TEST(grades_page_switches_terms_and_keeps_filters) {
     CHECK(log.append(record, error));
 
     const std::vector<std::string> terms{"2025-autumn", "2026-spring"};
-    const net::Response page =
-        app::grades_page(log, "", "Ada", 1, {}, "fail", "2026-spring", terms);
+    const net::Response page = app::grades_page(log, "", "Ada", 1, {}, "fail", "2026-spring",
+                                                terms, "2025-autumn");
     CHECK(page.body.find("Term:") != std::string::npos);
     CHECK(page.body.find("<strong>2026-spring</strong>") != std::string::npos);
     CHECK(page.body.find("<a href=\"/grades?student=Ada&result=fail&term=2025-autumn\">"
                          "2025-autumn</a>") != std::string::npos);
     CHECK(page.body.find("href=\"/grades.csv?student=Ada&result=fail&term=2026-spring\"") !=
           std::string::npos);
+    CHECK(page.body.find("action=\"/grades/active\"") != std::string::npos);
+    CHECK(page.body.find("New attempts go to <code>2025-autumn</code>.") != std::string::npos);
+
+    // Reading the active term needs no reminder of where new attempts go.
+    const net::Response current = app::grades_page(log, "", "Ada", 1, {}, "fail", "2025-autumn",
+                                                   terms, "2025-autumn");
+    CHECK(current.body.find("New attempts go to") == std::string::npos);
 
     // The single-file mode has no switcher at all.
     const net::Response plain = app::grades_page(log, "", "", 1, {}, "", "", {});

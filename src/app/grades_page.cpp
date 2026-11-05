@@ -145,7 +145,7 @@ std::string missed_checks(const std::vector<const GradeRecord*>& records) {
 net::Response grades_page(const GradeLog& log, std::string_view lesson, std::string_view student,
                           std::size_t page_number, std::span<const std::string> catalog,
                           std::string_view result, std::string_view term,
-                          std::span<const std::string> terms) {
+                          std::span<const std::string> terms, std::string_view active) {
     std::string error;
     const std::vector<GradeRecord> records = log.entries(error);
 
@@ -167,8 +167,9 @@ net::Response grades_page(const GradeLog& log, std::string_view lesson, std::str
     page += "<p class=\"no-print\"><a href=\"/\">Scan Cycle teacher portal</a></p>";
     page += "<h1>Graded attempts</h1>";
     // Switching term keeps the filters: "Ada's failures" is just as meaningful
-    // in the previous term as in this one.
-    if (terms.size() > 1 && !term.empty()) {
+    // in the previous term as in this one. The form switches where new attempts
+    // go, which is how a new class starts without restarting the portal.
+    if (!terms.empty()) {
         page += "<p class=\"no-print\">Term: ";
         bool first = true;
         for (const std::string& one : terms) {
@@ -184,6 +185,13 @@ net::Response grades_page(const GradeLog& log, std::string_view lesson, std::str
             }
         }
         page += "</p>";
+        page += "<form method=\"post\" action=\"/grades/active\" class=\"no-print\">"
+                "<label>Use term <input type=\"text\" name=\"term\" maxlength=\"64\" "
+                "size=\"14\"></label> <button type=\"submit\">Switch</button></form>";
+        if (!active.empty() && active != term) {
+            page += "<p class=\"no-print\">New attempts go to <code>" +
+                    net::html_escape(active) + "</code>.</p>";
+        }
     }
     if (!filtered) {
         page += "<p>" + std::to_string(records.size()) +

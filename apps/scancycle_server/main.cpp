@@ -9,11 +9,11 @@
 #include "net/http_server.hpp"
 #include "net/portal_server.hpp"
 
-#include <algorithm>
 #include <cstddef>
 #include <cstdio>
 #include <cstdlib>
 #include <filesystem>
+#include <optional>
 #include <span>
 #include <string>
 #include <system_error>
@@ -88,61 +88,80 @@ int main(int argc, char** argv) {
         lesson_ids.push_back(one.id);
     }
 
-    // Term mode lists the directory once at startup. A file created by a later
-    // run of the portal shows up on the next restart, which is when a term begins.
-    std::filesystem::path logs_directory;
-    std::vector<std::string> terms;
+    // Term mode keeps the directory's terms in memory; the active term can be
+    // switched from the page, which is what starting a new class needs. A file
+    // created outside the portal appears on the next restart.
+    std::optional<sc::app::TermLogs> term_logs;
+    sc::app::GradeLog single_log(records_path);
     if (!logs_path.empty()) {
-        logs_directory = logs_path;
+        std::filesystem::path logs_directory = logs_path;
         std::error_code error;
         std::filesystem::create_directories(logs_directory, error);
         if (error) {
             std::fprintf(stderr, "portal: could not create '%s'\n", logs_path.c_str());
             return 1;
         }
-        terms = sc::app::list_terms(logs_directory);
-        if (std::find(terms.begin(), terms.end(), active_term) == terms.end()) {
-            terms.push_back(active_term);
-        }
-        std::sort(terms.begin(), terms.end());
+        term_logs.emplace(logs_directory, active_term);
     }
 
-    // New attempts always go to the active term, whichever term a teacher is
-    // reading: a program must never land in last term's file.
-    sc::app::GradeLog active_log =
-        logs_path.empty()
-            ? sc::app::GradeLog(records_path)
-            : sc::app::GradeLog(sc::app::term_path(logs_directory, active_term).string());
-
-    // A term from a URL is only a name. An invalid one would be a path
-    // component, so it falls back to the active term instead of being joined.
-    const auto term_for = [&](const std::string& requested) {
-        if (logs_path.empty()) {
-            return std::string();
-        }
-        if (requested.empty() || !sc::app::valid_term(requested)) {
-            return active_term;
-        }
-        return requested;
-    };
     const auto log_for = [&](const std::string& requested) {
-        if (logs_path.empty() || requested.empty() || !sc::app::valid_term(requested)) {
-            return active_log;
+        if (term_logs) {
+            return term_logs->log(requested);
         }
-        return sc::app::GradeLog(sc::app::term_path(logs_directory, requested).string());
+        return single_log;
     };
-    const std::span<const std::string> term_list(terms);
+    const auto term_for = [&](const std::string& requested) {
+        return term_logs ? term_logs->resolve(requested) : std::string();
+    };
+    const auto term_list = [&]() -> std::span<const std::string> {
+        return term_logs ? std::span<const std::string>(term_logs->terms())
+                         : std::span<const std::string>();
+    };
+    const auto active_name = [&]() {
+        return term_logs ? term_logs->active() : std::string();
+    };
 
     sc::net::PortalRouter router = sc::net::make_default_router(lessons);
+    // A grade always writes to the term that is active at that moment, whichever
+    // term a teacher happens to be reading.
     router.route(sc::net::HttpMethod::Post, "/api/grade",
-                 [&lessons, &active_log](const sc::net::Request& request) {
-                     return sc::app::grade_lesson(lessons, request, &active_log);
+                 [&lessons, &log_for](const sc::net::Request& request) {
+                     sc::app::GradeLog log = log_for("");
+                     return sc::app::grade_lesson(lessons, request, &log);
                  });
 
     router.route(sc::net::HttpMethod::Post, "/grade",
-                 [&lessons, &active_log](const sc::net::Request& request) {
-                     return sc::app::grade_lesson_page(lessons, request, &active_log);
+                 [&lessons, &log_for](const sc::net::Request& request) {
+                     sc::app::GradeLog log = log_for("");
+                     return sc::app::grade_lesson_page(lessons, request, &log);
                  });
+
+    // Starting a new term and switching to it is one action, so a new class
+    // becomes a new file without restarting the portal. A name that cannot be a
+    // term is refused rather than silently ignored.
+    if (term_logs) {
+        router.route(sc::net::HttpMethod::Post, "/grades/active",
+                     [&](const sc::net::Request& request) {
+                         const std::string wanted = sc::net::form_field(request.body, "term");
+                         if (!term_logs->set_active(wanted)) {
+                             sc::net::Response response;
+                             response.status = 400;
+                             response.content_type = "text/html; charset=utf-8";
+                             response.body =
+                                 sc::net::page_head("Scan Cycle term") +
+                                 "<h1>Could not switch term</h1><p><code>" +
+                                 sc::net::html_escape(wanted) +
+                                 "</code> is not a term name. Use letters, digits, dots, "
+                                 "dashes or underscores.</p><p><a href=\"/grades\">Back to the "
+                                 "log</a></p></main></body></html>";
+                             return response;
+                         }
+                         sc::app::GradeLog log = term_logs->log("");
+                         return sc::app::grades_page(log, "", "", 1, lesson_ids, "",
+                                                     term_logs->active(), term_logs->terms(),
+                                                     term_logs->active());
+                     });
+    }
 
     // `?lesson=<id>`, `?student=<name>` and `?result=pass|fail` narrow the view;
     // an absent field is the whole log, and `?term=` reads another term's file.
@@ -156,7 +175,8 @@ int main(int argc, char** argv) {
                          sc::net::form_field(request.query, "page"));
                      sc::app::GradeLog log = log_for(requested);
                      return sc::app::grades_page(log, lesson, student, page, lesson_ids, result,
-                                                 term_for(requested), term_list);
+                                                 term_for(requested), term_list(),
+                                                 active_name());
                  });
 
     router.route(sc::net::HttpMethod::Get, "/grades.csv",

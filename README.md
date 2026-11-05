@@ -156,6 +156,9 @@ curl -s "http://127.0.0.1:8080/grades?result=fail"
 ./build/scancycle_server --logs=grades --term=2026-spring
 curl -s "http://127.0.0.1:8080/grades?term=2025-autumn"
 
+# The active term can be switched from the log page without a restart
+curl -s -X POST -d "term=2027-autumn" "http://127.0.0.1:8080/grades/active"
+
 # A name on the submission travels into the log, the pages and the CSV
 curl -s -X POST -d "lesson=press-batch&student=Ada" http://127.0.0.1:8080/grade
 
