@@ -19,6 +19,7 @@ std::string_view shell_factory_script() {
   };
   const light = {x:-0.38, y:0.82, z:0.46};
   let scene = null;
+  let camera = null;
   let width = 1;
   let height = 1;
   let dpr = 1;
@@ -42,20 +43,43 @@ std::string_view shell_factory_script() {
     ctx.lineJoin = "round";
   }
 
-  function project(point) {
-    const dx = point.x - view.tx;
-    const dz = point.z - view.tz;
-    const cy = Math.cos(view.yaw);
-    const sy = Math.sin(view.yaw);
-    const x1 = cy * dx - sy * dz;
-    const z1 = sy * dx + cy * dz;
+  // Build a real orbit camera above the target. The previous projection rotated
+  // the world without placing the eye, which let the floor render from below.
+  function updateCamera() {
     const cp = Math.cos(view.pitch);
     const sp = Math.sin(view.pitch);
-    const y1 = cp * (point.y - view.ty) - sp * z1;
-    const z2 = sp * (point.y - view.ty) + cp * z1 + view.distance;
-    if (z2 < 1) return null;
+    const cy = Math.cos(view.yaw);
+    const sy = Math.sin(view.yaw);
+    const eye = {
+      x:view.tx + view.distance * cp * sy,
+      y:view.ty + view.distance * sp,
+      z:view.tz + view.distance * cp * cy
+    };
+    const f = {x:view.tx - eye.x, y:view.ty - eye.y, z:view.tz - eye.z};
+    const fl = Math.hypot(f.x, f.y, f.z) || 1;
+    const forward = {x:f.x / fl, y:f.y / fl, z:f.z / fl};
+    const r = {x:-forward.z, y:0, z:forward.x};
+    const rl = Math.hypot(r.x, r.z) || 1;
+    const right = {x:r.x / rl, y:0, z:r.z / rl};
+    const up = {
+      x:right.y * forward.z - right.z * forward.y,
+      y:right.z * forward.x - right.x * forward.z,
+      z:right.x * forward.y - right.y * forward.x
+    };
+    camera = {eye, forward, right, up};
+  }
+
+  function project(point) {
+    if (!camera) updateCamera();
+    const dx = point.x - camera.eye.x;
+    const dy = point.y - camera.eye.y;
+    const dz = point.z - camera.eye.z;
+    const depth = dx * camera.forward.x + dy * camera.forward.y + dz * camera.forward.z;
+    if (depth < 1) return null;
+    const x = dx * camera.right.x + dy * camera.right.y + dz * camera.right.z;
+    const y = dx * camera.up.x + dy * camera.up.y + dz * camera.up.z;
     const focal = Math.min(width, height) * 1.25;
-    return {x: width / 2 + focal * x1 / z2, y: height / 2 - focal * y1 / z2, depth: z2};
+    return {x: width / 2 + focal * x / depth, y: height / 2 - focal * y / depth, depth};
   }
 
   function shade(hex, factor) {
@@ -176,6 +200,7 @@ std::string_view shell_factory_script() {
 
   function drawScene(time) {
     ctx.clearRect(0, 0, width, height);
+    updateCamera();
     drawGrid();
     if (!scene) return;
     const faces = [];
@@ -271,10 +296,10 @@ std::string_view shell_factory_script() {
       view.pitch = clamp(dragging.pitch + dy * 0.005, 0.12, 1.36);
     } else {
       const scale = view.distance / Math.max(260, Math.min(width, height)) * 1.9;
-      const cy = Math.cos(view.yaw);
-      const sy = Math.sin(view.yaw);
-      view.tx = dragging.tx - (dx * cy + dy * sy) * scale;
-      view.tz = dragging.tz - (-dx * sy + dy * cy) * scale;
+      const right = camera ? camera.right : {x:1, z:0};
+      const forward = camera ? camera.forward : {x:0, z:-1};
+      view.tx = dragging.tx - (dx * right.x - dy * forward.x) * scale;
+      view.tz = dragging.tz - (dx * right.z - dy * forward.z) * scale;
     }
   }
 
