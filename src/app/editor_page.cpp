@@ -1,13 +1,15 @@
 #include "app/editor_page.hpp"
 
 #include <string>
+#include <utility>
 
 namespace sc::app {
 namespace {
 
 // Kept as one stylesheet so every editor page has the same density, controls
-// and focus treatment. No external font or script: the pages must work on a
-// loopback classroom machine with no network.
+// and focus treatment. No external font or dependency: the pages must work on
+// a loopback classroom machine with no network. The only script is the inline
+// canvas controller below, which is static and needs no network.
 constexpr std::string_view kEditorCss = R"css(
 :root{
   color-scheme:light;
@@ -115,6 +117,30 @@ h3{font-size:1rem;line-height:1.35;margin-bottom:4px}
     linear-gradient(#fbfcfd,#fbfcfd) padding-box,
     repeating-linear-gradient(0deg,#f0f3f6 0 1px,transparent 1px 24px);
 }
+.diagram[data-zoomable]{padding:0;overflow:hidden;background:var(--surface-2)}
+.diagram-tools{
+  display:flex;align-items:center;gap:6px;flex-wrap:wrap;
+  padding:8px 12px;border-bottom:1px solid var(--line);
+  background:var(--surface-2);color:var(--muted);font-size:11px;
+}
+.diagram-tools[hidden]{display:none}
+.zoom-button{min-width:2rem;padding:.26rem .45rem;font-size:15px;line-height:1}
+.zoom-level{
+  min-width:3.25rem;text-align:center;color:#405363;
+  font:600 11px ui-monospace,SFMono-Regular,Menlo,monospace;
+  font-variant-numeric:tabular-nums;
+}
+.zoom-hint{margin-left:auto;color:var(--muted);font-size:11px}
+.diagram-viewport{
+  overflow:auto;padding:18px;max-height:min(70vh,560px);
+  cursor:grab;touch-action:none;overscroll-behavior:contain;
+  background:
+    linear-gradient(#fbfcfd,#fbfcfd) padding-box,
+    repeating-linear-gradient(0deg,#f0f3f6 0 1px,transparent 1px 24px);
+}
+.diagram-viewport a{cursor:pointer}
+.diagram-viewport:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.diagram-viewport.is-panning{cursor:grabbing;user-select:none}
 .diagram svg{display:block;margin:0 auto;max-width:none}
 svg.ladder,svg.fbd,svg.sfc{
   background:#fff;border:1px solid var(--line);border-radius:8px;
@@ -249,18 +275,141 @@ legend{font-size:12px;color:var(--muted)}
   .panel-head{padding:15px 16px}
   .panel-body{padding:16px}
   .diagram{padding:12px}
+  .diagram[data-zoomable]{padding:0}
+  .diagram-viewport{padding:12px;max-height:60vh}
+  .zoom-hint{display:none}
   .split{grid-template-columns:1fr}
   .edit-grid{grid-template-columns:1fr}
   .toolbar{padding:10px 12px}
   .editor-tools{margin-left:0}
 }
 @media print{
-  .topbar,.session,.toolbar,.editor-tools,.add-rung,form,button{display:none!important}
+  .topbar,.session,.toolbar,.diagram-tools,.editor-tools,.add-rung,form,button{
+    display:none!important
+  }
   body{background:#fff}
   .shell{max-width:none;padding:0}
   .panel,.rung-card,.disclosure{box-shadow:none;border:0}
+  .diagram[data-zoomable]{overflow:visible}
+  .diagram-viewport{max-height:none;overflow:visible}
 }
 )css";
+
+// The toolbar stays hidden in the HTML so a page without JavaScript keeps a
+// clean, scrollable drawing instead of inert buttons. All values are clamped
+// here; the server only supplies static markup.
+constexpr std::string_view kCanvasScript = R"js(
+(() => {
+    const MIN = 0.5;
+    const MAX = 3;
+    const STEP = 0.25;
+    for (const canvas of document.querySelectorAll("[data-zoomable]")) {
+        const viewport = canvas.querySelector("[data-zoom-viewport]");
+        const svg = viewport ? viewport.querySelector("svg") : null;
+        const controls = canvas.querySelector("[data-zoom-controls]");
+        const zoomOut = canvas.querySelector("[data-zoom-out]");
+        const zoomIn = canvas.querySelector("[data-zoom-in]");
+        const reset = canvas.querySelector("[data-zoom-reset]");
+        const level = canvas.querySelector("[data-zoom-level]");
+        if (!viewport || !svg || !controls || !zoomOut || !zoomIn || !reset || !level) {
+            continue;
+        }
+        controls.hidden = false;
+        let scale = 1;
+        let baseWidth = svg.getBoundingClientRect().width;
+        const measure = () => {
+            if (scale === 1) {
+                baseWidth = svg.getBoundingClientRect().width;
+            }
+        };
+        const update = () => {
+            level.textContent = Math.round(scale * 100) + "%";
+            zoomOut.disabled = scale <= MIN;
+            zoomIn.disabled = scale >= MAX;
+        };
+        const apply = (next) => {
+            if (!baseWidth) {
+                measure();
+            }
+            if (!baseWidth) {
+                return;
+            }
+            const target = Math.max(MIN, Math.min(MAX, next));
+            if (target === scale) {
+                return;
+            }
+            const centreX = (viewport.scrollLeft + viewport.clientWidth / 2) / scale;
+            const centreY = (viewport.scrollTop + viewport.clientHeight / 2) / scale;
+            scale = target;
+            svg.style.width = Math.round(baseWidth * scale) + "px";
+            svg.style.maxWidth = "none";
+            viewport.scrollLeft = centreX * scale - viewport.clientWidth / 2;
+            viewport.scrollTop = centreY * scale - viewport.clientHeight / 2;
+            update();
+        };
+        const resetView = () => {
+            scale = 1;
+            svg.style.width = "";
+            svg.style.maxWidth = "";
+            viewport.scrollLeft = 0;
+            viewport.scrollTop = 0;
+            baseWidth = 0;
+            requestAnimationFrame(measure);
+            update();
+        };
+        zoomOut.addEventListener("click", () => apply(scale - STEP));
+        zoomIn.addEventListener("click", () => apply(scale + STEP));
+        reset.addEventListener("click", resetView);
+        window.addEventListener("resize", measure);
+        viewport.addEventListener("wheel", (event) => {
+            if (!event.ctrlKey) {
+                return;
+            }
+            event.preventDefault();
+            apply(scale + (event.deltaY < 0 ? STEP : -STEP));
+        }, { passive: false });
+        let drag = null;
+        viewport.addEventListener("pointerdown", (event) => {
+            if (event.button !== 0 || event.target.closest("a,button")) {
+                return;
+            }
+            const rect = viewport.getBoundingClientRect();
+            const barWidth = viewport.offsetWidth - viewport.clientWidth;
+            const barHeight = viewport.offsetHeight - viewport.clientHeight;
+            if (event.clientX >= rect.right - barWidth ||
+                event.clientY >= rect.bottom - barHeight) {
+                return;
+            }
+            drag = {
+                x: event.clientX,
+                y: event.clientY,
+                left: viewport.scrollLeft,
+                top: viewport.scrollTop,
+            };
+            viewport.setPointerCapture(event.pointerId);
+            viewport.classList.add("is-panning");
+        });
+        viewport.addEventListener("pointermove", (event) => {
+            if (!drag) {
+                return;
+            }
+            viewport.scrollLeft = drag.left - (event.clientX - drag.x);
+            viewport.scrollTop = drag.top - (event.clientY - drag.y);
+        });
+        const endDrag = () => {
+            if (!drag) {
+                return;
+            }
+            drag = null;
+            viewport.classList.remove("is-panning");
+        };
+        viewport.addEventListener("pointerup", endDrag);
+        viewport.addEventListener("pointercancel", endDrag);
+        viewport.addEventListener("lostpointercapture", endDrag);
+        update();
+    }
+})();
+)js";
 
 }  // namespace
 
@@ -300,6 +449,35 @@ std::string editor_page_head(std::string_view title, std::string_view active) {
     return page;
 }
 
-std::string editor_page_foot() { return "</main></body></html>"; }
+std::string editor_page_foot() {
+    std::string page = "</main><script>";
+    page += kCanvasScript;
+    page += "</script></body></html>";
+    return page;
+}
+
+std::string diagram_canvas(std::string_view label, std::string drawing) {
+    std::string page;
+    page.reserve(drawing.size() + 1024);
+    page += "<div class=\"diagram\" data-zoomable>";
+    page += "<div class=\"diagram-tools\" data-zoom-controls role=\"toolbar\" ";
+    page += "aria-label=\"Diagram zoom\" hidden>";
+    page += "<button class=\"btn zoom-button\" type=\"button\" data-zoom-out ";
+    page += "aria-label=\"Zoom out\">&minus;</button>";
+    page += "<output class=\"zoom-level\" data-zoom-level aria-live=\"polite\">100%"
+            "</output>";
+    page += "<button class=\"btn zoom-button\" type=\"button\" data-zoom-in ";
+    page += "aria-label=\"Zoom in\">+</button>";
+    page += "<button class=\"btn subtle\" type=\"button\" data-zoom-reset ";
+    page += "aria-label=\"Reset diagram zoom\">Reset</button>";
+    page += "<span class=\"zoom-hint\">Drag to pan</span>";
+    page += "</div><div class=\"diagram-viewport\" data-zoom-viewport tabindex=\"0\" ";
+    page += "role=\"region\" aria-label=\"";
+    page += std::string(label);
+    page += ". Use the zoom buttons, drag to pan, or arrow keys to scroll.\">";
+    page += std::move(drawing);
+    page += "</div></div>";
+    return page;
+}
 
 }  // namespace sc::app

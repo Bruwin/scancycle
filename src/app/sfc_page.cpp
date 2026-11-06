@@ -96,9 +96,9 @@ net::Response sfc_page(const SfcSession& session) {
             page += "<p class=\"notice\">Not started. The initial step activates on the "
                     "first scan.</p>";
         }
-        page += "<div class=\"diagram\">";
-        page += ui::sfc_chart_svg(session.chart(), {active});
-        page += "</div></div></section>";
+        page += diagram_canvas("Sequential function chart",
+                               ui::sfc_chart_svg(session.chart(), {active}));
+        page += "</div></section>";
 
         page += "<div class=\"split\"><section class=\"panel\"><div class=\"panel-head\">"
                 "<div><p class=\"eyebrow\">States</p><h2>Steps</h2>"

@@ -164,6 +164,12 @@ TEST(ladder_page_shows_the_diagram_and_controls) {
     CHECK(page.body.find("Tab to a contact or junction") != std::string::npos);
     CHECK(page.body.find("svg.ladder a:focus .bar") != std::string::npos);
     CHECK(page.body.find("svg.fbd a:focus .block") != std::string::npos);
+    CHECK(page.body.find("data-zoomable") != std::string::npos);
+    CHECK(page.body.find("data-zoom-in") != std::string::npos);
+    CHECK(page.body.find("data-zoom-out") != std::string::npos);
+    CHECK(page.body.find("data-zoom-reset") != std::string::npos);
+    CHECK(page.body.find("data-zoom-level") != std::string::npos);
+    CHECK(page.body.find("aria-label=\"Rung 1 diagram.") != std::string::npos);
 }
 
 TEST(ladder_counter_shows_its_reset_source) {
@@ -186,6 +192,6 @@ TEST(ladder_page_escapes_a_broken_file) {
     const net::Response page = app::ladder_page(session);
 
     CHECK(page.status == 200);
-    CHECK(page.body.find("&lt;script") != std::string::npos);
-    CHECK(page.body.find("<script") == std::string::npos);
+    CHECK(page.body.find("&lt;script&gt;alert(1)&lt;/script&gt;") != std::string::npos);
+    CHECK(page.body.find("<script>alert(1)") == std::string::npos);
 }

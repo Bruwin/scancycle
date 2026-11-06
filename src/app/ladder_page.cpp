@@ -211,13 +211,18 @@ net::Response ladder_page(const LadderSession& session) {
             page += "</h3><p>";
             page += fbd ? "Click a block to invert a signal or change the junction."
                         : "Click a contact to invert it; click a junction to change it.";
-            page += "</p></div></div><div class=\"diagram\">";
+            page += "</p></div></div>";
+            std::string drawing =
+                fbd ? ui::fbd_rung_svg(session.source().rungs[i], {i, true})
+                    : ui::ladder_rung_svg(session.source().rungs[i], {i, true});
             if (fbd) {
-                page += ui::fbd_rung_svg(session.source().rungs[i], {i, true});
+                page += "<div class=\"diagram\">";
+                page += std::move(drawing);
+                page += "</div>";
             } else {
-                page += ui::ladder_rung_svg(session.source().rungs[i], {i, true});
+                page += diagram_canvas("Rung " + std::to_string(i + 1) + " diagram",
+                                       std::move(drawing));
             }
-            page += "</div>";
             page += rung_editor(i);
             page += "</article>";
         }
