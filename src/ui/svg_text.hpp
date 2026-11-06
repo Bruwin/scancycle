@@ -18,6 +18,13 @@ std::string svg_escape(std::string_view text);
 // form parse_path accepts in the page router.
 std::string svg_path_text(const plc::NetPath& path);
 
+// Wraps one drawing control in an anchor. `href` is already XML-escaped by the
+// caller; `label` is escaped here. tabindex and focusable put the anchor in the
+// tab order even in SVG user agents that do not do that by default, and the
+// native link activates with Enter once focused.
+std::string svg_link(std::string_view href, std::string_view label,
+                     const std::string& body);
+
 // A preset the way a drawing labels it: 1000 ms prints as "1s", 60000 as "1m".
 // Both editor surfaces show the same preset, so neither keeps its own copy.
 std::string duration_label(i64 milliseconds);

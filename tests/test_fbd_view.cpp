@@ -40,12 +40,16 @@ TEST(fbd_draws_a_junction_as_a_block) {
     CHECK(svg.find("&amp;path=0\"") != std::string::npos);
     CHECK(svg.find("&amp;path=1\"") != std::string::npos);
     CHECK(svg.find("/swap?rung=0") != std::string::npos);
+    CHECK(svg.find("tabindex=\"0\"") != std::string::npos);
+    CHECK(svg.find("aria-label=\"Toggle contact a\"") != std::string::npos);
+    CHECK(svg.find("aria-label=\"Change OR junction to AND\"") != std::string::npos);
 }
 
 TEST(fbd_draws_an_and_block_for_series) {
     const std::string svg = draw("VAR\n    a : BOOL;\n    b : BOOL;\n    out : BOOL;\n"
                                  "END_VAR\nout = a & b\n");
     CHECK(svg.find(">&amp;</text>") != std::string::npos);
+    CHECK(svg.find("aria-label=\"Change AND junction to OR\"") != std::string::npos);
 }
 
 TEST(fbd_bubbles_a_negated_contact) {
@@ -77,6 +81,7 @@ TEST(fbd_page_uses_fbd_headings) {
     CHECK(page.body.find("<title>Scan Cycle FBD</title>") != std::string::npos);
     CHECK(page.body.find("Function block diagram") != std::string::npos);
     CHECK(page.body.find("<h2>Networks</h2>") != std::string::npos);
+    CHECK(page.body.find("Tab to a block or junction") != std::string::npos);
     CHECK(page.body.find("<h1>Ladder editor</h1>") == std::string::npos);
 }
 

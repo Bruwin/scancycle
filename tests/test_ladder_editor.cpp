@@ -47,6 +47,9 @@ TEST(ladder_svg_draws_contacts_and_branch_links) {
     CHECK(svg.find("&amp;path=0\"") != std::string::npos);
     CHECK(svg.find("&amp;path=1\"") != std::string::npos);
     CHECK(svg.find("href=\"/toggle?rung=0") != std::string::npos);
+    CHECK(svg.find("tabindex=\"0\"") != std::string::npos);
+    CHECK(svg.find("focusable=\"true\"") != std::string::npos);
+    CHECK(svg.find("aria-label=\"Toggle contact a\"") != std::string::npos);
 }
 
 TEST(a_negated_contact_draws_a_slash) {
@@ -158,6 +161,9 @@ TEST(ladder_page_shows_the_diagram_and_controls) {
     CHECK(page.body.find("<svg class=\"ladder\"") != std::string::npos);
     CHECK(page.body.find("Step one scan") != std::string::npos);
     CHECK(page.body.find("Add a rung") != std::string::npos);
+    CHECK(page.body.find("Tab to a contact or junction") != std::string::npos);
+    CHECK(page.body.find("svg.ladder a:focus .bar") != std::string::npos);
+    CHECK(page.body.find("svg.fbd a:focus .block") != std::string::npos);
 }
 
 TEST(ladder_counter_shows_its_reset_source) {

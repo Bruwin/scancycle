@@ -134,6 +134,11 @@ svg.sfc .step{fill:#f8fafc;stroke:#334155;stroke-width:2}
 svg.sfc .step.active{fill:#e8f3ff;stroke:#0a62a8}
 svg.sfc .arrow{fill:#334155}
 svg.fbd .neg{fill:#fff;stroke:#b42318;stroke-width:2}
+svg.ladder a,svg.fbd a{outline:none}
+svg.ladder a:focus,svg.fbd a:focus{outline:2px solid #9ec9ea;outline-offset:2px}
+svg.ladder a:focus .bar,svg.fbd a:focus .block{stroke:var(--accent);stroke-width:4}
+svg.ladder a:focus .slash,svg.fbd a:focus .neg{stroke:var(--accent);stroke-width:3}
+svg.ladder a:focus text,svg.fbd a:focus text{fill:var(--accent);font-weight:700}
 .toolbar{
   display:flex;align-items:flex-start;gap:8px;flex-wrap:wrap;
   padding:12px 16px;border-top:1px solid var(--line);background:var(--surface-2);

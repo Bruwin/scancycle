@@ -40,6 +40,13 @@ std::string svg_path_text(const plc::NetPath& path) {
     return text;
 }
 
+std::string svg_link(std::string_view href, std::string_view label,
+                     const std::string& body) {
+    return "<a href=\"" + std::string(href) +
+           "\" tabindex=\"0\" focusable=\"true\" aria-label=\"" + svg_escape(label) +
+           "\">" + body + "</a>";
+}
+
 std::string duration_label(i64 milliseconds) {
     if (milliseconds > 0 && milliseconds % 60'000 == 0) {
         return std::to_string(milliseconds / 60'000) + "m";
