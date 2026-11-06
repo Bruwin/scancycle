@@ -43,6 +43,9 @@ NetEditResult add_parallel(Rung& rung, const NetPath& path, std::string name,
                            bool negated = false);
 
 NetEditResult toggle_negated(Rung& rung, const NetPath& path);
+// Swaps an AND junction for an OR one and back. The operands are untouched, so
+// the drawing keeps its shape and only the meaning of the block changes.
+NetEditResult toggle_junction(Rung& rung, const NetPath& path);
 NetEditResult set_contact(Rung& rung, const NetPath& path, std::string name);
 // Removes a node below the root. A junction left with one operand collapses
 // into that operand. The root is refused: remove the rung instead.
