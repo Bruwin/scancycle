@@ -55,8 +55,9 @@ Box contact_box(const plc::NetNode& node, const plc::NetPath& path, std::size_t 
     }
     body += "<text x=\"36\" y=\"10\" text-anchor=\"middle\">" + svg_escape(node.var) + "</text>";
     if (clickable) {
-        body = "<a href=\"/toggle?rung=" + std::to_string(rung) + "&amp;path=" +
-               svg_path_text(path) + "\">" + body + "</a>";
+        const std::string href = "/toggle?rung=" + std::to_string(rung) +
+                                 "&amp;path=" + svg_path_text(path);
+        body = svg_link(href, "Toggle contact " + node.var, body);
     }
     return {72, kRowHeight, body};
 }

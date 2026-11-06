@@ -151,9 +151,11 @@ net::Response ladder_page(const LadderSession& session) {
     const char* heading = fbd ? "Function block diagram" : "Ladder editor";
     const char* lede =
         fbd ? "The same control network, drawn as function blocks. Click a junction to "
-              "swap AND for OR; the text remains the source of truth."
+              "swap AND for OR. Keyboard: Tab to a block or junction, then press Enter "
+              "to toggle it."
             : "Inspect and edit the control logic one rung at a time. Click a contact to "
-              "invert it, or a junction to swap AND for OR.";
+              "invert it, or a junction to swap AND for OR. Keyboard: Tab to a contact "
+              "or junction, then press Enter to toggle it.";
 
     std::string page = editor_page_head(title, fbd ? "fbd" : "ladder");
     page += "<div class=\"page-head\"><div><p class=\"eyebrow\">";

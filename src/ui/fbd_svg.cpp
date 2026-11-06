@@ -60,10 +60,6 @@ std::string bubble(int cx, int cy) {
            std::to_string(cy) + "\" r=\"5\"/>";
 }
 
-std::string link(const std::string& href, const std::string& body) {
-    return "<a href=\"" + href + "\">" + body + "</a>";
-}
-
 // The query separator has to be escaped, or the '&' would end the attribute.
 std::string target(const char* action, std::size_t rung, const plc::NetPath& path) {
     return std::string(action) + "?rung=" + std::to_string(rung) + "&amp;path=" +
@@ -88,9 +84,21 @@ Box contact_box(const plc::NetNode& node, const plc::NetPath& path, std::size_t 
                 bool clickable) {
     Box box = value_box(node.var, node.negated);
     if (clickable) {
-        box.body = link(target("/toggle", rung, path), box.body);
+        box.body = svg_link(target("/toggle", rung, path),
+                            "Toggle contact " + node.var, box.body);
     }
     return box;
+}
+
+std::string junction_action(const plc::NetNode& node, const plc::NetPath& path) {
+    const bool and_junction = node.kind == plc::NetKind::Series;
+    std::string label = and_junction ? "Change AND junction" : "Change OR junction";
+    const std::string path_text = svg_path_text(path);
+    if (!path_text.empty()) {
+        label += " at path " + path_text;
+    }
+    label += and_junction ? " to OR" : " to AND";
+    return label;
 }
 
 Box junction_box(const plc::NetNode& node, const plc::NetPath& path, std::size_t rung,
@@ -134,7 +142,8 @@ Box junction_box(const plc::NetNode& node, const plc::NetPath& path, std::size_t
     junction += label(block_x + kBlockWidth / 2, block_top + block_height / 2 + 4,
                       node.kind == plc::NetKind::Series ? "&" : ">=1");
     if (clickable) {
-        junction = link(target("/swap", rung, path), junction);
+        junction = svg_link(target("/swap", rung, path), junction_action(node, path),
+                            junction);
     }
     body += junction;
 
