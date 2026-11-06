@@ -144,7 +144,9 @@ and every write checked by `CommissioningPolicy`. `io::ModbusTcpSlave` is a
 single-client loopback register image for tests and classroom commissioning.
 The TCP primitives are in-house; the driver deliberately reuses the existing
 Modbus codec rather than owning a second frame parser. The libplctag and DF1
-slices are implemented; libplctag hardware validation remains.
+slices are implemented. libplctag hardware validation is deferred to the 1.0
+release gate (#42); the code is accepted as code-complete without a hardware
+claim for now.
 
 `io::Df1Driver` is the first live driver that speaks to a controller: SLC 500 and
 PLC-5 serial DF1, in-house. It owns the full-duplex DLE framing (BCC or CRC-16),
@@ -183,8 +185,9 @@ the same `PlcTagApi` seam for bring-up: it reads or writes one boolean, and a
 write reads the current tag before setting bit 0 so the surrounding bits survive.
 That write is allowlisted and session-gated by `CommissioningPolicy`. The bench
 procedure for a CompactLogix or ControlLogix is in
-[LIBPLCTAG_HARDWARE_VALIDATION.md](LIBPLCTAG_HARDWARE_VALIDATION.md). It has not
-been run against real hardware; that is what the commissioning gate is for.
+[LIBPLCTAG_HARDWARE_VALIDATION.md](LIBPLCTAG_HARDWARE_VALIDATION.md). Hardware
+validation is deferred to the 1.0 release gate (#42); treat the driver and CLI as
+code-complete, not hardware-validated, until that gate passes.
 
 ## Drivers and licensing
 
@@ -326,11 +329,12 @@ drives the whole cell)*
   (three on the press cell), the loopback HTTP pages and the WebSocket live feed; the portal is
   still loopback-only with no TLS or authentication)*
 * **M6** live drivers: Modbus TCP against a software slave, then libplctag, then DF1.
-  *(in progress: the in-house Modbus/TCP driver, loopback software slave, write-gated
-  output path and socket tests are done; the DF1 slice has exchanged a valid read with
-  a real MicroLogix 1000, and the optional libplctag driver is implemented behind an
-  injectable API, tested with a fake backend, and usable through a one-shot bring-up
-  CLI. libplctag has not run against a plant PLC yet)*
+  *(code-complete: the in-house Modbus/TCP driver, loopback software slave,
+  write-gated output path and socket tests are done; the DF1 slice has exchanged a
+  valid read with a real MicroLogix 1000, and the optional libplctag driver is
+  implemented behind an injectable API, tested with a fake backend, and usable
+  through a one-shot bring-up CLI. Hardware validation is deferred to the 1.0
+  release gate (#42); M6 is code-complete, not hardware-validated.)*
 * **M7** graphical LD/FBD editors on the existing network model, SFC, content,
   asset variety. *(done: `scancycle_ide --program=file.ld` serves SVG rungs
   in either a ladder or a function block view, with click-to-invert contacts,
@@ -343,6 +347,9 @@ drives the whole cell)*
 
 ## Deferred
 
+* libplctag hardware validation is deferred to the 1.0 release gate (#42). The
+  driver and one-shot CLI are accepted as code-complete for development; no
+  hardware-validation claim is made until the bench run passes.
 * The CSV download is always `grades.csv`, whichever term is being read. Naming
   it after the term (`grades-2025-autumn.csv`) would keep a directory of exports
   self-describing; the rows themselves are already correct, so this waits until

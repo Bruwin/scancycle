@@ -35,7 +35,7 @@ Portal or Studio 5000 and recognise everything.
 | Modbus/TCP codec, live loopback driver, software slave, commissioning gate | working, tested |
 | DF1 codec (DLE, BCC/CRC-16), PCCC typed read/write, loopback data table | working, tested (no hardware) |
 | DF1 serial link (termios, pty tests), MicroLogix 1000 profile, bring-up CLI | working, tested (no hardware) |
-| libplctag driver (CIP/Modbus TCP booleans), opt-in build, bring-up CLI, fake-backend tests | working, tested (no hardware) |
+| libplctag driver (CIP/Modbus TCP booleans), opt-in build, bring-up CLI, fake-backend tests | working, fake-backend tests pass; hardware validation deferred to 1.0 |
 | Procedural materials, industrial kits and default-scene placement | working, tested |
 | Editor model, lesson schema, grader, portal routing | working, tested |
 | Composition root (plant + PLC + I/O in one headless session) | working, tested |

@@ -1,6 +1,8 @@
 # libplctag hardware validation (M6)
 
-Status: **not executed.** No real controller has been used with this binding yet.
+Status: **not executed; hardware validation is deferred to the 1.0 release gate
+([#42](https://github.com/Bruwin/scancycle/issues/42)).** No real controller has
+been used with this binding yet.
 
 This is the bench procedure for the one-shot `scancycle_cli libplctag` command.
 It validates the real libplctag adapter and the command's read-before-write
@@ -245,7 +247,7 @@ Notes and error text:
 ```
 
 A successful record is evidence for one controller. It does not by itself close
-M6 or change the public support tier without a maintainer review.
+the 1.0 gate (#42) or change the public support tier without a maintainer review.
 
 ## Troubleshooting
 
@@ -271,7 +273,7 @@ M6 or change the public support tier without a maintainer review.
 2. Confirm the value in Studio 5000.
 3. Remove the test tag only if the controller owner authorizes it.
 4. Keep the program backup until the result is reviewed.
-5. Attach the result record to the M6 issue. Do not change
+5. Attach the result record to the 1.0 gate issue (#42). Do not change
    `docs/ARCHITECTURE.md` to "done" until the evidence is accepted.
 
 ## References
