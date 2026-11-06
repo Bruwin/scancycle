@@ -177,3 +177,33 @@ TEST(a_contact_has_no_junction_to_swap) {
     CHECK(!toggle_junction(rung, {}).ok);
     CHECK(root(rung)->kind == NetKind::Contact);
 }
+
+TEST(negating_a_network_complements_its_column) {
+    auto a = std::make_unique<NetNode>();
+    a->kind = NetKind::Contact;
+    a->var = "a";
+    auto b = std::make_unique<NetNode>();
+    b->kind = NetKind::Contact;
+    b->var = "b";
+    b->negated = true;
+
+    auto series = std::make_unique<NetNode>();
+    series->kind = NetKind::Series;
+    series->operands.push_back(std::move(a));
+    series->operands.push_back(std::move(b));
+
+    Rung rung;
+    rung.condition = negate_net(*series);
+    rung.coils.push_back(Coil{"d", false});
+
+    CHECK(column(std::move(rung), {"a", "b"}) == "1011");
+}
+
+TEST(cloning_a_network_leaves_the_original_intact) {
+    Rung rung = rung_with("a");
+    const NetPtr copy = clone_net(*rung.condition);
+    CHECK(copy != nullptr);
+    CHECK(copy->kind == NetKind::Contact);
+    CHECK(copy->var == "a");
+    CHECK(copy.get() != rung.condition.get());
+}

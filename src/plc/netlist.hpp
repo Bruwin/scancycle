@@ -98,4 +98,15 @@ struct NetlistResult {
 NetlistResult compile_netlist(std::string_view name, std::span<const Rung> rungs,
                               std::span<const TagDecl> vars);
 
+// Deep copies a network. A node owns its operands, so anywhere one expression is
+// used twice - the SFC lowering uses a guard to enter and to leave - it needs a
+// copy rather than an alias.
+NetPtr clone_net(const NetNode& node);
+
+// The complement, built with De Morgan instead of a NOT node: a contact flips its
+// negation, a series becomes a parallel of complements, and a rail swaps. The
+// result reads TRUE exactly when the input reads FALSE, which is what lets a
+// step hold while none of its outgoing transitions is passing.
+NetPtr negate_net(const NetNode& node);
+
 }  // namespace sc::plc

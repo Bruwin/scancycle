@@ -257,4 +257,38 @@ NetlistResult compile_netlist(std::string_view name, std::span<const Rung> rungs
     return result;
 }
 
+NetPtr clone_net(const NetNode& node) {
+    auto copy = std::make_unique<NetNode>();
+    copy->kind = node.kind;
+    copy->var = node.var;
+    copy->negated = node.negated;
+    copy->operands.reserve(node.operands.size());
+    for (const NetPtr& operand : node.operands) {
+        copy->operands.push_back(operand ? clone_net(*operand) : nullptr);
+    }
+    return copy;
+}
+
+NetPtr negate_net(const NetNode& node) {
+    auto copy = std::make_unique<NetNode>();
+    switch (node.kind) {
+        case NetKind::Contact:
+            copy->kind = NetKind::Contact;
+            copy->var = node.var;
+            copy->negated = !node.negated;
+            return copy;
+        case NetKind::Always:
+            copy->kind = NetKind::Parallel;  // TRUE becomes the empty parallel
+            return copy;
+        case NetKind::Series:
+        case NetKind::Parallel:
+            copy->kind = node.kind == NetKind::Series ? NetKind::Parallel : NetKind::Series;
+            break;
+    }
+    for (const NetPtr& operand : node.operands) {
+        copy->operands.push_back(operand ? negate_net(*operand) : nullptr);
+    }
+    return copy;
+}
+
 }  // namespace sc::plc

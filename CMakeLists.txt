@@ -81,6 +81,7 @@ add_library(sc_plc
     src/plc/netlist_edit.cpp
     src/plc/il.cpp
     src/plc/ladder_text.cpp
+    src/plc/sfc.cpp
 )
 target_link_libraries(sc_plc PUBLIC sc_core PRIVATE sc_warnings)
 
@@ -225,6 +226,7 @@ if(SC_BUILD_TESTS)
         tests/test_netlist_edit.cpp
         tests/test_il.cpp
         tests/test_ladder_text.cpp
+        tests/test_sfc.cpp
         tests/test_sim.cpp
         tests/test_io.cpp
         tests/test_tools.cpp

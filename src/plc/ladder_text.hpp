@@ -61,4 +61,10 @@ LadderParseResult parse_ladder_source(std::string_view source);
 
 std::string format_ladder_source(const LadderSource& source);
 
+// One boolean network in the syntax a rung condition uses: a tag, `!tag`, `&`,
+// `|`, parentheses and the TRUE/FALSE rails. Exposed because an SFC transition
+// guard means exactly what a rung means, and a second parser would drift.
+NetPtr parse_net_expression(std::string_view text, int line, Diagnostics& diagnostics);
+std::string format_net_expression(const NetNode& node);
+
 }  // namespace sc::plc

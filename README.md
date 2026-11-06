@@ -24,7 +24,7 @@ Portal or Studio 5000 and recognise everything.
 | Deterministic core (PCG32, fixed timestep) | working, tested |
 | Voxel chunk storage + greedy mesher | working, tested |
 | Structured Text front end (lexer, parser) | working, tested |
-| Ladder rung files and FBD front end (contacts, coils, junctions, timers, counters) | working, tested |
+| Ladder rung files, FBD front end and SFC charts (contacts, coils, junctions, timers, counters, steps) | working, tested |
 | Instruction List front end (LD/AND/OR/ST and negated forms) | working, tested |
 | Bytecode compiler + VM + scan semantics | working, tested |
 | Standard function blocks (TON/TOF/CTU/CTD) | working, tested |
