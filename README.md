@@ -35,7 +35,7 @@ Portal or Studio 5000 and recognise everything.
 | Modbus/TCP codec, live loopback driver, software slave, commissioning gate | working, tested |
 | DF1 codec (DLE, BCC/CRC-16), PCCC typed read/write, loopback data table | working, tested (no hardware) |
 | DF1 serial link (termios, pty tests), MicroLogix 1000 profile, bring-up CLI | working, tested (no hardware) |
-| libplctag driver (CIP/S7 booleans), opt-in build, fake-backend tests | working, tested (no hardware) |
+| libplctag driver (CIP/S7 booleans), opt-in build, bring-up CLI, fake-backend tests | working, tested (no hardware) |
 | Procedural materials, industrial kits and default-scene placement | working, tested |
 | Editor model, lesson schema, grader, portal routing | working, tested |
 | Composition root (plant + PLC + I/O in one headless session) | working, tested |
@@ -223,6 +223,18 @@ curl -s -X POST -d "lesson=press-batch&student=Ada" http://127.0.0.1:8080/grade
 ./build/bin/scancycle_cli df1 --port=/dev/ttyUSB0 --read=N7:0
 ./build/bin/scancycle_cli df1 --port=/dev/ttyUSB0 --write=N7:1=1234
 ./build/bin/scancycle_cli df1 --port=/dev/ttyUSB0 --read=B3:5/2
+
+# Bring-up against a CIP or S7 tag. The attribute string is one argument, so
+# quote it. A write reads the tag first to preserve the surrounding bits, and
+# is gated by the same commissioning policy as the driver. Build with
+# -DSC_ENABLE_LIBPLCTAG=ON first; otherwise the command reports that support
+# was disabled at build time.
+./build/bin/scancycle_cli libplctag \
+    --tag='protocol=ab-eip&gateway=192.168.1.10&path=1,0&plc=ControlLogix&name=Start' \
+    --read
+./build/bin/scancycle_cli libplctag \
+    --tag='protocol=ab-eip&gateway=192.168.1.10&path=1,0&plc=ControlLogix&name=Run' \
+    --write=1
 
 # Open the PLC IDE on loopback: edit, compile, step, watch and force
 ./build/bin/scancycle_ide --program=examples/press_cell.st

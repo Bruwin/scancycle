@@ -1,10 +1,12 @@
 #include "app/application.hpp"
 #include "app/df1_tool.hpp"
 #include "app/lesson_runner.hpp"
+#include "app/plc_tag_tool.hpp"
 #include "app/watch_text.hpp"
 #include "core/deterministic_rng.hpp"
 #include "io/df1_profile.hpp"
 #include "io/df1_serial_link.hpp"
+#include "io/libplctag_api.hpp"
 #include "lesson/lesson.hpp"
 #include "plc/compiler.hpp"
 #include "plc/il.hpp"
@@ -47,7 +49,10 @@ void print_usage() {
         "  scancycle_cli df1 --port=DEVICE (--read=ADDR | --write=ADDR=VALUE)\n"
         "                        [--baud=N] [--node=N] [--host=N] [--checksum=crc|bcc]\n"
         "                        [--timeout-ms=N] [--trace]\n"
-        "                        (ADDR like N7:0, B3:5 or N7:0/3)\n");
+        "                        (ADDR like N7:0, B3:5 or N7:0/3)\n"
+        "  scancycle_cli libplctag --tag=ATTRIBUTES (--read | --write=VALUE)\n"
+        "                        [--timeout-ms=N]\n"
+        "                        (ATTRIBUTES is a complete libplctag tag string; quote it)\n");
 }
 
 bool read_file(const std::string& path, std::string& out) {
@@ -816,6 +821,72 @@ int command_df1(const std::vector<std::string>& args) {
     return 0;
 }
 
+int command_libplctag(const std::vector<std::string>& args) {
+    std::string tag;
+    std::string write_text;
+    bool read_requested = false;
+    bool write_requested = false;
+    long timeout_ms = 1000;
+
+    for (const std::string& arg : args) {
+        long parsed = 0;
+        if (arg.rfind("--tag=", 0) == 0) {
+            tag = arg.substr(6);
+        } else if (arg == "--read") {
+            read_requested = true;
+        } else if (arg.rfind("--write=", 0) == 0) {
+            write_requested = true;
+            write_text = arg.substr(8);
+        } else if (arg.rfind("--timeout-ms=", 0) == 0) {
+            if (!parse_long_option(arg.substr(13), 1, 60'000, parsed)) {
+                std::fprintf(stderr, "--timeout-ms must be 1..60000\n");
+                return 2;
+            }
+            timeout_ms = parsed;
+        } else {
+            std::fprintf(stderr, "unknown option '%s'\n", arg.c_str());
+            return 2;
+        }
+    }
+
+    if (tag.empty()) {
+        std::fprintf(stderr, "libplctag needs --tag=ATTRIBUTES\n");
+        return 2;
+    }
+    if (read_requested == write_requested) {
+        std::fprintf(stderr, "libplctag needs exactly one of --read or --write\n");
+        return 2;
+    }
+
+    bool value = false;
+    if (write_requested && !parse_bool_text(write_text, value)) {
+        std::fprintf(stderr, "--write needs 0, 1, true, false, on or off\n");
+        return 2;
+    }
+
+    std::string error;
+    auto api = sc::io::make_libplctag_api(error);
+    if (!api) {
+        std::fprintf(stderr, "libplctag: %s\n", error.c_str());
+        return 1;
+    }
+
+    sc::app::PlcTagToolConfig config;
+    config.tag = tag;
+    config.timeout_ms = static_cast<int>(timeout_ms);
+    const sc::app::PlcTagToolResult result =
+        write_requested ? sc::app::plc_tag_write(config, *api, value)
+                        : sc::app::plc_tag_read(config, *api);
+    if (!result.ok) {
+        std::fprintf(stderr, "libplctag: %s\n", result.error.c_str());
+        return 1;
+    }
+
+    std::printf("%s = %d%s\n", tag.c_str(), result.value ? 1 : 0,
+                write_requested ? " written" : "");
+    return 0;
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -854,6 +925,9 @@ int main(int argc, char** argv) {
     }
     if (command == "df1") {
         return command_df1(rest);
+    }
+    if (command == "libplctag") {
+        return command_libplctag(rest);
     }
 
     print_usage();
