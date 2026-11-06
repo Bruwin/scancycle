@@ -4,6 +4,7 @@
 #include "plc/ladder_text.hpp"
 #include "plc/netlist.hpp"
 #include "plc/parser.hpp"
+#include "plc/sfc.hpp"
 
 #include <utility>
 
@@ -38,6 +39,20 @@ bool Application::initialize() {
             plc::compile_netlist("ladder", parsed.source.rungs, parsed.source.vars);
         if (!compiled.ok) {
             error_ = compiled.diagnostics.empty() ? "failed to compile the ladder program"
+                                                 : compiled.diagnostics.front().message;
+            return false;
+        }
+        program_ = std::move(compiled.program);
+    } else if (config_.program_language == ProgramLanguage::Sfc) {
+        plc::SfcParseResult parsed = plc::parse_sfc_source(config_.program_source);
+        if (!parsed.ok) {
+            error_ = parsed.diagnostics.empty() ? "failed to parse the SFC chart"
+                                                : parsed.diagnostics.front().message;
+            return false;
+        }
+        plc::SfcResult compiled = plc::compile_sfc("sfc", parsed.chart);
+        if (!compiled.ok) {
+            error_ = compiled.diagnostics.empty() ? "failed to compile the SFC chart"
                                                  : compiled.diagnostics.front().message;
             return false;
         }

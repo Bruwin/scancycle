@@ -1,0 +1,33 @@
+(* The press cell as a chart: clamp the part, press it, let the ram retract,
+   then wait for the next part. A chart is state, so each step is a tag the
+   monitor shows, and each guard is the same expression a rung condition is. *)
+
+VAR
+    clamp_on : BOOL;
+    ram_down : BOOL;
+    part_in_place : BOOL;
+    clamped : BOOL;
+    at_bottom : BOOL;
+    at_top : BOOL;
+END_VAR
+
+INITIAL idle
+
+STEP idle
+END_STEP
+
+STEP clamp
+    ACTION clamp_on
+END_STEP
+
+STEP press
+    ACTION ram_down
+END_STEP
+
+STEP release
+END_STEP
+
+TRANSITION idle -> clamp := part_in_place
+TRANSITION clamp -> press := clamped
+TRANSITION press -> release := at_bottom
+TRANSITION release -> idle := at_top

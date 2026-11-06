@@ -317,8 +317,9 @@ drives the whole cell)*
   asset variety. *(in progress: `scancycle_ide --program=file.ld` serves SVG rungs
   in either a ladder or a function block view, with click-to-invert contacts,
   click-to-swap junctions and forms for branches, coils and rails; `plc/sfc` parses
-  charts and lowers them to rungs with one active step per scan; the chart drawing
-  and the content pass remain)*
+  charts and lowers them to rungs with one active step per scan, and
+  `--program=chart.sfc` serves the chart drawing with the active step marked; the
+  content and asset passes remain)*
 
 ## Deferred
 

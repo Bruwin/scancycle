@@ -133,6 +133,7 @@ add_library(sc_ui
     src/ui/editor_model.cpp
     src/ui/ladder_svg.cpp
     src/ui/fbd_svg.cpp
+    src/ui/sfc_svg.cpp
     src/ui/svg_text.cpp
 )
 target_link_libraries(sc_ui PUBLIC sc_core sc_plc PRIVATE sc_warnings)
@@ -167,6 +168,8 @@ add_library(sc_app
     src/app/application.cpp
     src/app/ladder_session.cpp
     src/app/ladder_page.cpp
+    src/app/sfc_session.cpp
+    src/app/sfc_page.cpp
     src/app/ide_session.cpp
     src/app/ide_page.cpp
     src/app/watch_text.cpp
@@ -227,6 +230,7 @@ if(SC_BUILD_TESTS)
         tests/test_il.cpp
         tests/test_ladder_text.cpp
         tests/test_sfc.cpp
+        tests/test_sfc_page.cpp
         tests/test_sim.cpp
         tests/test_io.cpp
         tests/test_tools.cpp
