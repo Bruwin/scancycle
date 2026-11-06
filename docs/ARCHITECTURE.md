@@ -143,8 +143,8 @@ register, inputs latched before the scan, only changed outputs written after it,
 and every write checked by `CommissioningPolicy`. `io::ModbusTcpSlave` is a
 single-client loopback register image for tests and classroom commissioning.
 The TCP primitives are in-house; the driver deliberately reuses the existing
-Modbus codec rather than owning a second frame parser. libplctag and DF1 remain
-the next M6 steps.
+Modbus codec rather than owning a second frame parser. The libplctag and DF1
+slices are implemented; libplctag hardware validation remains.
 
 `io::Df1Driver` is the first live driver that speaks to a controller: SLC 500 and
 PLC-5 serial DF1, in-house. It owns the full-duplex DLE framing (BCC or CRC-16),
@@ -168,7 +168,9 @@ implementation yet and reports that as a value. Like every live driver here it
 has not met a real controller.
 
 The libplctag driver, `io::LibPlcTagDriver`, is the path to Allen-Bradley CIP and
-Siemens S7. It deliberately does not call the C library directly: a `PlcTagApi`
+Modbus/TCP. It does not implement Siemens S7; that needs a separate path such as
+OPC UA or a dedicated S7 driver. It deliberately does not call the C library
+directly: a `PlcTagApi`
 seam carries `create`, `read`, `get_bool`, `set_bool`, `write` and `destroy`, so
 the latching, changed-output and commissioning rules are tested with a fake
 backend and need no PLC. One binding is one complete libplctag attribute string,
@@ -179,14 +181,16 @@ library is MPL-2.0 (see the table below), so static linking imposes no disclosur
 obligation on our own code. The one-shot `scancycle_cli libplctag` command uses
 the same `PlcTagApi` seam for bring-up: it reads or writes one boolean, and a
 write reads the current tag before setting bit 0 so the surrounding bits survive.
-That write is allowlisted and session-gated by `CommissioningPolicy`. It has not
+That write is allowlisted and session-gated by `CommissioningPolicy`. The bench
+procedure for a CompactLogix or ControlLogix is in
+[LIBPLCTAG_HARDWARE_VALIDATION.md](LIBPLCTAG_HARDWARE_VALIDATION.md). It has not
 been run against real hardware; that is what the commissioning gate is for.
 
 ## Drivers and licensing
 
 | Target | Library | Licence | Note |
 |---|---|---|---|
-| Allen-Bradley CIP, Siemens S7, Modbus/TCP | `libplctag` (choose MPL-2.0) | MPL-2.0 | static linking allowed, no disclosure of our code |
+| Allen-Bradley CIP, Modbus/TCP | `libplctag` (choose MPL-2.0) | MPL-2.0 | static linking allowed, no disclosure of our code |
 | OPC UA | `open62541` | MPL-2.0 | modern S7-1500 / CompactLogix |
 | Modbus RTU/TCP | in-house codec | ours | small enough that owning it beats vendoring |
 | SLC 500 / PLC-5 serial DF1 | in-house | ours | documented protocol |

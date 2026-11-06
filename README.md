@@ -35,7 +35,7 @@ Portal or Studio 5000 and recognise everything.
 | Modbus/TCP codec, live loopback driver, software slave, commissioning gate | working, tested |
 | DF1 codec (DLE, BCC/CRC-16), PCCC typed read/write, loopback data table | working, tested (no hardware) |
 | DF1 serial link (termios, pty tests), MicroLogix 1000 profile, bring-up CLI | working, tested (no hardware) |
-| libplctag driver (CIP/S7 booleans), opt-in build, bring-up CLI, fake-backend tests | working, tested (no hardware) |
+| libplctag driver (CIP/Modbus TCP booleans), opt-in build, bring-up CLI, fake-backend tests | working, tested (no hardware) |
 | Procedural materials, industrial kits and default-scene placement | working, tested |
 | Editor model, lesson schema, grader, portal routing | working, tested |
 | Composition root (plant + PLC + I/O in one headless session) | working, tested |
@@ -59,7 +59,7 @@ ctest --test-dir build --output-on-failure
 Cross-compilation presets live in `CMakePresets.json` (`debug`, `release`,
 `windows`, `macos`).
 
-The libplctag driver (Allen-Bradley CIP, Siemens S7) is opt-in and needs the C
+The libplctag driver (Allen-Bradley CIP, Modbus/TCP) is opt-in and needs the C
 library and headers installed:
 
 ```sh
@@ -68,7 +68,9 @@ cmake --build build -j
 ```
 
 Without the switch the driver still compiles, as a stub whose factory reports
-that the binding was disabled at build time.
+that the binding was disabled at build time. The bench procedure for a real
+CompactLogix or ControlLogix is
+[docs/LIBPLCTAG_HARDWARE_VALIDATION.md](docs/LIBPLCTAG_HARDWARE_VALIDATION.md).
 
 The renderer is opt-in, because the headless half must build anywhere:
 
@@ -224,7 +226,7 @@ curl -s -X POST -d "lesson=press-batch&student=Ada" http://127.0.0.1:8080/grade
 ./build/bin/scancycle_cli df1 --port=/dev/ttyUSB0 --write=N7:1=1234
 ./build/bin/scancycle_cli df1 --port=/dev/ttyUSB0 --read=B3:5/2
 
-# Bring-up against a CIP or S7 tag. The attribute string is one argument, so
+# Bring-up against a CIP or Modbus/TCP tag. The attribute string is one argument, so
 # quote it. A write reads the tag first to preserve the surrounding bits, and
 # is gated by the same commissioning policy as the driver. Build with
 # -DSC_ENABLE_LIBPLCTAG=ON first; otherwise the command reports that support
