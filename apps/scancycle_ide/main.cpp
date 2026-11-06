@@ -2,6 +2,8 @@
 #include "app/ide_session.hpp"
 #include "app/ladder_page.hpp"
 #include "app/ladder_session.hpp"
+#include "app/sfc_page.hpp"
+#include "app/sfc_session.hpp"
 #include "net/http_server.hpp"
 
 #include <cstdio>
@@ -30,7 +32,7 @@ void print_usage() {
         "\n"
         "  --port=N       loopback port (default 8090)\n"
         "  --requests=N   stop after N requests; 0 serves until interrupted\n"
-        "  --program=PATH Structured Text or ladder (.ld) file to load "
+        "  --program=PATH Structured Text, ladder (.ld) or SFC (.sfc) file to load "
         "(default examples/press_cell.st)\n");
 }
 
@@ -87,14 +89,22 @@ int main(int argc, char** argv) {
     const bool ladder_program =
         program_path.size() > 3 &&
         program_path.compare(program_path.size() - 3, 3, ".ld") == 0;
+    const bool sfc_program =
+        program_path.size() > 4 &&
+        program_path.compare(program_path.size() - 4, 4, ".sfc") == 0;
 
     std::unique_ptr<sc::app::IdeSession> ide;
     std::unique_ptr<sc::app::LadderSession> ladder;
+    std::unique_ptr<sc::app::SfcSession> sfc;
     std::unique_ptr<sc::net::PortalRouter> router;
     if (ladder_program) {
         ladder = std::make_unique<sc::app::LadderSession>(std::move(source));
         router = std::make_unique<sc::net::PortalRouter>(
             sc::app::make_ladder_router(*ladder));
+    } else if (sfc_program) {
+        sfc = std::make_unique<sc::app::SfcSession>(std::move(source));
+        router = std::make_unique<sc::net::PortalRouter>(
+            sc::app::make_sfc_router(*sfc));
     } else {
         ide = std::make_unique<sc::app::IdeSession>(std::move(source));
         router = std::make_unique<sc::net::PortalRouter>(
@@ -109,8 +119,13 @@ int main(int argc, char** argv) {
     const unsigned bound = static_cast<unsigned>(server.port());
     std::printf("Scan Cycle IDE\n");
     std::printf("  http://127.0.0.1:%u/\n", bound);
-    std::printf("  program %s%s\n", program_path.c_str(),
-                ladder_program ? " (ladder)" : "");
+    const char* language = "";
+    if (ladder_program) {
+        language = " (ladder)";
+    } else if (sfc_program) {
+        language = " (sfc)";
+    }
+    std::printf("  program %s%s\n", program_path.c_str(), language);
     std::printf("  Ctrl+C stops the server\n\n");
     std::fflush(stdout);
 

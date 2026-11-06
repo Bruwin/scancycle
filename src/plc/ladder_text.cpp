@@ -581,6 +581,15 @@ std::string format_sink(const Rung& rung) {
 
 }  // namespace
 
+NetPtr parse_net_expression(std::string_view text, int line, Diagnostics& diagnostics) {
+    ConditionParser parser(text, line, 0, diagnostics);
+    return parser.parse();
+}
+
+std::string format_net_expression(const NetNode& node) {
+    return format_condition(node, NetKind::Parallel);
+}
+
 std::string format_ladder_source(const LadderSource& source) {
     std::string text;
     if (!source.vars.empty()) {

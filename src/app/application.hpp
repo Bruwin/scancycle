@@ -21,7 +21,7 @@ namespace sc {
 
 // The composition root runs one program. Ladder rung files are lowered through
 // the same netlist pass the CLI uses, so a lesson can ship either language.
-enum class ProgramLanguage : u8 { StructuredText = 0, Ladder };
+enum class ProgramLanguage : u8 { StructuredText = 0, Ladder, Sfc };
 
 struct DeviceSpec {
     sim::DeviceKind kind = sim::DeviceKind::Motor;
