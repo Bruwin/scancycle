@@ -83,6 +83,10 @@ TEST(fbd_page_uses_fbd_headings) {
     CHECK(page.body.find("<h2>Networks</h2>") != std::string::npos);
     CHECK(page.body.find("Tab to a block or junction") != std::string::npos);
     CHECK(page.body.find("<h1>Ladder editor</h1>") == std::string::npos);
+    CHECK(page.body.find("data-zoomable") != std::string::npos);
+    CHECK(page.body.find("data-zoom-controls") != std::string::npos);
+    CHECK(page.body.find("data-zoom-level") != std::string::npos);
+    CHECK(page.body.find("aria-label=\"Network 1 diagram.") != std::string::npos);
 }
 
 TEST(fbd_page_switches_the_drawing) {

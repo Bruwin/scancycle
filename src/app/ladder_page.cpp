@@ -215,14 +215,10 @@ net::Response ladder_page(const LadderSession& session) {
             std::string drawing =
                 fbd ? ui::fbd_rung_svg(session.source().rungs[i], {i, true})
                     : ui::ladder_rung_svg(session.source().rungs[i], {i, true});
-            if (fbd) {
-                page += "<div class=\"diagram\">";
-                page += std::move(drawing);
-                page += "</div>";
-            } else {
-                page += diagram_canvas("Rung " + std::to_string(i + 1) + " diagram",
-                                       std::move(drawing));
-            }
+            std::string label = fbd ? "Network " : "Rung ";
+            label += std::to_string(i + 1);
+            label += " diagram";
+            page += diagram_canvas(label, std::move(drawing));
             page += rung_editor(i);
             page += "</article>";
         }
