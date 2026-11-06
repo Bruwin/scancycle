@@ -179,6 +179,7 @@ add_library(sc_app
     src/app/lesson_runner.cpp
     src/app/lesson_api.cpp
     src/app/df1_tool.cpp
+    src/app/plc_tag_tool.cpp
 )
 target_link_libraries(sc_app PUBLIC sc_core sc_sim sc_plc sc_io sc_lesson sc_net sc_ui PRIVATE sc_warnings)
 
@@ -250,6 +251,7 @@ if(SC_BUILD_TESTS)
         tests/test_df1.cpp
         tests/test_df1_serial.cpp
         tests/test_df1_tool.cpp
+        tests/test_plc_tag_tool.cpp
     )
     target_link_libraries(sc_tests PRIVATE
         sc_plc sc_world sc_render sc_sim sc_io sc_assets sc_ui sc_lesson sc_net sc_app

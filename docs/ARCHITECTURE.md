@@ -176,8 +176,11 @@ which keeps protocol selection in configuration rather than in the driver. The
 real adapter is a single translation unit behind `-DSC_ENABLE_LIBPLCTAG=ON`, off
 by default, because the headless build must not require an external package. The
 library is MPL-2.0 (see the table below), so static linking imposes no disclosure
-obligation on our own code. It has not been run against real hardware; that is
-what the commissioning gate is for.
+obligation on our own code. The one-shot `scancycle_cli libplctag` command uses
+the same `PlcTagApi` seam for bring-up: it reads or writes one boolean, and a
+write reads the current tag before setting bit 0 so the surrounding bits survive.
+That write is allowlisted and session-gated by `CommissioningPolicy`. It has not
+been run against real hardware; that is what the commissioning gate is for.
 
 ## Drivers and licensing
 
@@ -322,8 +325,8 @@ drives the whole cell)*
   *(in progress: the in-house Modbus/TCP driver, loopback software slave, write-gated
   output path and socket tests are done; the DF1 slice has exchanged a valid read with
   a real MicroLogix 1000, and the optional libplctag driver is implemented behind an
-  injectable API and tested with a fake backend. libplctag has not run against a plant
-  PLC yet)*
+  injectable API, tested with a fake backend, and usable through a one-shot bring-up
+  CLI. libplctag has not run against a plant PLC yet)*
 * **M7** graphical LD/FBD editors on the existing network model, SFC, content,
   asset variety. *(done: `scancycle_ide --program=file.ld` serves SVG rungs
   in either a ladder or a function block view, with click-to-invert contacts,
