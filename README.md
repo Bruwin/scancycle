@@ -121,6 +121,16 @@ lesson's reference program, runs it against that lesson's own cell for 30
 simulated seconds, and grades it with the same rubric a student is graded
 with, so a broken exercise fails CI instead of failing a classroom.
 
+The optional browser smoke test drives the built editor in headless Chromium:
+
+```sh
+npm ci
+npx playwright install chromium
+node tests/browser/editor_smoke.mjs build/bin/scancycle_ide
+```
+
+It requires Node 22 and is run by the Linux CI job.
+
 ## Run
 
 ```sh
