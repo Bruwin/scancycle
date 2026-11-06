@@ -278,8 +278,11 @@ surfaces.
 ## Procedural assets
 
 A parametric kit generator, not noise: beveled boxes, panel lines, hazard
-stripes, pipe elbows, chosen by a seeded grammar per machine class. Materials are
-triplanar and procedural in-shader, so the repository holds no texture files.
+stripes, pipe elbows, chosen by a seeded grammar per machine class. The catalogue
+covers the production cell (conveyor, press, control cabinet, photo-eye and stack
+light) plus safety fence, pallet rack, pipe run, barrel and pallet load. A class
+fixes the silhouette; the seed varies proportions and optional fittings. Materials
+are triplanar and procedural in-shader, so the repository holds no texture files.
 Readability beats variety — a photo-eye must be identifiable at 20 metres.
 
 ## Performance budget
@@ -323,8 +326,8 @@ drives the whole cell)*
   click-to-swap junctions and forms for branches, coils and rails; `plc/sfc` parses
   charts and lowers them to rungs with one active step per scan, and
   `--program=chart.sfc` serves the chart page with the active step marked; the
-  asset pass widens the material palette and the kit grammar, and examples/ gains
-  a counter rung file and a press chart)*
+  asset pass widens the material palette and gives the kit grammar a ten-class
+  industrial catalogue, and examples/ gains a counter rung file and a press chart)*
 
 ## Deferred
 
