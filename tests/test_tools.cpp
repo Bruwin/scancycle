@@ -9,7 +9,15 @@ using namespace sc;
 TEST(material_library_has_factory_defaults) {
     const MaterialLibrary library = MaterialLibrary::create_factory_defaults();
 
-    CHECK(library.size() >= 5);
+    CHECK(library.size() >= 9);
+    // Ids are the index into the palette and a chunk stores ids, so a gap or a
+    // repeated name would make one material unreachable from the renderer.
+    for (std::size_t i = 0; i < library.materials().size(); ++i) {
+        CHECK(library.materials()[i].id == static_cast<MaterialId>(i + 1));
+        for (std::size_t j = i + 1; j < library.materials().size(); ++j) {
+            CHECK(library.materials()[i].name != library.materials()[j].name);
+        }
+    }
     CHECK(library.find(kMaterialAir) == nullptr);
 
     const Material* floor = library.find(1);
@@ -49,6 +57,20 @@ TEST(kit_generation_is_deterministic) {
                   first.pieces[i].depth != other.pieces[i].depth;
     }
     CHECK(differs);
+}
+
+TEST(kit_pieces_stay_inside_a_machine_sized_box) {
+    for (u64 seed = 1; seed <= 8; ++seed) {
+        const Kit kit = generate_machine_kit("press", seed);
+        bool inside = true;
+        for (const KitPiece& piece : kit.pieces) {
+            inside = inside && piece.x >= 0 && piece.y >= 0 && piece.z >= 0 &&
+                     piece.x + static_cast<i32>(piece.width) <= 24 &&
+                     piece.y + static_cast<i32>(piece.height) <= 24 &&
+                     piece.z + static_cast<i32>(piece.depth) <= 24;
+        }
+        CHECK(inside);
+    }
 }
 
 TEST(editor_insert_and_erase) {

@@ -314,12 +314,13 @@ drives the whole cell)*
   injectable API and tested with a fake backend. libplctag has not run against a plant
   PLC yet)*
 * **M7** graphical LD/FBD editors on the existing network model, SFC, content,
-  asset variety. *(in progress: `scancycle_ide --program=file.ld` serves SVG rungs
+  asset variety. *(done: `scancycle_ide --program=file.ld` serves SVG rungs
   in either a ladder or a function block view, with click-to-invert contacts,
   click-to-swap junctions and forms for branches, coils and rails; `plc/sfc` parses
   charts and lowers them to rungs with one active step per scan, and
-  `--program=chart.sfc` serves the chart drawing with the active step marked; the
-  content and asset passes remain)*
+  `--program=chart.sfc` serves the chart page with the active step marked; the
+  asset pass widens the material palette and the kit grammar, and examples/ gains
+  a counter rung file and a press chart)*
 
 ## Deferred
 

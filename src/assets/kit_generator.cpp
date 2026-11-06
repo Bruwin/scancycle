@@ -32,6 +32,27 @@ Kit generate_machine_kit(const std::string& name, u64 seed) {
                                       static_cast<i32>(body_depth / 2) + 1, 1, height, 1});
     }
 
+    // A photo-eye post at the front edge. Most machines get one: it is the part a
+    // student has to find before they can wire the cell.
+    if (rng.bounded(4) != 0) {
+        const u32 post_height = 2 + rng.bounded(3);
+        kit.pieces.push_back(KitPiece{3, static_cast<i32>(body_width) + 1, 1,
+                                      static_cast<i32>(body_depth) / 2, 1, post_height, 1});
+    }
+
+    // A guard rail down one side, so not every kit is an open box.
+    if (rng.bounded(2) == 0) {
+        kit.pieces.push_back(KitPiece{5, 0, 2, 0, 1, 2, body_depth + 2});
+    }
+
+    // A conveyor stub leaving the body, which is what makes a kit read as part of
+    // a line instead of a lone cabinet.
+    if (rng.bounded(3) == 0) {
+        kit.pieces.push_back(KitPiece{2, static_cast<i32>(body_width) + 2, 1,
+                                       static_cast<i32>(body_depth) / 3, 4, 1,
+                                      body_depth / 2});
+    }
+
     return kit;
 }
 

@@ -22,7 +22,9 @@ struct Material {
 
 class MaterialLibrary {
 public:
-    // Id 0 is reserved for air. The first real material gets id 1.
+    // Id 0 is reserved for air. The first real material gets id 1, and ids are
+    // the index plus one: a new material is appended, because inserting one would
+    // repaint every chunk that already stores a later id.
     MaterialId add(std::string name, f32 r, f32 g, f32 b, f32 roughness, f32 metallic,
                    bool emissive = false);
 
