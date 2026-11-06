@@ -200,6 +200,12 @@ TEST(ide_free_play_page_shows_banner_and_reset) {
     CHECK(page.body.find("not a security sandbox") != std::string::npos);
     CHECK(page.body.find("Reset to starter") != std::string::npos);
     CHECK(page.body.find("data-free-play-reset") != std::string::npos);
+    CHECK(page.body.find("viewport-fit=cover") != std::string::npos);
+    CHECK(page.body.find("env(safe-area-inset-left)") != std::string::npos);
+    CHECK(page.body.find("focus-visible") != std::string::npos);
+    CHECK(page.body.find("for=\"program-source\"") != std::string::npos);
+    CHECK(page.body.find("id=\"program-source\"") != std::string::npos);
+    CHECK(page.body.find("table-scroll") != std::string::npos);
 }
 
 TEST(ide_free_play_reset_restores_the_starter_and_clears_forces) {
