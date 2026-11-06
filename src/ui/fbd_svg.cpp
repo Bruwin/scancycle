@@ -1,5 +1,6 @@
 #include "ui/fbd_svg.hpp"
 
+#include "plc/ladder_text.hpp"
 #include "plc/netlist_edit.hpp"
 #include "ui/svg_text.hpp"
 
@@ -20,6 +21,7 @@ constexpr int kBlockGap = 18;   // between a junction's inputs and its block
 constexpr int kStackGap = 10;   // between stacked inputs
 constexpr int kBus = 6;         // where the input bus runs
 constexpr int kFlowGap = 26;    // between the network and its sink
+constexpr int kPad = 8;         // keeps the 2px strokes off the viewBox edge
 
 // A laid-out sub-network. `out_y` is where its value leaves the right edge and
 // `height` is what the parent stacks, so a junction never needs to know what its
@@ -212,15 +214,18 @@ Box timer_box(const plc::TimerSink& timer) {
 }
 
 Box counter_box(const plc::CounterSink& counter) {
-    const int width = 140;
+    const std::string reset =
+        counter.reset ? plc::format_net_expression(*counter.reset) : std::string();
+    const int width =
+        reset.empty() ? 140 : std::max(140, (static_cast<int>(reset.size()) + 3) * 7 + 20);
     std::string body = box_rect(0, 0, width, 40);
     body += label(width / 2, 25, std::string(counter.down ? "CTD " : "CTU ") +
                                    std::to_string(counter.preset));
     body += label(width / 2, 56, counter.var);
-    if (counter.reset) {
-        body += label(width / 2, 72, "reset wired");
+    if (!reset.empty()) {
+        body += label(width / 2, 72, "R: " + reset);
     }
-    return {width, counter.reset ? 80 : 60, 20, body};
+    return {width, reset.empty() ? 60 : 80, 20, body};
 }
 
 Box sink_box(const plc::Rung& rung) {
@@ -241,10 +246,10 @@ std::string fbd_rung_svg(const plc::Rung& rung, const FbdSvgOptions& options) {
                               : value_box("TRUE", false);
     const Box sink = sink_box(rung);
 
-    const int height = std::max(condition.height, sink.height);
-    const int width = condition.width + kFlowGap + sink.width;
-    const int condition_top = (height - condition.height) / 2;
-    const int sink_top = (height - sink.height) / 2;
+    const int content_height = std::max(condition.height, sink.height);
+    const int content_width = condition.width + kFlowGap + sink.width;
+    const int condition_top = (content_height - condition.height) / 2;
+    const int sink_top = (content_height - sink.height) / 2;
     const int wire_y = condition_top + condition.out_y;
 
     std::string body;
@@ -252,10 +257,12 @@ std::string fbd_rung_svg(const plc::Rung& rung, const FbdSvgOptions& options) {
     body += translate(condition.width + kFlowGap, sink_top, sink.body);
     body += line(condition.width, wire_y, condition.width + kFlowGap, wire_y);
 
+    const int width = content_width + 2 * kPad;
+    const int height = content_height + 2 * kPad;
     return "<svg class=\"fbd\" xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 " +
            std::to_string(width) + " " + std::to_string(height) + "\" width=\"" +
            std::to_string(width) + "\" height=\"" + std::to_string(height) + "\">" +
-           body + "</svg>";
+           translate(kPad, kPad, body) + "</svg>";
 }
 
 }  // namespace sc::ui

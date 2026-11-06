@@ -60,6 +60,26 @@ TEST(fbd_labels_a_timer_preset) {
     CHECK(svg.find(">out</text>") != std::string::npos);
 }
 
+TEST(fbd_shows_the_counter_reset_source) {
+    const std::string svg = draw("VAR\n    pulse : BOOL;\n    reset_btn : BOOL;\n"
+                                 "    out : BOOL;\nEND_VAR\n"
+                                 "out = CTU(pulse, reset_btn, 5)\n");
+    CHECK(svg.find("R: reset_btn") != std::string::npos);
+    CHECK(svg.find("reset wired") == std::string::npos);
+    CHECK(svg.find("translate(8,8)") != std::string::npos);
+}
+
+TEST(fbd_page_uses_fbd_headings) {
+    app::LadderSession session(kChart);
+    session.set_view(app::ChartView::Fbd);
+    const net::Response page = app::ladder_page(session);
+
+    CHECK(page.body.find("<title>Scan Cycle FBD</title>") != std::string::npos);
+    CHECK(page.body.find("Function block diagram") != std::string::npos);
+    CHECK(page.body.find("<h2>Networks</h2>") != std::string::npos);
+    CHECK(page.body.find("<h1>Ladder editor</h1>") == std::string::npos);
+}
+
 TEST(fbd_page_switches_the_drawing) {
     app::LadderSession session(kChart);
     const std::string before = session.text();

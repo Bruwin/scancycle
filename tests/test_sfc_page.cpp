@@ -31,6 +31,40 @@ TRANSITION idle -> fill := start
 TRANSITION fill -> idle
 )sfc";
 
+const char* kLongGuards = R"sfc(VAR
+    part_in_place : BOOL;
+    clamped : BOOL;
+    at_bottom : BOOL;
+    at_top : BOOL;
+    motor : BOOL;
+END_VAR
+
+INITIAL idle
+
+STEP idle
+END_STEP
+
+STEP lower
+    ACTION motor
+END_STEP
+
+STEP clamp
+    ACTION motor
+END_STEP
+
+STEP raise
+    ACTION motor
+END_STEP
+
+STEP home
+END_STEP
+
+TRANSITION idle -> lower := part_in_place
+TRANSITION lower -> clamp := at_bottom
+TRANSITION clamp -> raise := clamped
+TRANSITION raise -> home := at_top
+)sfc";
+
 }  // namespace
 
 TEST(sfc_session_compiles_and_starts_in_its_initial_step) {
@@ -59,6 +93,38 @@ TEST(sfc_drawing_marks_the_active_step) {
     CHECK(svg.find("class=\"step active\"") != std::string::npos);
     CHECK(svg.find(">start</text>") != std::string::npos);
     CHECK(svg.find("always") != std::string::npos);
+}
+
+TEST(sfc_long_guards_widen_the_drawing) {
+    app::SfcSession session(kLongGuards);
+    CHECK(session.parsed());
+    if (!session.parsed()) {
+        return;
+    }
+
+    const std::string svg = ui::sfc_chart_svg(session.chart(), {});
+    CHECK(svg.find("<g transform=\"translate(10,10)\">") != std::string::npos);
+
+    const std::string prefix = "viewBox=\"0 0 ";
+    const std::size_t view = svg.find(prefix);
+    CHECK(view != std::string::npos);
+    if (view != std::string::npos) {
+        const std::size_t start = view + prefix.size();
+        const std::size_t end = svg.find('"', start);
+        const int width = std::stoi(svg.substr(start, end - start));
+        CHECK(width > 500);
+    }
+}
+
+TEST(sfc_page_says_not_started_before_the_first_scan) {
+    app::SfcSession session(kChart);
+    const net::Response page = app::sfc_page(session);
+    CHECK(page.body.find("Not started") != std::string::npos);
+    CHECK(page.body.find("initial step activates") != std::string::npos);
+
+    CHECK(session.step());
+    const net::Response after = app::sfc_page(session);
+    CHECK(after.body.find("Running") != std::string::npos);
 }
 
 TEST(sfc_page_shows_the_chart_and_controls) {

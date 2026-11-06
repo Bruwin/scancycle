@@ -160,6 +160,21 @@ TEST(ladder_page_shows_the_diagram_and_controls) {
     CHECK(page.body.find("Add a rung") != std::string::npos);
 }
 
+TEST(ladder_counter_shows_its_reset_source) {
+    plc::LadderParseResult parsed = plc::parse_ladder_source(
+        "VAR\n    pulse : BOOL;\n    reset_btn : BOOL;\n    out : BOOL;\nEND_VAR\n"
+        "out = CTU(pulse, reset_btn, 5)\n");
+    CHECK(parsed.ok);
+    if (!parsed.ok || parsed.source.rungs.empty()) {
+        return;
+    }
+
+    const std::string svg = ui::ladder_rung_svg(parsed.source.rungs[0], {0, true});
+    CHECK(svg.find("R: reset_btn") != std::string::npos);
+    CHECK(svg.find(">reset</text>") == std::string::npos);
+    CHECK(svg.find("translate(8,8)") != std::string::npos);
+}
+
 TEST(ladder_page_escapes_a_broken_file) {
     app::LadderSession session("(* <script>alert(1)</script>\n");
     const net::Response page = app::ladder_page(session);

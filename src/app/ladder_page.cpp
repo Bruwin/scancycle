@@ -1,5 +1,6 @@
 #include "app/ladder_page.hpp"
 
+#include "app/editor_page.hpp"
 #include "net/http.hpp"
 #include "ui/fbd_svg.hpp"
 #include "ui/ladder_svg.hpp"
@@ -79,153 +80,204 @@ std::string hidden(const char* name, std::size_t value) {
            std::to_string(value) + "\">";
 }
 
+std::string two_digits(std::size_t value) {
+    return (value < 9 ? "0" : "") + std::to_string(value + 1);
+}
+
+std::string status_badge(const LadderSession& session, bool faulted) {
+    if (!session.parsed()) {
+        return "<span class=\"badge bad\">Parse error</span>";
+    }
+    if (!session.compiled()) {
+        return "<span class=\"badge warn\">Not compiled</span>";
+    }
+    if (faulted) {
+        return "<span class=\"badge bad\">Faulted</span>";
+    }
+    return "<span class=\"badge ok\">Ready</span>";
+}
+
+std::string rung_editor(std::size_t index) {
+    const std::string rung = std::to_string(index);
+    std::string tools = "<div class=\"toolbar\">";
+    tools += "<a class=\"btn subtle\" href=\"/rail?rung=" + rung +
+             "&value=1\" title=\"Replace this rung's condition with a true rail\">Set true</a>";
+    tools += "<a class=\"btn subtle\" href=\"/rail?rung=" + rung +
+             "&value=0\" title=\"Replace this rung's condition with a false rail\">Set false</a>";
+    tools += "<a class=\"btn danger\" href=\"/remove-rung?rung=" + rung +
+             "\">Remove rung</a>";
+    tools += "<details class=\"editor-tools\"><summary>Edit rung</summary>";
+    tools += "<div class=\"edit-grid\">";
+
+    tools += "<form class=\"tool-form\" method=\"post\" action=\"/add\">";
+    tools += "<h4>Add branch</h4>";
+    tools += hidden("rung", index);
+    tools += "<div class=\"row\"><label>Path <input name=\"path\" size=\"4\" "
+             "placeholder=\"0.1\" title=\"branch path, e.g. 0.1\"></label>";
+    tools += "<label>Tag <input name=\"tag\" size=\"8\" placeholder=\"tag\"></label></div>";
+    tools += "<div class=\"row\"><label>Kind <select name=\"kind\">"
+             "<option value=\"series\">series</option>"
+             "<option value=\"parallel\">parallel</option></select></label>";
+    tools += "<label><input type=\"checkbox\" name=\"negated\" value=\"1\"> NC</label></div>";
+    tools += "<button class=\"btn primary\" type=\"submit\">Add branch</button></form>";
+
+    tools += "<form class=\"tool-form\" method=\"get\" action=\"/remove\">";
+    tools += "<h4>Remove branch</h4>";
+    tools += hidden("rung", index);
+    tools += "<div class=\"row\"><label>Path <input name=\"path\" size=\"4\" "
+             "placeholder=\"0.1\"></label></div>";
+    tools += "<button class=\"btn\" type=\"submit\">Remove branch</button></form>";
+
+    tools += "<form class=\"tool-form\" method=\"post\" action=\"/coil\">";
+    tools += "<h4>Set coil</h4>";
+    tools += hidden("rung", index);
+    tools += "<div class=\"row\"><label>Index <input type=\"number\" name=\"index\" "
+             "value=\"0\" min=\"0\"></label>";
+    tools += "<label>Coil <input name=\"tag\" size=\"8\" placeholder=\"coil\"></label>";
+    tools += "<label><input type=\"checkbox\" name=\"negated\" value=\"1\"> NC</label></div>";
+    tools += "<button class=\"btn\" type=\"submit\">Set coil</button></form>";
+
+    tools += "</div></details></div>";
+    return tools;
+}
+
 }  // namespace
 
 net::Response ladder_page(const LadderSession& session) {
     const Application::WatchSnapshot snapshot = session.snapshot();
-
-    std::string page = net::page_head("Scan Cycle ladder");
-    page += "<style>"
-            "svg.ladder,svg.fbd{background:#fff;border:1px solid #ccc;max-width:100%;"
-            "height:auto;margin:.4rem 0}"
-            "svg.ladder .wire{stroke:#333;stroke-width:2;fill:none}"
-            "svg.ladder .bar{stroke:#111;stroke-width:3}"
-            "svg.ladder .slash{stroke:#b00;stroke-width:2}"
-            "svg.ladder .coil{fill:none;stroke:#111;stroke-width:2}"
-            "svg.ladder .block{fill:#f5f5f5;stroke:#333;stroke-width:2}"
-            "svg.ladder text{font:11px monospace;fill:#111}"
-            "svg.ladder a:hover .bar{stroke:#06c}"
-            "svg.fbd .wire{stroke:#333;stroke-width:2;fill:none}"
-            "svg.fbd .block{fill:#fff;stroke:#333;stroke-width:2}"
-            "svg.fbd .neg{fill:#fff;stroke:#b00;stroke-width:2}"
-            "svg.fbd text{font:11px monospace;fill:#111}"
-            "svg.fbd a:hover .block{stroke:#06c}"
-            ".rung{border-top:1px solid #ddd;padding:.4rem 0}"
-            ".tools form{display:inline-flex;gap:.25rem;margin:.2rem .6rem .2rem 0}"
-            "</style>";
-    page += "<h1>Scan Cycle ladder</h1>";
-    page += "<p class=\"no-print\">Click a contact to invert it, or a junction to "
-            "swap AND for OR. Use a form to add a branch, change the coil, or set a "
-            "rail. The page is local to this machine.</p>";
-
     const bool fbd = session.view() == ChartView::Fbd;
-    page += "<p class=\"views no-print\">View: ";
-    page += fbd ? "<strong>FBD</strong>" : "<a href=\"/view?mode=fbd\">FBD</a>";
-    page += " · ";
-    page += fbd ? "<a href=\"/view?mode=ladder\">ladder</a>" : "<strong>ladder</strong>";
-    page += "</p>";
+    const char* title = fbd ? "Scan Cycle FBD" : "Scan Cycle ladder";
+    const char* eyebrow = "Graphical logic";
+    const char* heading = fbd ? "Function block diagram" : "Ladder editor";
+    const char* lede =
+        fbd ? "The same control network, drawn as function blocks. Click a junction to "
+              "swap AND for OR; the text remains the source of truth."
+            : "Inspect and edit the control logic one rung at a time. Click a contact to "
+              "invert it, or a junction to swap AND for OR.";
 
-    page += "<p>Scan <strong>" + std::to_string(snapshot.scan) + "</strong> · ";
-    if (!session.parsed()) {
-        page += "<span class=\"fail\">parse error</span>";
-    } else if (!session.compiled()) {
-        page += "<span class=\"fail\">not compiled</span>";
-    } else if (snapshot.faulted) {
-        page += "<span class=\"fail\">faulted</span>";
-    } else {
-        page += "<span class=\"pass\">ready</span>";
-    }
-    page += "</p>";
+    std::string page = editor_page_head(title, fbd ? "fbd" : "ladder");
+    page += "<div class=\"page-head\"><div><p class=\"eyebrow\">";
+    page += eyebrow;
+    page += "</p><h1>";
+    page += heading;
+    page += "</h1><p class=\"lede\">";
+    page += lede;
+    page += "</p></div><div class=\"session\">";
+    page += status_badge(session, snapshot.faulted);
+    page += "<span class=\"scan\">Scan <strong>" + std::to_string(snapshot.scan) +
+            "</strong></span></div></div>";
 
     if (!session.error().empty()) {
-        page += "<p class=\"fail\"><strong>Error:</strong> " +
-                net::html_escape(session.error()) + "</p>";
+        page += "<div class=\"alert\"><h2>Error</h2><p>";
+        page += net::html_escape(session.error());
+        page += "</p></div>";
     }
 
     if (!session.diagnostics().empty()) {
-        page += "<h2>Diagnostics</h2><table><thead><tr><th>Line</th><th>Column</th>"
-                "<th>Message</th></tr></thead><tbody>";
+        page += "<section class=\"panel\"><div class=\"panel-head\"><div>"
+                "<p class=\"eyebrow\">Compiler</p><h2>Diagnostics</h2>"
+                "<p>Fix these before the chart can run.</p></div></div>"
+                "<div class=\"panel-body table-wrap\"><table><thead><tr><th>Line</th>"
+                "<th>Column</th><th>Message</th></tr></thead><tbody>";
         for (const plc::Diagnostic& diagnostic : session.diagnostics()) {
             page += "<tr><td>" + std::to_string(diagnostic.line) + "</td><td>" +
                     std::to_string(diagnostic.column) + "</td><td>" +
                     net::html_escape(diagnostic.message) + "</td></tr>";
         }
-        page += "</tbody></table>";
+        page += "</tbody></table></div></section>";
     }
 
     if (session.parsed()) {
-        page += "<h2>Rungs</h2>";
-        for (std::size_t i = 0; i < session.source().rungs.size(); ++i) {
+        const std::size_t count = session.source().rungs.size();
+        page += "<section class=\"panel\"><div class=\"panel-head\"><div>"
+                "<p class=\"eyebrow\">Source</p><h2>";
+        page += fbd ? "Networks" : "Rungs";
+        page += "</h2><p>";
+        page += fbd ? "Each network is one rung lowered to function blocks."
+                    : "Each card is one line of the ladder source.";
+        page += "</p></div><span class=\"chip\">" + std::to_string(count) + " ";
+        page += fbd ? (count == 1 ? "network" : "networks")
+                    : (count == 1 ? "rung" : "rungs");
+        page += "</span></div><div class=\"panel-body\"><div class=\"rung-list\">";
+
+        for (std::size_t i = 0; i < count; ++i) {
             const std::string rung = std::to_string(i);
-            page += "<section class=\"rung\"><h3>Rung " + std::to_string(i + 1) + "</h3>";
+            page += "<article class=\"rung-card\"><div class=\"rung-head\">";
+            page += "<span class=\"rung-index\">" + two_digits(i) + "</span><div><h3>";
+            page += fbd ? "Network " : "Rung ";
+            page += std::to_string(i + 1);
+            page += "</h3><p>";
+            page += fbd ? "Click a block to invert a signal or change the junction."
+                        : "Click a contact to invert it; click a junction to change it.";
+            page += "</p></div></div><div class=\"diagram\">";
             if (fbd) {
                 page += ui::fbd_rung_svg(session.source().rungs[i], {i, true});
             } else {
                 page += ui::ladder_rung_svg(session.source().rungs[i], {i, true});
             }
-            page += "<div class=\"tools no-print\">";
-            page += "<a href=\"/rail?rung=" + rung + "&value=1\">always true</a> ";
-            page += "<a href=\"/rail?rung=" + rung + "&value=0\">always false</a> ";
-            page += "<a href=\"/remove-rung?rung=" + rung + "\">remove rung</a> ";
-
-            page += "<form method=\"post\" action=\"/add\">";
-            page += hidden("rung", i);
-            page += "<input name=\"path\" size=\"4\" placeholder=\"path\" "
-                    "title=\"branch path, e.g. 0.1\">";
-            page += "<input name=\"tag\" size=\"8\" placeholder=\"tag\">";
-            page += "<select name=\"kind\"><option value=\"series\">series</option>"
-                    "<option value=\"parallel\">parallel</option></select>";
-            page += "<label><input type=\"checkbox\" name=\"negated\" value=\"1\">NC</label>";
-            page += "<button>Add</button></form>";
-
-            page += "<form method=\"get\" action=\"/remove\">";
-            page += hidden("rung", i);
-            page += "<input name=\"path\" size=\"4\" placeholder=\"path\">";
-            page += "<button>Remove branch</button></form>";
-
-            page += "<form method=\"post\" action=\"/coil\">";
-            page += hidden("rung", i);
-            page += "<input type=\"number\" name=\"index\" value=\"0\" min=\"0\" "
-                    "style=\"width:4rem\">";
-            page += "<input name=\"tag\" size=\"8\" placeholder=\"coil\">";
-            page += "<label><input type=\"checkbox\" name=\"negated\" value=\"1\">NC</label>";
-            page += "<button>Set coil</button></form>";
-            page += "</div></section>";
+            page += "</div>";
+            page += rung_editor(i);
+            page += "</article>";
         }
 
-        page += "<h2>Add a rung</h2><form method=\"post\" action=\"/rung\">"
-                "<input name=\"coil\" placeholder=\"coil tag\"> "
-                "<button>Add rung</button></form>";
+        page += "</div><div class=\"add-rung\"><div><h3>Add a rung</h3>"
+                "<p>Give the new coil a tag. The rung starts with a true rail.</p></div>";
+        page += "<form method=\"post\" action=\"/rung\"><input name=\"coil\" "
+                "placeholder=\"coil tag\" aria-label=\"New coil tag\">"
+                "<button class=\"btn primary\" type=\"submit\">Add rung</button></form>";
+        page += "</div></div></section>";
     } else {
-        page += "<p class=\"fail\">The file does not parse, so there is no drawing to "
-                "edit. Fix it below, or edit the file and reload.</p>";
+        page += "<div class=\"notice\"><strong>No drawing yet.</strong> The file does not "
+                "parse, so there is nothing to edit. Fix it below, or edit the file and "
+                "reload.</div>";
     }
 
-    page += "<h2>Monitor</h2>";
-    page += "<form method=\"post\" action=\"/step\" class=\"no-print\">"
-            "<button type=\"submit\"";
+    page += "<section class=\"panel\"><div class=\"panel-head\"><div>"
+            "<p class=\"eyebrow\">Execution</p><h2>Monitor</h2>"
+            "<p>Values are read after the last scan; a step executes exactly one scan.</p>"
+            "</div><form method=\"post\" action=\"/step\"><button class=\"btn primary\" "
+            "type=\"submit\"";
     if (!session.compiled() || snapshot.faulted) {
         page += " disabled";
     }
-    page += ">Step one scan</button></form>";
+    page += ">Step one scan</button></form></div><div class=\"panel-body\">";
 
     if (!session.compiled()) {
-        page += "<p>Compile a chart to see its variables.</p>";
+        page += "<p class=\"notice\">Compile a chart to see its variables.</p>";
     } else if (snapshot.tags.empty()) {
-        page += "<p>This chart declares no watchable variables.</p>";
+        page += "<p class=\"notice\">This chart declares no watchable variables.</p>";
     } else {
-        page += "<table><thead><tr><th>Tag</th><th>Value</th></tr></thead><tbody>";
+        page += "<div class=\"table-wrap\"><table><thead><tr><th>Tag</th><th>Value</th>"
+                "</tr></thead><tbody>";
         for (const Application::Watch& tag : snapshot.tags) {
             page += "<tr><td><code>" + net::html_escape(tag.name) + "</code></td><td>";
             if (tag.present) {
-                page += net::html_escape(tag.value.to_string());
+                const std::string value = tag.value.to_string();
+                const bool on = value == "TRUE";
+                page += "<span class=\"value " + std::string(on ? "true" : "false") +
+                        "\">" + net::html_escape(value) + "</span>";
             } else {
-                page += "-";
+                page += "<span class=\"value false\">-</span>";
             }
             page += "</td></tr>";
         }
-        page += "</tbody></table>";
+        page += "</tbody></table></div>";
     }
+    page += "</div></section>";
 
-    page += "<details><summary>Generated ladder text</summary><pre>";
+    page += "<details class=\"disclosure\"><summary>Generated ladder text</summary>"
+            "<div class=\"panel-body\"><pre>";
     page += net::html_escape(session.text());
-    page += "</pre></details>";
-    page += "<details><summary>Replace the file</summary>"
-            "<form method=\"post\" action=\"/load\">"
-            "<textarea name=\"source\" rows=\"12\" cols=\"80\" spellcheck=\"false\">";
+    page += "</pre></div></details>";
+    page += "<details class=\"disclosure\"><summary>Replace the file</summary>"
+            "<div class=\"panel-body\"><form method=\"post\" action=\"/load\">"
+            "<textarea name=\"source\" rows=\"14\" spellcheck=\"false\" "
+            "aria-label=\"Ladder source\">";
     page += net::html_escape(session.text());
-    page += "</textarea><p><button type=\"submit\">Load</button></p></form></details>";
-    page += "</main></body></html>";
+    page += "</textarea><p><button class=\"btn primary\" type=\"submit\">Load</button>"
+            "</p></form></div></details>";
+
+    page += editor_page_foot();
 
     net::Response response;
     response.content_type = "text/html; charset=utf-8";
