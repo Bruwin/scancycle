@@ -126,6 +126,7 @@ endif()
 add_library(sc_assets
     src/assets/material_library.cpp
     src/assets/kit_generator.cpp
+    src/assets/kit_grammar.cpp
 )
 target_link_libraries(sc_assets PUBLIC sc_core sc_world PRIVATE sc_warnings)
 
@@ -234,6 +235,7 @@ if(SC_BUILD_TESTS)
         tests/test_sfc_page.cpp
         tests/test_sim.cpp
         tests/test_io.cpp
+        tests/test_assets.cpp
         tests/test_tools.cpp
         tests/test_ide.cpp
         tests/test_lesson.cpp
