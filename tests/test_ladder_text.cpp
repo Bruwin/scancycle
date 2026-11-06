@@ -407,3 +407,112 @@ TEST(a_counter_value_tag_must_be_declared_on_a_rung) {
     CHECK(built.diagnostics.size() == 1);
     CHECK(built.diagnostics[0].message.find("missing") != std::string::npos);
 }
+
+TEST(a_true_rail_energises_its_coil) {
+    Built built = build(std::string(kHeader) + "d = TRUE\n");
+    CHECK(built.ok);
+    if (!built.ok) {
+        return;
+    }
+
+    Vm vm(built.program);
+    CHECK(vm.scan(0));
+    CHECK(vm.get("d").as_bool());
+}
+
+TEST(a_false_rail_leaves_its_coil_off) {
+    Built built = build(std::string(kHeader) + "d = FALSE\n");
+    CHECK(built.ok);
+    if (!built.ok) {
+        return;
+    }
+
+    Vm vm(built.program);
+    CHECK(vm.scan(0));
+    CHECK(!vm.get("d").as_bool());
+}
+
+TEST(a_negated_coil_writes_the_inverse) {
+    Built built = build(std::string(kHeader) + "!d = a\n");
+    CHECK(built.ok);
+    if (!built.ok) {
+        return;
+    }
+
+    Vm vm(built.program);
+    CHECK(vm.scan(0));
+    CHECK(vm.get("d").as_bool());
+
+    CHECK(vm.set("a", Value::boolean(true)));
+    CHECK(vm.scan(10));
+    CHECK(!vm.get("d").as_bool());
+}
+
+TEST(a_negated_timer_output_is_refused) {
+    Built built = build(std::string(kHeader) + "!d = TON(a, 1s)\n");
+    CHECK(!built.ok);
+    CHECK(built.diagnostics.size() == 1);
+    CHECK(built.diagnostics[0].message.find("cannot be negated") != std::string::npos);
+}
+
+TEST(format_ladder_source_round_trips_the_rung_forms) {
+    LadderParseResult parsed =
+        parse_ladder_source(std::string(kHeader) + "d = (a | b) & !c\nc = TON(d, 1s)\n");
+    CHECK(parsed.ok);
+    if (!parsed.ok) {
+        return;
+    }
+
+    const std::string text = format_ladder_source(parsed.source);
+    CHECK(text.find("d = (a | b) & !c\n") != std::string::npos);
+    CHECK(text.find("c = TON(d, 1s)\n") != std::string::npos);
+
+    LadderParseResult again = parse_ladder_source(text);
+    CHECK(again.ok);
+    CHECK(again.source.rungs.size() == 2);
+}
+
+TEST(format_ladder_source_drops_redundant_parentheses) {
+    LadderParseResult parsed =
+        parse_ladder_source(std::string(kHeader) + "d = (a & b) & c\n");
+    CHECK(parsed.ok);
+    if (!parsed.ok) {
+        return;
+    }
+
+    const std::string text = format_ladder_source(parsed.source);
+    CHECK(text.find("d = a & b & c\n") != std::string::npos);
+}
+
+TEST(format_ladder_source_round_trips_a_counter_with_reset_and_count) {
+    const std::string header =
+        "VAR\n    a : BOOL;\n    b : BOOL;\n    out : BOOL;\n    parts : INT;\nEND_VAR\n";
+    LadderParseResult parsed = parse_ladder_source(header + "out, parts = CTU(a, b, 20)\n");
+    CHECK(parsed.ok);
+    if (!parsed.ok) {
+        return;
+    }
+
+    const std::string text = format_ladder_source(parsed.source);
+    CHECK(text.find("out, parts = CTU(a, b, 20)\n") != std::string::npos);
+    CHECK(parse_ladder_source(text).ok);
+}
+
+TEST(format_ladder_source_writes_one_line_per_coil) {
+    LadderSource source;
+    source.vars = {TagDecl{"a", ValueType::Bool}, TagDecl{"d", ValueType::Bool},
+                   TagDecl{"e", ValueType::Bool}};
+    Rung rung;
+    rung.coils.push_back(Coil{"d", false});
+    rung.coils.push_back(Coil{"e", true});
+    source.rungs.push_back(std::move(rung));
+
+    const std::string text = format_ladder_source(source);
+    CHECK(text.find("    a : BOOL;\n") != std::string::npos);
+    CHECK(text.find("d = TRUE\n") != std::string::npos);
+    CHECK(text.find("!e = TRUE\n") != std::string::npos);
+
+    LadderParseResult parsed = parse_ladder_source(text);
+    CHECK(parsed.ok);
+    CHECK(parsed.source.rungs.size() == 2);
+}
