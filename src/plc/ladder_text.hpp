@@ -24,6 +24,11 @@
 // `!` applies to a contact, not to a group. Inverting a whole branch is rare on a
 // real drawing and the netlist has no node for it; refusing is better than
 // quietly parsing `!(a | b)` as `!a | b`.
+//
+// A rail is written TRUE or FALSE, and a coil may be negated by putting `!` on
+// the left: `!alarm = !reset & TRUE`. TRUE and FALSE are reserved words, so a tag
+// cannot be named after them. The formatter emits the same syntax, which is what
+// lets a drawing round-trip through the file.
 #include "plc/declaration.hpp"
 #include "plc/diagnostic.hpp"
 #include "plc/netlist.hpp"
@@ -48,5 +53,12 @@ struct LadderParseResult {
 // block; a file without one produces rungs that no compilation can resolve, and
 // the netlist compiler says so.
 LadderParseResult parse_ladder_source(std::string_view source);
+
+// Writes a source back in the same form. Parentheses are emitted only where
+// precedence needs them, a rail becomes TRUE/FALSE, and a multi-coil rung is
+// written as one line per coil (the netlist shares its condition; the file
+// format has one coil on the left).
+
+std::string format_ladder_source(const LadderSource& source);
 
 }  // namespace sc::plc

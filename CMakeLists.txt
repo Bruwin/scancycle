@@ -128,7 +128,7 @@ add_library(sc_assets
 )
 target_link_libraries(sc_assets PUBLIC sc_core sc_world PRIVATE sc_warnings)
 
-add_library(sc_ui src/ui/editor_model.cpp)
+add_library(sc_ui src/ui/editor_model.cpp src/ui/ladder_svg.cpp)
 target_link_libraries(sc_ui PUBLIC sc_core sc_plc PRIVATE sc_warnings)
 
 add_library(sc_lesson
@@ -159,6 +159,8 @@ add_library(sc_app
     src/app/grades_students.cpp
     src/app/term_logs.cpp
     src/app/application.cpp
+    src/app/ladder_session.cpp
+    src/app/ladder_page.cpp
     src/app/ide_session.cpp
     src/app/ide_page.cpp
     src/app/watch_text.cpp
@@ -227,6 +229,7 @@ if(SC_BUILD_TESTS)
         tests/test_modbus_tcp.cpp
         tests/test_libplctag.cpp
         tests/test_app.cpp
+        tests/test_ladder_editor.cpp
         tests/test_df1.cpp
         tests/test_df1_serial.cpp
         tests/test_df1_tool.cpp

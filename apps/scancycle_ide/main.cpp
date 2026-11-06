@@ -1,11 +1,14 @@
 #include "app/ide_page.hpp"
 #include "app/ide_session.hpp"
+#include "app/ladder_page.hpp"
+#include "app/ladder_session.hpp"
 #include "net/http_server.hpp"
 
 #include <cstdio>
 #include <cstdlib>
 #include <fstream>
 #include <iterator>
+#include <memory>
 #include <string>
 #include <utility>
 
@@ -27,7 +30,8 @@ void print_usage() {
         "\n"
         "  --port=N       loopback port (default 8090)\n"
         "  --requests=N   stop after N requests; 0 serves until interrupted\n"
-        "  --program=PATH Structured Text file to load (default examples/press_cell.st)\n");
+        "  --program=PATH Structured Text or ladder (.ld) file to load "
+        "(default examples/press_cell.st)\n");
 }
 
 }  // namespace
@@ -80,9 +84,23 @@ int main(int argc, char** argv) {
                      program_path.c_str());
     }
 
-    sc::app::IdeSession session(std::move(source));
-    sc::net::PortalRouter router = sc::app::make_ide_router(session);
-    sc::net::HttpServer server(router);
+    const bool ladder_program =
+        program_path.size() > 3 &&
+        program_path.compare(program_path.size() - 3, 3, ".ld") == 0;
+
+    std::unique_ptr<sc::app::IdeSession> ide;
+    std::unique_ptr<sc::app::LadderSession> ladder;
+    std::unique_ptr<sc::net::PortalRouter> router;
+    if (ladder_program) {
+        ladder = std::make_unique<sc::app::LadderSession>(std::move(source));
+        router = std::make_unique<sc::net::PortalRouter>(
+            sc::app::make_ladder_router(*ladder));
+    } else {
+        ide = std::make_unique<sc::app::IdeSession>(std::move(source));
+        router = std::make_unique<sc::net::PortalRouter>(
+            sc::app::make_ide_router(*ide));
+    }
+    sc::net::HttpServer server(*router);
     if (!server.listen(static_cast<sc::u16>(port))) {
         std::fprintf(stderr, "ide: %s\n", server.error().c_str());
         return 1;
@@ -91,7 +109,8 @@ int main(int argc, char** argv) {
     const unsigned bound = static_cast<unsigned>(server.port());
     std::printf("Scan Cycle IDE\n");
     std::printf("  http://127.0.0.1:%u/\n", bound);
-    std::printf("  program %s\n", program_path.c_str());
+    std::printf("  program %s%s\n", program_path.c_str(),
+                ladder_program ? " (ladder)" : "");
     std::printf("  Ctrl+C stops the server\n\n");
     std::fflush(stdout);
 
