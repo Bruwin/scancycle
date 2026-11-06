@@ -168,6 +168,7 @@ add_library(sc_app
     src/app/application.cpp
     src/app/ladder_session.cpp
     src/app/ladder_page.cpp
+    src/app/editor_page.cpp
     src/app/sfc_session.cpp
     src/app/sfc_page.cpp
     src/app/ide_session.cpp

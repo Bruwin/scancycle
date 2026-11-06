@@ -1,5 +1,6 @@
 #include "ui/ladder_svg.hpp"
 
+#include "plc/ladder_text.hpp"
 #include "plc/netlist_edit.hpp"
 #include "ui/svg_text.hpp"
 
@@ -15,6 +16,7 @@ namespace {
 constexpr int kRowHeight = 48;
 constexpr int kGap = 12;
 constexpr int kBus = 4;
+constexpr int kPad = 8;  // keeps the 2px strokes off the viewBox edge
 
 struct Box {
     int width = 0;
@@ -206,6 +208,10 @@ Box timer_box(const plc::TimerSink& timer) {
 }
 
 Box counter_box(const plc::CounterSink& counter) {
+    const std::string reset =
+        counter.reset ? plc::format_net_expression(*counter.reset) : std::string();
+    const int width =
+        reset.empty() ? 180 : std::max(180, 150 + static_cast<int>(reset.size()) * 7 + 18);
     std::string body;
     body += line("wire", 0, 30, 10, 30);
     body += "<rect class=\"block\" x=\"10\" y=\"12\" width=\"130\" height=\"36\" rx=\"4\"/>";
@@ -214,10 +220,11 @@ Box counter_box(const plc::CounterSink& counter) {
             std::to_string(counter.preset) + "</text>";
     body += line("wire", 140, 30, 180, 30);
     body += "<text x=\"75\" y=\"58\" text-anchor=\"middle\">" + svg_escape(counter.var) + "</text>";
-    if (counter.reset) {
-        body += "<text x=\"160\" y=\"58\" text-anchor=\"middle\">reset</text>";
+    if (!reset.empty()) {
+        body += "<text x=\"150\" y=\"58\" text-anchor=\"start\">R: " +
+                svg_escape(reset) + "</text>";
     }
-    return {180, 64, body};
+    return {width, 64, body};
 }
 
 Box sink_box(const plc::Rung& rung) {
@@ -239,18 +246,21 @@ std::string ladder_rung_svg(const plc::Rung& rung, const LadderSvgOptions& optio
     const Box sink = sink_box(rung);
 
     const int gap = 26;
-    const int height = std::max(condition.height, sink.height);
-    const int width = condition.width + gap + sink.width;
+    const int content_height = std::max(condition.height, sink.height);
+    const int content_width = condition.width + gap + sink.width;
 
     std::string body;
-    body += translate(0, (height - condition.height) / 2, condition.body);
-    body += translate(condition.width + gap, (height - sink.height) / 2, sink.body);
-    body += line("wire", condition.width, height / 2, condition.width + gap, height / 2);
+    body += translate(0, (content_height - condition.height) / 2, condition.body);
+    body += translate(condition.width + gap, (content_height - sink.height) / 2, sink.body);
+    body += line("wire", condition.width, content_height / 2, condition.width + gap,
+                 content_height / 2);
 
+    const int width = content_width + 2 * kPad;
+    const int height = content_height + 2 * kPad;
     return "<svg class=\"ladder\" xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 " +
            std::to_string(width) + " " + std::to_string(height) + "\" width=\"" +
            std::to_string(width) + "\" height=\"" + std::to_string(height) + "\">" +
-           body + "</svg>";
+           translate(kPad, kPad, body) + "</svg>";
 }
 
 }  // namespace sc::ui
