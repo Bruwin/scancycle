@@ -28,12 +28,14 @@ void print_usage() {
     std::printf(
         "scancycle_ide - Scan Cycle PLC IDE\n"
         "\n"
-        "usage: scancycle_ide [--port=N] [--requests=N] [--program=PATH]\n"
+        "usage: scancycle_ide [--port=N] [--requests=N] [--program=PATH] [--free-play]\n"
         "\n"
-        "  --port=N       loopback port (default 8090)\n"
+        "  --port=N       loopback port (default 8090; Free Play defaults to 8091)\n"
         "  --requests=N   stop after N requests; 0 serves until interrupted\n"
         "  --program=PATH Structured Text, ladder (.ld) or SFC (.sfc) file to load "
-        "(default examples/press_cell.st)\n");
+        "(default examples/press_cell.st)\n"
+        "  --free-play    serve the local no-grade Free Play session; uses the "
+        "press-cell starter\n");
 }
 
 }  // namespace
@@ -43,6 +45,8 @@ int main(int argc, char** argv) {
     long requests = 0;
     std::string program_path = "examples/press_cell.st";
     bool program_given = false;
+    bool port_given = false;
+    bool free_play = false;
 
     for (int i = 1; i < argc; ++i) {
         const std::string arg = argv[i];
@@ -57,6 +61,9 @@ int main(int argc, char** argv) {
                 return 2;
             }
             port = static_cast<unsigned>(value);
+            port_given = true;
+        } else if (arg == "--free-play") {
+            free_play = true;
         } else if (arg.rfind("--requests=", 0) == 0) {
             requests = std::strtol(arg.c_str() + 11, nullptr, 10);
             if (requests < 0) {
@@ -76,14 +83,29 @@ int main(int argc, char** argv) {
         }
     }
 
+    if (free_play && program_given) {
+        std::fprintf(stderr, "ide: --free-play uses examples/press_cell.st; "
+                             "do not pass --program\n");
+        return 2;
+    }
+    if (free_play && !port_given) {
+        port = 8091;
+    }
+
     std::string source = read_file(program_path);
-    if (source.empty() && program_given) {
+    if (source.empty() && (program_given || free_play)) {
         std::fprintf(stderr, "ide: cannot read '%s'\n", program_path.c_str());
         return 1;
     }
     if (source.empty()) {
         std::fprintf(stderr, "ide: no program at '%s'; starting with an empty editor\n",
                      program_path.c_str());
+    }
+
+    sc::app::IdePageOptions page_options;
+    page_options.free_play = free_play;
+    if (free_play) {
+        page_options.starter_source = source;
     }
 
     const bool ladder_program =
@@ -108,7 +130,7 @@ int main(int argc, char** argv) {
     } else {
         ide = std::make_unique<sc::app::IdeSession>(std::move(source));
         router = std::make_unique<sc::net::PortalRouter>(
-            sc::app::make_ide_router(*ide));
+            sc::app::make_ide_router(*ide, page_options));
     }
     sc::net::HttpServer server(*router);
     if (!server.listen(static_cast<sc::u16>(port))) {
@@ -117,8 +139,11 @@ int main(int argc, char** argv) {
     }
 
     const unsigned bound = static_cast<unsigned>(server.port());
-    std::printf("Scan Cycle IDE\n");
+    std::printf("%s\n", free_play ? "Scan Cycle Free Play" : "Scan Cycle IDE");
     std::printf("  http://127.0.0.1:%u/\n", bound);
+    if (free_play) {
+        std::printf("  local free play: no grades, no hardware, no persistence\n");
+    }
     const char* language = "";
     if (ladder_program) {
         language = " (ladder)";

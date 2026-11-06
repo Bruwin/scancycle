@@ -36,6 +36,8 @@ TEST(shell_intro_has_the_start_menu_and_hides_teacher_by_default) {
     CHECK(contains(response.body, "Scan Cycle"));
     CHECK(contains(response.body, "New session"));
     CHECK(contains(response.body, "Load session"));
+    CHECK(contains(response.body, "Free Play"));
+    CHECK(contains(response.body, options.free_play_url));
     CHECK(contains(response.body, "Settings"));
     CHECK(contains(response.body, "viewport-fit=cover"));
     CHECK(contains(response.body, "autofocus"));
@@ -58,6 +60,22 @@ TEST(shell_teacher_mode_reveals_the_portal_entry_and_redirect) {
     const net::Response redirect = get(router, "/teacher");
     CHECK(redirect.status == 303);
     CHECK(redirect.location == options.portal_url);
+}
+
+TEST(shell_free_play_entry_uses_the_configured_url_in_both_modes) {
+    app::ShellOptions options;
+    options.free_play_url = "http://127.0.0.1:9091/free-play";
+
+    const net::PortalRouter student = app::make_shell_router(options);
+    const net::Response student_intro = get(student, "/");
+    CHECK(contains(student_intro.body, options.free_play_url));
+    CHECK(contains(student_intro.body, "Free Play"));
+
+    options.teacher_mode = true;
+    const net::PortalRouter teacher = app::make_shell_router(options);
+    const net::Response teacher_intro = get(teacher, "/");
+    CHECK(contains(teacher_intro.body, options.free_play_url));
+    CHECK(contains(teacher_intro.body, "Free Play"));
 }
 
 TEST(shell_teacher_route_is_not_available_in_student_mode) {

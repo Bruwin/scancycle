@@ -6,7 +6,8 @@
     "node": ">=22"
   },
   "scripts": {
-    "test:browser": "node tests/browser/editor_smoke.mjs build/bin/scancycle_ide"
+    "test:browser": "node tests/browser/editor_smoke.mjs build/bin/scancycle_ide",
+    "test:browser:free-play": "node tests/browser/free_play_smoke.mjs build/bin/scancycle_ide"
   },
   "devDependencies": {
     "playwright": "1.65.0"

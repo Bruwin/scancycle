@@ -43,6 +43,7 @@ std::string shell_topbar(const ShellOptions& options, std::string_view active) {
     bar += "<nav class=\"nav\" aria-label=\"Main navigation\">";
     bar += nav_link("/factory", "Factory", active == "factory");
     bar += nav_link(options.ide_url, "PLC IDE", false);
+    bar += nav_link(options.free_play_url, "Free Play", false);
     if (options.teacher_mode) {
         bar += nav_link(options.portal_url, "Teacher portal", false);
     }
@@ -113,8 +114,15 @@ std::string intro_page(const ShellOptions& options) {
       <span class="menu-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 5h14v14H5z"/><path d="M9 9h6M9 13h6M9 17h3"/></svg></span>
       <span class="menu-text"><strong>Load session</strong><small>Choose a sample cell scenario</small></span>
       <span class="menu-arrow" aria-hidden="true">→</span>
-    </a>
-    <a class="menu-card" href="/settings">
+    </a>)";
+    page += "<a class=\"menu-card\" href=\"";
+    page += net::html_escape(options.free_play_url);
+    page += R"(">
+      <span class="menu-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></span>
+      <span class="menu-text"><strong>Free Play</strong><small>Experiment without grades</small></span>
+      <span class="menu-arrow" aria-hidden="true">→</span>
+    </a>)";
+    page += R"(    <a class="menu-card" href="/settings">
       <span class="menu-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8z"/><path d="m4.9 4.9 2.2 2.2M16.9 16.9l2.2 2.2M4.9 19.1l2.2-2.2M16.9 7.1l2.2-2.2M3 12h3M18 12h3M12 3v3M12 18v3"/></svg></span>
       <span class="menu-text"><strong>Settings</strong><small>Grid, motion and this browser</small></span>
       <span class="menu-arrow" aria-hidden="true">→</span>

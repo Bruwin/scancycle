@@ -150,6 +150,22 @@ the portal URL can reach it. Real authentication and TLS need explicit human
 approval and are not part of this slice. The shell also does not persist PLC
 programs or grade data; the IDE and portal own those.
 
+## Free Play
+
+`scancycle_ide --free-play` starts a separate local IDE process on port 8091. It
+reuses the same `IdeSession` and simulated press cell as the regular IDE, but adds
+a Free Play banner and a Reset route that recompiles `examples/press_cell.st` and
+clears forces. It has no grade routes, no grade log, no real-hardware driver and
+no persistence; closing the process loses the session. The shell links to it
+through `--free-play-url` (default `http://127.0.0.1:8091/`) and does not spawn or
+supervise it. The entry is available in both shell presentation modes; it is not
+a teacher surface.
+
+This is a product-state boundary, not a security sandbox. It runs as the local
+user, reads the bundled starter from the local filesystem, and is loopback-only;
+it is not intended for untrusted remote users. Free Play is post-1.0 work; the
+1.0 release gate remains #42.
+
 ## Simulation
 
 `Plant` owns devices (`Motor`, `Belt`, `PhotoEye`, `Valve`, `StackLight`) and

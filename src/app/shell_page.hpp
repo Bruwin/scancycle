@@ -10,6 +10,7 @@ namespace sc::app {
 
 struct ShellOptions {
     std::string ide_url = "http://127.0.0.1:8090/";
+    std::string free_play_url = "http://127.0.0.1:8091/";
     std::string portal_url = "http://127.0.0.1:8080/";
     // This is a local presentation switch, not an authorization boundary. The
     // portal itself remains loopback-only and unauthenticated.

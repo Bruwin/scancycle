@@ -21,14 +21,24 @@ net::Response see_other(std::string location) {
 
 }  // namespace
 
-net::Response ide_page(const IdeSession& session) {
+net::Response ide_page(const IdeSession& session, const IdePageOptions& options) {
     const Application::WatchSnapshot snapshot = session.snapshot();
     const std::vector<std::string> unbound = session.unbound_devices();
 
-    std::string page = net::page_head("Scan Cycle IDE");
-    page += "<h1>Scan Cycle IDE</h1>";
-    page += "<p class=\"no-print\">Edit Structured Text, compile it, then step the scan "
-            "cycle one scan at a time. The page is local to this machine.</p>";
+    const std::string title = options.free_play ? "Scan Cycle Free Play" : "Scan Cycle IDE";
+    std::string page = net::page_head(title);
+    page += options.free_play ? "<h1>Free Play</h1>" : "<h1>Scan Cycle IDE</h1>";
+    if (options.free_play) {
+        page += "<section class=\"free-play-banner\" data-free-play>";
+        page += "<strong>Free Play</strong><span>Local simulation · no grades · no hardware.</span>";
+        page += "<small>This is a practice session, not a security sandbox. "
+                "Closing the process loses your program.</small></section>";
+        page += "<p class=\"no-print\">Experiment with the press cell: edit, compile, "
+                "step, watch and force. Nothing here is graded or saved.</p>";
+    } else {
+        page += "<p class=\"no-print\">Edit Structured Text, compile it, then step the scan "
+                "cycle one scan at a time. The page is local to this machine.</p>";
+    }
 
     page += "<p>Scan <strong>" + std::to_string(snapshot.scan) + "</strong> · clock <strong>" +
             std::to_string(snapshot.now_ms) + " ms</strong> · ";
@@ -55,6 +65,12 @@ net::Response ide_page(const IdeSession& session) {
                     net::html_escape(diagnostic.message) + "</td></tr>";
         }
         page += "</tbody></table>";
+    }
+
+    if (options.free_play) {
+        page += "<form method=\"post\" action=\"/reset\" class=\"no-print\" "
+                "data-free-play-reset><button type=\"submit\">Reset to starter</button> "
+                "<span>Reloads the starter program and clears forces.</span></form>";
     }
 
     page += "<h2>Program</h2>";
@@ -142,12 +158,20 @@ net::Response ide_page(const IdeSession& session) {
     return response;
 }
 
-net::PortalRouter make_ide_router(IdeSession& session) {
+net::PortalRouter make_ide_router(IdeSession& session, const IdePageOptions& options) {
     net::PortalRouter router;
 
-    router.route(net::HttpMethod::Get, "/", [&session](const net::Request&) {
-        return ide_page(session);
+    router.route(net::HttpMethod::Get, "/", [&session, options](const net::Request&) {
+        return ide_page(session, options);
     });
+
+    if (options.free_play) {
+        router.route(net::HttpMethod::Post, "/reset",
+                     [&session, options](const net::Request&) {
+                         session.compile(options.starter_source);
+                         return see_other("/");
+                     });
+    }
 
     router.route(net::HttpMethod::Get, "/api/health", [](const net::Request&) {
         net::Response response;

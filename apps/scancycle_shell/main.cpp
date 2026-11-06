@@ -20,7 +20,7 @@ int main(int argc, char** argv) {
         } else if (arg == "--help") {
             std::printf(
                 "scancycle_shell [--port=8070] [--teacher] "
-                "[--ide-url=URL] [--portal-url=URL] [--requests=N]\n");
+                "[--ide-url=URL] [--free-play-url=URL] [--portal-url=URL] [--requests=N]\n");
             return 0;
         } else if (arg.rfind("--port=", 0) == 0) {
             char* end = nullptr;
@@ -36,6 +36,12 @@ int main(int argc, char** argv) {
             options.ide_url = arg.substr(10);
             if (options.ide_url.empty()) {
                 std::fprintf(stderr, "shell: --ide-url= needs a URL\n");
+                return 2;
+            }
+        } else if (arg.rfind("--free-play-url=", 0) == 0) {
+            options.free_play_url = arg.substr(16);
+            if (options.free_play_url.empty()) {
+                std::fprintf(stderr, "shell: --free-play-url= needs a URL\n");
                 return 2;
             }
         } else if (arg.rfind("--portal-url=", 0) == 0) {
@@ -64,6 +70,7 @@ int main(int argc, char** argv) {
     std::printf("  http://127.0.0.1:%u/api/factory\n", bound);
     std::printf("  mode: %s\n", options.teacher_mode ? "teacher entry visible" : "student entry hidden");
     std::printf("  IDE: %s\n", options.ide_url.c_str());
+    std::printf("  Free Play: %s\n", options.free_play_url.c_str());
     if (options.teacher_mode) {
         std::printf("  portal: %s\n", options.portal_url.c_str());
     }

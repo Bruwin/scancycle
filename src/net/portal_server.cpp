@@ -106,6 +106,10 @@ std::string page_head(std::string_view title) {
            "pre{background:#f6f6f6;padding:.7rem;border-radius:3px;"
            "white-space:pre-wrap;overflow-wrap:anywhere}"
            ".pass{color:#1a7f37}.fail{color:#b42318}"
+           ".free-play-banner{border:1px solid #d9b25f;background:#fff8e6;"
+           "padding:.75rem 1rem;border-radius:6px;margin:1rem 0}"
+           ".free-play-banner strong,.free-play-banner span,.free-play-banner small{"
+           "display:block}.free-play-banner small{color:#5f4b16;margin-top:.2rem}"
            "</style></head><body><main>";
 }
 
