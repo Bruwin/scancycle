@@ -24,7 +24,11 @@ std::string nav_link(std::string_view href, std::string_view label, bool active)
     }
     link += "\" href=\"";
     link += net::html_escape(href);
-    link += "\">";
+    link += "\"";
+    if (active) {
+        link += " aria-current=\"page\"";
+    }
+    link += ">";
     link += label;
     link += "</a>";
     return link;
@@ -54,7 +58,7 @@ std::string shell_head(const ShellOptions& options, std::string_view title,
     std::string page;
     page.reserve(12000);
     page += "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\">";
-    page += "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">";
+    page += "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1, viewport-fit=cover\">";
     page += "<link rel=\"icon\" href=\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23f3b642'/%3E%3Ctext x='32' y='42' font-size='24' font-family='sans-serif' font-weight='900' text-anchor='middle' fill='%231a1000'%3ESC%3C/text%3E%3C/svg%3E\">";
     page += "<title>";
     page += net::html_escape(title);
@@ -100,7 +104,7 @@ std::string intro_page(const ShellOptions& options) {
     </div>
   </section>
   <nav class="menu" aria-label="Start menu">
-    <a class="menu-card" href="/factory?new=1">
+    <a class="menu-card" href="/factory?new=1" autofocus>
       <span class="menu-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></span>
       <span class="menu-text"><strong>New session</strong><small>Open the press-cell factory</small></span>
       <span class="menu-arrow" aria-hidden="true">→</span>
@@ -184,7 +188,10 @@ std::string sessions_page(const ShellOptions& options) {
       <h1>Choose a session</h1>
       <p class="lede">Sample cells for a quick look. Open the PLC IDE for the editable program.</p>
     </div>
-    <a class="btn primary" href="/factory?new=1">New session</a>
+    <div class="page-actions">
+      <a class="btn ghost" href="/">Back to menu</a>
+      <a class="btn primary" href="/factory?new=1">New session</a>
+    </div>
   </div>
   <div class="session-grid">
     <a class="session-card" href="/factory?focus=press">
@@ -227,11 +234,12 @@ std::string settings_page(const ShellOptions& options) {
       <h1>Settings</h1>
       <p class="lede">Display preferences are stored in this browser only.</p>
     </div>
+    <div class="page-actions"><a class="btn ghost" href="/">Back to menu</a></div>
   </div>
   <section class="settings-card">
     <form id="settings-form">
       <div class="setting-row">
-        <input type="checkbox" id="setting-grid">
+        <input type="checkbox" id="setting-grid" autofocus>
         <label for="setting-grid"><strong>Floor grid</strong><small>Show the 2-unit factory grid under the kits.</small></label>
       </div>
       <div class="setting-row">

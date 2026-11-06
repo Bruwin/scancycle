@@ -37,6 +37,10 @@ TEST(shell_intro_has_the_start_menu_and_hides_teacher_by_default) {
     CHECK(contains(response.body, "New session"));
     CHECK(contains(response.body, "Load session"));
     CHECK(contains(response.body, "Settings"));
+    CHECK(contains(response.body, "viewport-fit=cover"));
+    CHECK(contains(response.body, "autofocus"));
+    CHECK(contains(response.body, "focus-visible"));
+    CHECK(contains(response.body, "env(safe-area-inset-left)"));
     CHECK(!contains(response.body, "Teacher portal"));
     CHECK(!contains(response.body, "Teacher mode"));
 }
@@ -76,6 +80,7 @@ TEST(shell_factory_page_has_the_canvas_and_controls) {
     CHECK(contains(response.body, "Drag to orbit"));
     CHECK(contains(response.body, "Scroll to zoom"));
     CHECK(contains(response.body, "Open PLC IDE"));
+    CHECK(contains(response.body, "aria-current=\"page\""));
 }
 
 TEST(shell_scene_is_built_from_the_procedural_kit_layout) {
@@ -101,12 +106,15 @@ TEST(shell_sessions_and_settings_are_real_local_pages) {
     CHECK(sessions.status == 200);
     CHECK(contains(sessions.body, "Choose a session"));
     CHECK(contains(sessions.body, "/factory?focus=press"));
+    CHECK(contains(sessions.body, "Back to menu"));
 
     const net::Response settings = get(router, "/settings");
     CHECK(settings.status == 200);
     CHECK(contains(settings.body, "settings-form"));
     CHECK(contains(settings.body, "setting-grid"));
     CHECK(contains(settings.body, "setting-motion"));
+    CHECK(contains(settings.body, "autofocus"));
+    CHECK(contains(settings.body, "Back to menu"));
 }
 
 TEST(shell_health_endpoint_reports_the_surface) {
