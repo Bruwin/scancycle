@@ -42,6 +42,7 @@ Portal or Studio 5000 and recognise everything.
 | Vulkan 1.3 renderer: GPU cull, chunk streaming, golden frame (opt-in) | working, verified on lavapipe in CI |
 | Teacher portal: pages, toolbox-enforced grading, printable grade log, live updates | working, tested |
 | PLC IDE: editor, diagnostics, watch, forcing, single-scan step | working, tested (local web surface) |
+| Graphical ladder editor: SVG rungs, click-to-invert, branch and coil edits | working, tested (local web surface) |
 
 ## Build
 
@@ -132,6 +133,10 @@ with, so a broken exercise fails CI instead of failing a classroom.
 # fifty scans is not enough and a hundred and ten is.
 ./build/bin/scancycle_cli ladder examples/interlock.ld --scans=50 --set start_btn=1
 ./build/bin/scancycle_cli ladder examples/interlock.ld --scans=110 --set start_btn=1
+
+# Open the graphical ladder editor on a rung file. Click a contact to invert it;
+# the forms add a branch, change the coil or set a rail, then step the scan.
+./build/bin/scancycle_ide --program=examples/interlock.ld
 
 # Serve the teacher portal on loopback; graded attempts go to the named log.
 # The printable log also listens for live updates on the WebSocket port.
