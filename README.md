@@ -42,6 +42,7 @@ Portal or Studio 5000 and recognise everything.
 | Vulkan 1.3 renderer: GPU cull, chunk streaming, golden frame (opt-in) | working, verified on lavapipe in CI |
 | Teacher portal: pages, toolbox-enforced grading, printable grade log, live updates | working, tested |
 | PLC IDE: editor, diagnostics, watch, forcing, single-scan step | working, tested (local web surface) |
+| 1.0 shell: intro/menu, teacher-gated portal entry, interactive factory canvas | working, tested (local web surface; shell preview, not the Vulkan renderer) |
 | Graphical LD/FBD editor: SVG rungs or blocks, click-to-invert contacts, click-to-swap junctions, branch and coil edits | working, tested (local web surface) |
 | SFC chart page: step drawing with the active step marked | working, tested (local web surface) |
 
@@ -242,6 +243,14 @@ curl -s -X POST -d "lesson=press-batch&student=Ada" http://127.0.0.1:8080/grade
 ./build/bin/scancycle_ide --program=examples/press_cell.st
 # then open http://127.0.0.1:8090/
 
+# Open the 1.0 shell. Student mode hides the teacher portal entry.
+./build/bin/scancycle_shell --port=8070
+# then open http://127.0.0.1:8070/
+
+# A teacher machine can reveal the portal entry. This is a launch mode, not
+# authentication; the portal itself is still loopback-only and unauthenticated.
+./build/bin/scancycle_shell --port=8070 --teacher
+
 # Run every lesson's reference program against its cell and grade it
 ./build/bin/scancycle_cli lesson
 ```
@@ -260,8 +269,8 @@ src/assets    procedural materials, machine kits and scene placement
 src/ui        Structured Text editor model (buffer, diagnostics, undo)
 src/lesson    lesson data model, rubric, grader
 src/net       teacher portal request routing and live WebSocket transport
-src/app       application composition root, headless session and IDE routes
-apps/         scancycle_cli, scancycle_server, scancycle_ide
+src/app       application composition root, headless session, IDE routes and 1.0 shell pages
+apps/         scancycle_cli, scancycle_server, scancycle_ide, scancycle_shell
 tests/        headless test suite (ctest)
 docs/         architecture and project conventions
 ```
