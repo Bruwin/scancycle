@@ -38,7 +38,7 @@ completes the curriculum should recognise TIA Portal or Studio 5000 on sight.
 | `src/sim` | plant devices, `Plant` tick, process image | 1 |
 | `src/plc` | IEC 61131-3 front ends (ST, LD/FBD, IL), bytecode, VM, standard FBs | 1 |
 | `src/io` | tag database, `PlcDriver`, in-house Modbus/TCP driver and slave, commissioning | 2 |
-| `src/assets` | procedural materials and machine kits | 2 |
+| `src/assets` | procedural materials, machine kits, scene placement | 2 |
 | `src/ui` | Structured Text editor model, ladder SVG | 2 |
 | `src/lesson` | lesson schema, rubric, grader | 2 |
 | `src/net` | teacher portal routing | 3 |
@@ -124,8 +124,9 @@ truth-table column.
 * Working hardware floor: a card with Vulkan 1.3 and dynamic rendering. The
   reference machine is a Radeon RX 580 on an i7-4960X, which also fixes the CPU
   baseline at AVX without AVX2 or FMA3.
-* **Static world is voxels; machines are instanced procedural meshes.** A moving
-  conveyor or robot arm must never be voxelised.
+* **Static props are voxels; moving mechanisms are instanced procedural meshes.**
+  The industrial kit catalogue is stamped into the static world; a moving conveyor
+  or robot arm must never be voxelised.
 
 ## Simulation
 
@@ -284,6 +285,9 @@ light) plus safety fence, pallet rack, pipe run, barrel and pallet load. A class
 fixes the silhouette; the seed varies proportions and optional fittings. Materials
 are triplanar and procedural in-shader, so the repository holds no texture files.
 Readability beats variety — a photo-eye must be identifiable at 20 metres.
+`assets/kit_scene` stamps the catalogue into a fixed layout around the origin, and
+`scancycle_viewer` calls it after `generate_plant`; the existing mesher and
+streamer draw the production cell without a separate model or draw path.
 
 ## Performance budget
 
@@ -327,7 +331,8 @@ drives the whole cell)*
   charts and lowers them to rungs with one active step per scan, and
   `--program=chart.sfc` serves the chart page with the active step marked; the
   asset pass widens the material palette and gives the kit grammar a ten-class
-  industrial catalogue, and examples/ gains a counter rung file and a press chart)*
+  industrial catalogue; the default viewer stamps that catalogue into its plant,
+  and examples/ gains a counter rung file and a press chart)*
 
 ## Deferred
 

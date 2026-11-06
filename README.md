@@ -36,7 +36,7 @@ Portal or Studio 5000 and recognise everything.
 | DF1 codec (DLE, BCC/CRC-16), PCCC typed read/write, loopback data table | working, tested (no hardware) |
 | DF1 serial link (termios, pty tests), MicroLogix 1000 profile, bring-up CLI | working, tested (no hardware) |
 | libplctag driver (CIP/S7 booleans), opt-in build, fake-backend tests | working, tested (no hardware) |
-| Procedural materials and parametric machine kits | working, tested |
+| Procedural materials, industrial kits and default-scene placement | working, tested |
 | Editor model, lesson schema, grader, portal routing | working, tested |
 | Composition root (plant + PLC + I/O in one headless session) | working, tested |
 | Vulkan 1.3 renderer: GPU cull, chunk streaming, golden frame (opt-in) | working, verified on lavapipe in CI |
@@ -97,7 +97,7 @@ how fast the machine happened to run.
 
 
 That needs a Vulkan 1.3 driver and SDL3; CMake uses an installed SDL3 if it
-finds one and otherwise fetches the pinned release. The viewer generates a plant,
+finds one and otherwise fetches the pinned release. The viewer generates a plant with a ten-class industrial kit cell,
 streams its chunks onto the GPU as the camera moves, and orbits it; `--frames`
 makes it exit on its own, which is how CI runs it on a machine with no display.
 
@@ -242,7 +242,7 @@ src/world     voxel chunks, greedy mesher, world container, world generation
 src/sim       plant devices, factory simulation tick
 src/plc       IEC 61131-3 front ends (ST, ladder/FBD, IL) -> bytecode -> VM
 src/io        tag database, PLC driver interface, Modbus/TCP and DF1 drivers, libplctag
-src/assets    procedural material library and machine kit generator
+src/assets    procedural materials, machine kits and scene placement
 src/ui        Structured Text editor model (buffer, diagnostics, undo)
 src/lesson    lesson data model, rubric, grader
 src/net       teacher portal request routing and live WebSocket transport
