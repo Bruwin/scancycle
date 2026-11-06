@@ -127,6 +127,7 @@ add_library(sc_assets
     src/assets/material_library.cpp
     src/assets/kit_generator.cpp
     src/assets/kit_grammar.cpp
+    src/assets/kit_scene.cpp
 )
 target_link_libraries(sc_assets PUBLIC sc_core sc_world PRIVATE sc_warnings)
 
@@ -216,7 +217,7 @@ if(SC_ENABLE_VULKAN)
                                           PRIVATE sc_warnings)
 
     add_executable(scancycle_viewer apps/scancycle_viewer/main.cpp)
-    target_link_libraries(scancycle_viewer PRIVATE sc_render_vk sc_world sc_warnings)
+    target_link_libraries(scancycle_viewer PRIVATE sc_render_vk sc_world sc_assets sc_warnings)
 endif()
 
 if(SC_BUILD_TESTS)
@@ -236,6 +237,7 @@ if(SC_BUILD_TESTS)
         tests/test_sim.cpp
         tests/test_io.cpp
         tests/test_assets.cpp
+        tests/test_kit_scene.cpp
         tests/test_tools.cpp
         tests/test_ide.cpp
         tests/test_lesson.cpp

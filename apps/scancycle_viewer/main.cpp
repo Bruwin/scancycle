@@ -1,6 +1,7 @@
 // The windowed viewer: one SDL3 window, one Vulkan device, one frame loop.
 // It exists so the renderer can be exercised on real hardware, which is the one
 // thing the GPU-free test suite cannot do.
+#include "assets/kit_scene.hpp"
 #include "core/image.hpp"
 #include "render/camera.hpp"
 #include "platform/platform.hpp"
@@ -85,7 +86,9 @@ int main(int argc, char** argv) {
     params.chunks_z = 4;
     params.pillar_count = 40;
     sc::generate_plant(world, params);
+    sc::place_factory_kits(world, params.floor_y);
     std::printf("chunks  : %zu in the world\n", world.chunk_count());
+    std::printf("kits    : %zu industrial classes\n", sc::kFactoryKitLayout.size());
 
     sc::VoxelRenderer renderer(*device);
 
