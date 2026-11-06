@@ -128,7 +128,12 @@ add_library(sc_assets
 )
 target_link_libraries(sc_assets PUBLIC sc_core sc_world PRIVATE sc_warnings)
 
-add_library(sc_ui src/ui/editor_model.cpp src/ui/ladder_svg.cpp)
+add_library(sc_ui
+    src/ui/editor_model.cpp
+    src/ui/ladder_svg.cpp
+    src/ui/fbd_svg.cpp
+    src/ui/svg_text.cpp
+)
 target_link_libraries(sc_ui PUBLIC sc_core sc_plc PRIVATE sc_warnings)
 
 add_library(sc_lesson
@@ -230,6 +235,7 @@ if(SC_BUILD_TESTS)
         tests/test_libplctag.cpp
         tests/test_app.cpp
         tests/test_ladder_editor.cpp
+        tests/test_fbd_view.cpp
         tests/test_df1.cpp
         tests/test_df1_serial.cpp
         tests/test_df1_tool.cpp

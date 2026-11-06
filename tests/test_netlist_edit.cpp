@@ -161,3 +161,19 @@ TEST(a_path_that_does_not_resolve_is_refused) {
     CHECK(!set_contact(rung, {0}, "b").ok);
     CHECK(!remove_node(rung, {0, 1}).ok);
 }
+
+TEST(swapping_a_junction_flips_its_meaning) {
+    Rung rung = rung_with("a");
+    CHECK(add_parallel(rung, {}, "b", false).ok);
+    CHECK(root(rung)->kind == NetKind::Parallel);
+
+    CHECK(toggle_junction(rung, {}).ok);
+    CHECK(root(rung)->kind == NetKind::Series);
+    CHECK(column(std::move(rung), {"a", "b"}) == "0001");
+}
+
+TEST(a_contact_has_no_junction_to_swap) {
+    Rung rung = rung_with("a");
+    CHECK(!toggle_junction(rung, {}).ok);
+    CHECK(root(rung)->kind == NetKind::Contact);
+}

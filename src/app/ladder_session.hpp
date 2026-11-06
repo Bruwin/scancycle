@@ -15,6 +15,11 @@
 
 namespace sc::app {
 
+// Which drawing the page shows. The chart, the text and every edit are shared,
+// so the choice is presentation state the session carries for its page rather
+// than something that belongs to either renderer.
+enum class ChartView : u8 { Ladder, Fbd };
+
 class LadderSession {
 public:
     explicit LadderSession(std::string source = {});
@@ -26,6 +31,8 @@ public:
     const std::string& text() const { return text_; }
     const plc::LadderSource& source() const { return source_; }
     bool parsed() const { return parsed_; }
+    ChartView view() const { return view_; }
+    void set_view(ChartView view) { view_ = view; }
     const plc::Diagnostics& diagnostics() const { return diagnostics_; }
     const std::string& error() const { return error_; }
 
@@ -53,6 +60,7 @@ private:
     std::unique_ptr<Application> application_;
     std::string error_;
     bool parsed_ = false;
+    ChartView view_ = ChartView::Ladder;
 };
 
 }  // namespace sc::app

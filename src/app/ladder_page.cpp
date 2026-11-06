@@ -1,6 +1,7 @@
 #include "app/ladder_page.hpp"
 
 #include "net/http.hpp"
+#include "ui/fbd_svg.hpp"
 #include "ui/ladder_svg.hpp"
 
 #include <cstddef>
@@ -85,8 +86,8 @@ net::Response ladder_page(const LadderSession& session) {
 
     std::string page = net::page_head("Scan Cycle ladder");
     page += "<style>"
-            "svg.ladder{background:#fff;border:1px solid #ccc;max-width:100%;height:auto;"
-            "margin:.4rem 0}"
+            "svg.ladder,svg.fbd{background:#fff;border:1px solid #ccc;max-width:100%;"
+            "height:auto;margin:.4rem 0}"
             "svg.ladder .wire{stroke:#333;stroke-width:2;fill:none}"
             "svg.ladder .bar{stroke:#111;stroke-width:3}"
             "svg.ladder .slash{stroke:#b00;stroke-width:2}"
@@ -94,13 +95,25 @@ net::Response ladder_page(const LadderSession& session) {
             "svg.ladder .block{fill:#f5f5f5;stroke:#333;stroke-width:2}"
             "svg.ladder text{font:11px monospace;fill:#111}"
             "svg.ladder a:hover .bar{stroke:#06c}"
+            "svg.fbd .wire{stroke:#333;stroke-width:2;fill:none}"
+            "svg.fbd .block{fill:#fff;stroke:#333;stroke-width:2}"
+            "svg.fbd .neg{fill:#fff;stroke:#b00;stroke-width:2}"
+            "svg.fbd text{font:11px monospace;fill:#111}"
+            "svg.fbd a:hover .block{stroke:#06c}"
             ".rung{border-top:1px solid #ddd;padding:.4rem 0}"
             ".tools form{display:inline-flex;gap:.25rem;margin:.2rem .6rem .2rem 0}"
             "</style>";
     page += "<h1>Scan Cycle ladder</h1>";
-    page += "<p class=\"no-print\">Click a contact to invert it. Use a form to add a "
-            "branch, change the coil, or set a rail. The page is local to this machine."
-            "</p>";
+    page += "<p class=\"no-print\">Click a contact to invert it, or a junction to "
+            "swap AND for OR. Use a form to add a branch, change the coil, or set a "
+            "rail. The page is local to this machine.</p>";
+
+    const bool fbd = session.view() == ChartView::Fbd;
+    page += "<p class=\"views no-print\">View: ";
+    page += fbd ? "<strong>FBD</strong>" : "<a href=\"/view?mode=fbd\">FBD</a>";
+    page += " · ";
+    page += fbd ? "<a href=\"/view?mode=ladder\">ladder</a>" : "<strong>ladder</strong>";
+    page += "</p>";
 
     page += "<p>Scan <strong>" + std::to_string(snapshot.scan) + "</strong> · ";
     if (!session.parsed()) {
@@ -135,7 +148,11 @@ net::Response ladder_page(const LadderSession& session) {
         for (std::size_t i = 0; i < session.source().rungs.size(); ++i) {
             const std::string rung = std::to_string(i);
             page += "<section class=\"rung\"><h3>Rung " + std::to_string(i + 1) + "</h3>";
-            page += ui::ladder_rung_svg(session.source().rungs[i], {i, true});
+            if (fbd) {
+                page += ui::fbd_rung_svg(session.source().rungs[i], {i, true});
+            } else {
+                page += ui::ladder_rung_svg(session.source().rungs[i], {i, true});
+            }
             page += "<div class=\"tools no-print\">";
             page += "<a href=\"/rail?rung=" + rung + "&value=1\">always true</a> ";
             page += "<a href=\"/rail?rung=" + rung + "&value=0\">always false</a> ";
@@ -243,6 +260,34 @@ net::PortalRouter make_ladder_router(LadderSession& session) {
         }
         if (!session.edit(rung, [&](plc::Rung& one) {
                 return plc::toggle_negated(one, path);
+            })) {
+            return bad_request(session.error());
+        }
+        return see_other("/");
+    });
+
+    router.route(net::HttpMethod::Get, "/view", [&session](const net::Request& request) {
+        const std::string mode = net::form_field(request.query, "mode");
+        if (mode == "fbd") {
+            session.set_view(ChartView::Fbd);
+        } else if (mode == "ladder") {
+            session.set_view(ChartView::Ladder);
+        } else {
+            return bad_request("mode must be ladder or fbd");
+        }
+        return see_other("/");
+    });
+
+    router.route(net::HttpMethod::Get, "/swap", [&session](const net::Request& request) {
+        const std::size_t rung =
+            parse_index(net::form_field(request.query, "rung"), kMissing);
+        plc::NetPath path;
+        if (rung == kMissing ||
+            !parse_path(net::form_field(request.query, "path"), path)) {
+            return bad_request("bad rung or path");
+        }
+        if (!session.edit(rung, [&](plc::Rung& one) {
+                return plc::toggle_junction(one, path);
             })) {
             return bad_request(session.error());
         }

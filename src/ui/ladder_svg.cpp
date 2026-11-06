@@ -1,6 +1,7 @@
 #include "ui/ladder_svg.hpp"
 
 #include "plc/netlist_edit.hpp"
+#include "ui/svg_text.hpp"
 
 #include <algorithm>
 #include <cstddef>
@@ -21,29 +22,6 @@ struct Box {
     std::string body;
 };
 
-std::string escape(std::string_view text) {
-    std::string out;
-    for (const char c : text) {
-        switch (c) {
-            case '&':
-                out += "&amp;";
-                break;
-            case '<':
-                out += "&lt;";
-                break;
-            case '>':
-                out += "&gt;";
-                break;
-            case '"':
-                out += "&quot;";
-                break;
-            default:
-                out.push_back(c);
-        }
-    }
-    return out;
-}
-
 std::string line(const char* css, int x1, int y1, int x2, int y2) {
     return "<line class=\"" + std::string(css) + "\" x1=\"" + std::to_string(x1) +
            "\" y1=\"" + std::to_string(y1) + "\" x2=\"" + std::to_string(x2) +
@@ -53,27 +31,6 @@ std::string line(const char* css, int x1, int y1, int x2, int y2) {
 std::string translate(int x, int y, const std::string& body) {
     return "<g transform=\"translate(" + std::to_string(x) + "," + std::to_string(y) +
            ")\">" + body + "</g>";
-}
-
-std::string path_text(const plc::NetPath& path) {
-    std::string text;
-    for (std::size_t i = 0; i < path.size(); ++i) {
-        if (i != 0) {
-            text.push_back('.');
-        }
-        text += std::to_string(path[i]);
-    }
-    return text;
-}
-
-std::string duration_text(i64 milliseconds) {
-    if (milliseconds > 0 && milliseconds % 60'000 == 0) {
-        return std::to_string(milliseconds / 60'000) + "m";
-    }
-    if (milliseconds > 0 && milliseconds % 1'000 == 0) {
-        return std::to_string(milliseconds / 1'000) + "s";
-    }
-    return std::to_string(milliseconds) + "ms";
 }
 
 Box rail_box(const char* label) {
@@ -94,10 +51,10 @@ Box contact_box(const plc::NetNode& node, const plc::NetPath& path, std::size_t 
     if (node.negated) {
         body += line("slash", 18, 34, 54, 14);
     }
-    body += "<text x=\"36\" y=\"10\" text-anchor=\"middle\">" + escape(node.var) + "</text>";
+    body += "<text x=\"36\" y=\"10\" text-anchor=\"middle\">" + svg_escape(node.var) + "</text>";
     if (clickable) {
         body = "<a href=\"/toggle?rung=" + std::to_string(rung) + "&amp;path=" +
-               path_text(path) + "\">" + body + "</a>";
+               svg_path_text(path) + "\">" + body + "</a>";
     }
     return {72, kRowHeight, body};
 }
@@ -203,7 +160,7 @@ Box coil_box(const plc::Coil& coil) {
     if (coil.negated) {
         body += line("slash", 20, 34, 44, 14);
     }
-    body += "<text x=\"32\" y=\"10\" text-anchor=\"middle\">" + escape(coil.var) + "</text>";
+    body += "<text x=\"32\" y=\"10\" text-anchor=\"middle\">" + svg_escape(coil.var) + "</text>";
     return {72, kRowHeight, body};
 }
 
@@ -242,9 +199,9 @@ Box timer_box(const plc::TimerSink& timer) {
     body += "<rect class=\"block\" x=\"10\" y=\"12\" width=\"100\" height=\"36\" rx=\"4\"/>";
     body += "<text x=\"60\" y=\"34\" text-anchor=\"middle\">" +
             std::string(timer.off_delay ? "TOF " : "TON ") +
-            duration_text(timer.preset_ms) + "</text>";
+            duration_label(timer.preset_ms) + "</text>";
     body += line("wire", 110, 30, 150, 30);
-    body += "<text x=\"60\" y=\"58\" text-anchor=\"middle\">" + escape(timer.var) + "</text>";
+    body += "<text x=\"60\" y=\"58\" text-anchor=\"middle\">" + svg_escape(timer.var) + "</text>";
     return {150, 64, body};
 }
 
@@ -256,7 +213,7 @@ Box counter_box(const plc::CounterSink& counter) {
             std::string(counter.down ? "CTD " : "CTU ") +
             std::to_string(counter.preset) + "</text>";
     body += line("wire", 140, 30, 180, 30);
-    body += "<text x=\"75\" y=\"58\" text-anchor=\"middle\">" + escape(counter.var) + "</text>";
+    body += "<text x=\"75\" y=\"58\" text-anchor=\"middle\">" + svg_escape(counter.var) + "</text>";
     if (counter.reset) {
         body += "<text x=\"160\" y=\"58\" text-anchor=\"middle\">reset</text>";
     }
