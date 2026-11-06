@@ -38,6 +38,25 @@ jobs:
       - name: Test
         run: ctest --test-dir build --output-on-failure -C Debug
 
+      - name: Set up Node for the browser smoke test
+        if: runner.os == 'Linux'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install browser smoke test dependencies
+        if: runner.os == 'Linux'
+        run: npm ci
+
+      - name: Install Chromium for the browser smoke test
+        if: runner.os == 'Linux'
+        run: npx playwright install --with-deps chromium
+
+      - name: Browser smoke test
+        if: runner.os == 'Linux'
+        run: node tests/browser/editor_smoke.mjs build/bin/scancycle_ide
+
   # The matrix above builds only the headless half, which left the renderer with no
   # automated execution at all. This job runs it for real against Mesa's lavapipe
   # software device, under Xvfb because SDL3 needs a surface to create.

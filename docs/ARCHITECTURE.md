@@ -207,6 +207,10 @@ Rendering dependencies, pulled in only when `SC_ENABLE_VULKAN=ON`:
 The headless half keeps building with no GPU, no display and no SDL, which is
 what lets CI stay honest on machines that have none of them.
 
+The browser smoke test is test-only tooling: Playwright 1.65.0 (Apache-2.0)
+drives its managed Chromium against the built editor on Linux CI. Neither is
+linked into the shipping binaries or required by the CMake build.
+
 What LGPL-3.0 actually obliges: a component linked from LGPL code may be linked
 dynamically, or statically as long as the objects needed to relink the binary
 accompany it, and modifications to that component stay LGPL. Permissive
