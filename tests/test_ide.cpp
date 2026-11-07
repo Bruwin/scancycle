@@ -175,3 +175,75 @@ TEST(ide_page_shows_compile_diagnostics) {
     CHECK(page.body.find("Diagnostics") != std::string::npos);
     CHECK(page.body.find("not compiled") != std::string::npos);
 }
+
+TEST(ide_page_has_no_free_play_banner_by_default) {
+    app::IdeSession session(kIdeProgram);
+    const net::Response page = app::ide_page(session);
+
+    CHECK(page.body.find("Scan Cycle IDE") != std::string::npos);
+    CHECK(page.body.find("Free Play") == std::string::npos);
+    CHECK(page.body.find("data-free-play") == std::string::npos);
+}
+
+TEST(ide_free_play_page_shows_banner_and_reset) {
+    app::IdeSession session(kIdeProgram);
+    app::IdePageOptions options;
+    options.free_play = true;
+    options.starter_source = kIdeProgram;
+
+    const net::Response page = app::ide_page(session, options);
+
+    CHECK(page.status == 200);
+    CHECK(page.body.find("Scan Cycle Free Play") != std::string::npos);
+    CHECK(page.body.find("data-free-play") != std::string::npos);
+    CHECK(page.body.find("no grades") != std::string::npos);
+    CHECK(page.body.find("not a security sandbox") != std::string::npos);
+    CHECK(page.body.find("Reset to starter") != std::string::npos);
+    CHECK(page.body.find("data-free-play-reset") != std::string::npos);
+    CHECK(page.body.find("viewport-fit=cover") != std::string::npos);
+    CHECK(page.body.find("env(safe-area-inset-left)") != std::string::npos);
+    CHECK(page.body.find("focus-visible") != std::string::npos);
+    CHECK(page.body.find("for=\"program-source\"") != std::string::npos);
+    CHECK(page.body.find("id=\"program-source\"") != std::string::npos);
+    CHECK(page.body.find("table-scroll") != std::string::npos);
+}
+
+TEST(ide_free_play_reset_restores_the_starter_and_clears_forces) {
+    app::IdeSession session(kIdeProgram);
+    app::IdePageOptions options;
+    options.free_play = true;
+    options.starter_source = kIdeProgram;
+    net::PortalRouter router = app::make_ide_router(session, options);
+
+    net::Request step;
+    step.method = net::HttpMethod::Post;
+    step.path = "/step";
+    CHECK(router.dispatch(step).status == 303);
+    CHECK(session.snapshot().scan == 1);
+    CHECK(session.set_force("run_light", false));
+
+    net::Request reset;
+    reset.method = net::HttpMethod::Post;
+    reset.path = "/reset";
+    const net::Response response = router.dispatch(reset);
+
+    CHECK(response.status == 303);
+    CHECK(response.location == "/");
+    CHECK(session.snapshot().scan == 0);
+    CHECK(session.snapshot().forces.empty());
+    CHECK(session.source() == kIdeProgram);
+    CHECK(session.compiled());
+}
+
+TEST(ide_free_play_router_has_no_grade_route) {
+    app::IdeSession session(kIdeProgram);
+    app::IdePageOptions options;
+    options.free_play = true;
+    options.starter_source = kIdeProgram;
+    const net::PortalRouter router = app::make_ide_router(session, options);
+
+    net::Request grade;
+    grade.method = net::HttpMethod::Get;
+    grade.path = "/grade";
+    CHECK(router.dispatch(grade).status == 404);
+}

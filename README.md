@@ -42,6 +42,7 @@ Portal or Studio 5000 and recognise everything.
 | Vulkan 1.3 renderer: GPU cull, chunk streaming, golden frame (opt-in) | working, verified on lavapipe in CI |
 | Teacher portal: pages, toolbox-enforced grading, printable grade log, live updates | working, tested |
 | PLC IDE: editor, diagnostics, watch, forcing, single-scan step | working, tested (local web surface) |
+| Free Play: separate local IDE session with a starter, banner and reset; no grades, hardware or persistence | working, tested (local web surface; not a security sandbox) |
 | 1.0 shell: intro/menu, teacher-gated portal entry, interactive factory canvas | working, tested (local web surface; shell preview, not the Vulkan renderer) |
 | Graphical LD/FBD editor: SVG rungs or blocks, click-to-invert contacts, click-to-swap junctions, branch and coil edits | working, tested (local web surface) |
 | SFC chart page: step drawing with the active step marked | working, tested (local web surface) |
@@ -130,6 +131,7 @@ The optional browser smoke test drives the built editor in headless Chromium:
 npm ci
 npx playwright install chromium
 node tests/browser/editor_smoke.mjs build/bin/scancycle_ide
+node tests/browser/free_play_smoke.mjs build/bin/scancycle_ide
 ```
 
 It requires Node 22 and is run by the Linux CI job.
@@ -243,7 +245,13 @@ curl -s -X POST -d "lesson=press-batch&student=Ada" http://127.0.0.1:8080/grade
 ./build/bin/scancycle_ide --program=examples/press_cell.st
 # then open http://127.0.0.1:8090/
 
-# Open the 1.0 shell. Student mode hides the teacher portal entry.
+# Open Free Play: a separate local IDE process with no grades, hardware or
+# persistence. It starts from examples/press_cell.st and defaults to port 8091.
+./build/bin/scancycle_ide --free-play
+# then open http://127.0.0.1:8091/
+
+# Open the 1.0 shell. Student mode hides the teacher portal entry, and the
+# Free Play card links to the URL below.
 ./build/bin/scancycle_shell --port=8070
 # then open http://127.0.0.1:8070/
 

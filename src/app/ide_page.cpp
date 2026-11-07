@@ -21,14 +21,24 @@ net::Response see_other(std::string location) {
 
 }  // namespace
 
-net::Response ide_page(const IdeSession& session) {
+net::Response ide_page(const IdeSession& session, const IdePageOptions& options) {
     const Application::WatchSnapshot snapshot = session.snapshot();
     const std::vector<std::string> unbound = session.unbound_devices();
 
-    std::string page = net::page_head("Scan Cycle IDE");
-    page += "<h1>Scan Cycle IDE</h1>";
-    page += "<p class=\"no-print\">Edit Structured Text, compile it, then step the scan "
-            "cycle one scan at a time. The page is local to this machine.</p>";
+    const std::string title = options.free_play ? "Scan Cycle Free Play" : "Scan Cycle IDE";
+    std::string page = net::page_head(title);
+    page += options.free_play ? "<h1>Free Play</h1>" : "<h1>Scan Cycle IDE</h1>";
+    if (options.free_play) {
+        page += "<section class=\"free-play-banner\" data-free-play>";
+        page += "<strong>Free Play</strong><span>Local simulation · no grades · no hardware.</span>";
+        page += "<small>This is a practice session, not a security sandbox. "
+                "Closing the process loses your program.</small></section>";
+        page += "<p class=\"no-print\">Experiment with the press cell: edit, compile, "
+                "step, watch and force. Nothing here is graded or saved.</p>";
+    } else {
+        page += "<p class=\"no-print\">Edit Structured Text, compile it, then step the scan "
+                "cycle one scan at a time. The page is local to this machine.</p>";
+    }
 
     page += "<p>Scan <strong>" + std::to_string(snapshot.scan) + "</strong> · clock <strong>" +
             std::to_string(snapshot.now_ms) + " ms</strong> · ";
@@ -47,19 +57,27 @@ net::Response ide_page(const IdeSession& session) {
     }
 
     if (!session.diagnostics().empty()) {
-        page += "<h2>Diagnostics</h2><table><thead><tr><th>Line</th><th>Column</th>"
-                "<th>Message</th></tr></thead><tbody>";
+        page += "<h2>Diagnostics</h2><div class=\"table-scroll\"><table><thead><tr>"
+                "<th>Line</th><th>Column</th><th>Message</th></tr></thead><tbody>";
         for (const plc::Diagnostic& diagnostic : session.diagnostics()) {
             page += "<tr><td>" + std::to_string(diagnostic.line) + "</td><td>" +
                     std::to_string(diagnostic.column) + "</td><td>" +
                     net::html_escape(diagnostic.message) + "</td></tr>";
         }
-        page += "</tbody></table>";
+        page += "</tbody></table></div>";
+    }
+
+    if (options.free_play) {
+        page += "<form method=\"post\" action=\"/reset\" class=\"no-print\" "
+                "data-free-play-reset><button type=\"submit\">Reset to starter</button> "
+                "<span>Reloads the starter program and clears forces.</span></form>";
     }
 
     page += "<h2>Program</h2>";
     page += "<form method=\"post\" action=\"/apply\">"
-            "<textarea name=\"source\" rows=\"24\" wrap=\"off\" spellcheck=\"false\">";
+            "<label class=\"sr-only\" for=\"program-source\">Program source</label>"
+            "<textarea id=\"program-source\" name=\"source\" rows=\"24\" wrap=\"off\" "
+            "spellcheck=\"false\">";
     page += net::html_escape(session.source());
     page += "</textarea><p><button type=\"submit\">Compile &amp; load</button> "
             "<span class=\"no-print\">Replaces the running program and resets the scan "
@@ -78,7 +96,8 @@ net::Response ide_page(const IdeSession& session) {
     } else if (snapshot.tags.empty()) {
         page += "<p>This program declares no watchable variables.</p>";
     } else {
-        page += "<table><thead><tr><th>Tag</th><th>Type</th><th>Value</th><th>Forced</th>"
+        page += "<div class=\"table-scroll\"><table aria-label=\"Watch variables\">"
+                "<thead><tr><th>Tag</th><th>Type</th><th>Value</th><th>Forced</th>"
                 "<th class=\"no-print\">Actions</th></tr></thead><tbody>";
         for (const Application::Watch& tag : snapshot.tags) {
             page += "<tr><td><code>" + net::html_escape(tag.name) + "</code></td><td>";
@@ -117,7 +136,7 @@ net::Response ide_page(const IdeSession& session) {
             }
             page += "</td></tr>";
         }
-        page += "</tbody></table>";
+        page += "</tbody></table></div>";
     }
 
     page += "<p class=\"no-print\">Only tags bound to plant I/O can be forced; internal "
@@ -142,12 +161,20 @@ net::Response ide_page(const IdeSession& session) {
     return response;
 }
 
-net::PortalRouter make_ide_router(IdeSession& session) {
+net::PortalRouter make_ide_router(IdeSession& session, const IdePageOptions& options) {
     net::PortalRouter router;
 
-    router.route(net::HttpMethod::Get, "/", [&session](const net::Request&) {
-        return ide_page(session);
+    router.route(net::HttpMethod::Get, "/", [&session, options](const net::Request&) {
+        return ide_page(session, options);
     });
+
+    if (options.free_play) {
+        router.route(net::HttpMethod::Post, "/reset",
+                     [&session, options](const net::Request&) {
+                         session.compile(options.starter_source);
+                         return see_other("/");
+                     });
+    }
 
     router.route(net::HttpMethod::Get, "/api/health", [](const net::Request&) {
         net::Response response;
