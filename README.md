@@ -113,7 +113,8 @@ on `PATH`.
 CMAKE=/path/to/cmake tools/setup_lavapipe.sh
 ```
 
-The first run downloads about 32 MB of packages. On a host without
+Pass `--setup-only` to stop after extraction and validation without building. The
+first run downloads about 32 MB of packages. On a host without
 `/usr/bin/xkbcomp`, the script starts Xvfb in a private user namespace with the
 prefixed `xkbcomp`, so the local sysroot remains self-contained.
 

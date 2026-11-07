@@ -7,6 +7,7 @@
 #
 # Usage:
 #   tools/setup_lavapipe.sh
+#   tools/setup_lavapipe.sh --setup-only
 #   CMAKE=/path/to/cmake tools/setup_lavapipe.sh
 #
 # Optional environment variables:
@@ -33,6 +34,13 @@ fail() {
     printf 'lavapipe: %s\n' "$*" >&2
     exit 1
 }
+
+setup_only=0
+if [ "${1:-}" = "--setup-only" ]; then
+    setup_only=1
+    shift
+fi
+[ "$#" -eq 0 ] || fail "unknown argument: $*"
 
 command -v apt-get >/dev/null 2>&1 || fail 'apt-get is required'
 command -v dpkg-deb >/dev/null 2>&1 || fail 'dpkg-deb is required'
@@ -100,6 +108,11 @@ compgen -G "$prefix/usr/share/vulkan/explicit_layer.d/*khronos_validation*.json"
     || fail 'the Khronos validation layer was not extracted'
 [ -x "$prefix/usr/bin/Xvfb" ] || fail 'Xvfb was not extracted'
 [ -x "$prefix/usr/bin/xkbcomp" ] || fail 'xkbcomp was not extracted'
+
+if [ "$setup_only" -eq 1 ]; then
+    printf 'lavapipe: setup complete\n'
+    exit 0
+fi
 
 export PATH="$prefix/usr/bin:$PATH"
 export LD_LIBRARY_PATH="$prefix/usr/lib/x86_64-linux-gnu:/lib/x86_64-linux-gnu${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"

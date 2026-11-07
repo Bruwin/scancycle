@@ -278,4 +278,11 @@ if(SC_BUILD_TESTS)
             COMMAND ${PROJECT_SOURCE_DIR}/tools/check_rules.sh
             WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
     endif()
+    if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+        # The local lavapipe setup is a Linux-only no-root path; exercise its
+        # argument/preflight/cache behavior with stubs rather than apt or a GPU.
+        add_test(NAME sc_lavapipe_setup
+            COMMAND bash ${PROJECT_SOURCE_DIR}/tests/tools/setup_lavapipe_test.sh
+            WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
+    endif()
 endif()
