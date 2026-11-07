@@ -180,8 +180,14 @@ add_library(sc_app
     src/app/lesson_api.cpp
     src/app/df1_tool.cpp
     src/app/plc_tag_tool.cpp
+    src/app/shell_page.cpp
+    src/app/shell_scene.cpp
+    src/app/shell_factory_script.cpp
+    src/app/shell_settings_script.cpp
+    src/app/shell_style.cpp
 )
-target_link_libraries(sc_app PUBLIC sc_core sc_sim sc_plc sc_io sc_lesson sc_net sc_ui PRIVATE sc_warnings)
+target_link_libraries(sc_app PUBLIC sc_core sc_sim sc_plc sc_io sc_lesson sc_net sc_ui sc_assets
+                                      PRIVATE sc_warnings)
 
 add_executable(scancycle_cli apps/scancycle_cli/main.cpp)
 target_link_libraries(scancycle_cli PRIVATE sc_plc sc_world sc_app sc_lesson sc_warnings)
@@ -191,6 +197,9 @@ target_link_libraries(scancycle_server PRIVATE sc_net sc_lesson sc_app sc_warnin
 
 add_executable(scancycle_ide apps/scancycle_ide/main.cpp)
 target_link_libraries(scancycle_ide PRIVATE sc_app sc_net sc_warnings)
+
+add_executable(scancycle_shell apps/scancycle_shell/main.cpp)
+target_link_libraries(scancycle_shell PRIVATE sc_app sc_net sc_warnings)
 
 if(SC_ENABLE_VULKAN)
     find_package(Vulkan REQUIRED)
@@ -252,6 +261,7 @@ if(SC_BUILD_TESTS)
         tests/test_df1_serial.cpp
         tests/test_df1_tool.cpp
         tests/test_plc_tag_tool.cpp
+        tests/test_shell.cpp
     )
     target_link_libraries(sc_tests PRIVATE
         sc_plc sc_world sc_render sc_sim sc_io sc_assets sc_ui sc_lesson sc_net sc_app

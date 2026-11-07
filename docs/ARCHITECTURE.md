@@ -42,7 +42,7 @@ completes the curriculum should recognise TIA Portal or Studio 5000 on sight.
 | `src/ui` | Structured Text editor model, ladder SVG | 2 |
 | `src/lesson` | lesson schema, rubric, grader | 2 |
 | `src/net` | teacher portal routing | 3 |
-| `src/app` | composition root, headless session, IDE routes | 3 |
+| `src/app` | composition root, headless session, IDE routes, 1.0 shell pages | 3 |
 
 Rule: a module may include headers from its own layer or lower, never higher.
 
@@ -127,6 +127,28 @@ truth-table column.
 * **Static props are voxels; moving mechanisms are instanced procedural meshes.**
   The industrial kit catalogue is stamped into the static world; a moving conveyor
   or robot arm must never be voxelised.
+
+## 1.0 shell
+
+The 1.0 shell is a local web surface served by `scancycle_shell`. It is the
+entry/menu layer, not a second simulation or a replacement for the existing
+surfaces: `/` is the intro, `/factory` is the interactive cell, `/sessions`
+focuses sample scenarios, `/settings` stores display preferences in the browser,
+and `/api/factory` exposes the scene. The PLC IDE and teacher portal remain
+separate servers, linked from the shell.
+
+The factory page renders the same `kFactoryKitLayout` and procedural kit pieces
+that the Vulkan viewer uses, serialised as boxes in `shell_scene.cpp` and drawn
+with a dependency-free canvas projection. Left drag orbits, right or middle drag
+pans, and the wheel zooms. This is a shell preview, not the production renderer;
+the Vulkan path remains the hardware renderer.
+
+The teacher portal entry is rendered only when the shell is started with
+`--teacher`. That is a local presentation switch, not an authorization boundary:
+the portal is still loopback-only and unauthenticated, and a student who knows
+the portal URL can reach it. Real authentication and TLS need explicit human
+approval and are not part of this slice. The shell also does not persist PLC
+programs or grade data; the IDE and portal own those.
 
 ## Simulation
 
