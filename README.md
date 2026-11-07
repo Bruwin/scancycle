@@ -99,6 +99,24 @@ rounds a pixel differently passes while a shader regression does not.
 A capture pins the clock to the frame number, so the reference does not drift with
 how fast the machine happened to run.
 
+### Local lavapipe environment without root
+
+On Ubuntu, `tools/setup_lavapipe.sh` reproduces the CI Vulkan job in a local
+sysroot. It downloads the CI package set with `apt-get` into `.cache/lavapipe`,
+extracts it under `.cache/lavapipe/root`, builds all targets in
+`build-lavapipe`, and runs the same 90-frame Xvfb check against
+`tests/data/scene_reference.ppm`. It never runs `sudo` or changes system
+packages. CMake 3.25 or newer must already be installed; set `CMAKE` if it is not
+on `PATH`.
+
+```sh
+CMAKE=/path/to/cmake tools/setup_lavapipe.sh
+```
+
+Pass `--setup-only` to stop after extraction and validation without building. The
+first run downloads about 32 MB of packages. On a host without
+`/usr/bin/xkbcomp`, the script starts Xvfb in a private user namespace with the
+prefixed `xkbcomp`, so the local sysroot remains self-contained.
 
 That needs a Vulkan 1.3 driver and SDL3; CMake uses an installed SDL3 if it
 finds one and otherwise fetches the pinned release. The viewer generates a plant with a ten-class industrial kit cell,
